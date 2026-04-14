@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BookValuePro — See the value others miss.</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#fff;color:#1a1a1a;}
+.bvp-nav{background:#0d2e1e;padding:0 2rem;height:60px;display:flex;align-items:center;justify-content:space-between;}
+.bvp-logo{display:flex;align-items:center;gap:12px;text-decoration:none;}
+.bvp-mark{width:36px;height:36px;border-radius:50%;background:#1a5c3a;border:1.5px solid #3da272;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;color:white;}
+.bvp-wordmark{font-size:16px;font-weight:500;color:white;}
+.bvp-wordmark span{color:#3da272;}
+.bvp-nav-cta{background:#3da272;color:white;border:none;padding:8px 18px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;}
+.bvp-hero{background:#0d2e1e;padding:5rem 2rem 4rem;text-align:center;}
+.bvp-hero-badge{display:inline-block;background:#1a5c3a;color:#7abf9a;font-size:11px;font-weight:500;letter-spacing:0.08em;padding:5px 14px;border-radius:20px;border:0.5px solid #3da272;margin-bottom:1.5rem;}
+.bvp-hero h1{font-size:42px;font-weight:500;color:white;line-height:1.2;margin-bottom:1rem;max-width:620px;margin-left:auto;margin-right:auto;}
+.bvp-hero h1 span{color:#3da272;}
+.bvp-hero p{font-size:17px;color:#7abf9a;line-height:1.7;max-width:520px;margin:0 auto 2.5rem;}
+.bvp-signup-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:1rem;}
+.bvp-signup-row input{padding:10px 16px;border-radius:8px;border:0.5px solid #3da272;background:#1a5c3a;color:white;font-size:14px;width:280px;outline:none;}
+.bvp-signup-row input::placeholder{color:#7abf9a;}
+.bvp-signup-btn{background:#3da272;color:white;border:none;padding:10px 24px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;}
+.bvp-signup-btn:hover{background:#2e8a5e;}
+.bvp-hero-sub{font-size:12px;color:#5a8a6a;}
+.bvp-success{font-size:14px;color:#3da272;margin-top:0.75rem;display:none;}
+.bvp-error{font-size:14px;color:#e05a5a;margin-top:0.75rem;display:none;}
+.bvp-section{padding:4rem 2rem;max-width:900px;margin:0 auto;}
+.bvp-section-label{font-size:11px;font-weight:500;letter-spacing:0.1em;color:#3da272;margin-bottom:0.75rem;}
+.bvp-section h2{font-size:28px;font-weight:500;color:#1a1a1a;margin-bottom:1rem;line-height:1.3;}
+.bvp-section p{font-size:15px;color:#555;line-height:1.7;margin-bottom:2rem;}
+.bvp-features{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-top:2rem;}
+.bvp-feature-card{background:#fff;border:0.5px solid #ddd;border-radius:12px;padding:1.25rem;}
+.bvp-feature-icon{width:36px;height:36px;border-radius:8px;background:#e6f5ee;display:flex;align-items:center;justify-content:center;margin-bottom:1rem;}
+.bvp-feature-icon svg{width:18px;height:18px;stroke:#1a5c3a;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;}
+.bvp-feature-card h3{font-size:15px;font-weight:500;color:#1a1a1a;margin-bottom:6px;}
+.bvp-feature-card p{font-size:13px;color:#666;line-height:1.6;margin:0;}
+.bvp-divider{border:none;border-top:0.5px solid #e5e5e5;margin:0 2rem;}
+.bvp-how{background:#f7faf8;padding:4rem 2rem;}
+.bvp-how-inner{max-width:900px;margin:0 auto;}
+.bvp-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-top:2rem;}
+.bvp-step{background:#fff;border:0.5px solid #ddd;border-radius:12px;padding:1.25rem;}
+.bvp-step-num{font-size:11px;font-weight:500;color:#3da272;letter-spacing:0.08em;margin-bottom:0.5rem;}
+.bvp-step h3{font-size:15px;font-weight:500;color:#1a1a1a;margin-bottom:6px;}
+.bvp-step p{font-size:13px;color:#666;line-height:1.6;margin:0;}
+.bvp-testimonials{padding:4rem 2rem;max-width:900px;margin:0 auto;}
+.bvp-tcard{background:#fff;border:0.5px solid #ddd;border-radius:12px;padding:1.5rem;margin-bottom:12px;}
+.bvp-tcard-quote{font-size:15px;color:#1a1a1a;line-height:1.7;margin-bottom:1rem;font-style:italic;}
+.bvp-tcard-author{font-size:13px;color:#888;}
+.bvp-tcard-author span{color:#1a5c3a;font-weight:500;}
+.bvp-cta-section{background:#0d2e1e;padding:4rem 2rem;text-align:center;}
+.bvp-cta-section h2{font-size:28px;font-weight:500;color:white;margin-bottom:1rem;}
+.bvp-cta-section p{font-size:15px;color:#7abf9a;margin-bottom:2rem;}
+.bvp-footer{background:#071a0f;padding:2rem;text-align:center;}
+.bvp-footer p{font-size:12px;color:#3a5a44;}
+</style>
+</head>
+<body>
+
+<nav class="bvp-nav">
+  <a class="bvp-logo" href="#">
+    <div class="bvp-mark">BV</div>
+    <div class="bvp-wordmark">Book<span>Value</span>Pro</div>
+  </a>
+  <button class="bvp-nav-cta" onclick="document.getElementById('signup-main').focus()">Get early access</button>
+</nav>
+
+<div class="bvp-hero">
+  <div class="bvp-hero-badge">Now accepting early access signups</div>
+  <h1>See the value <span>others miss.</span></h1>
+  <p>BookValuePro helps Medicare Supplement agents and agencies know exactly which clients to call, when to call them, and how much commission is on the table.</p>
+  <div class="bvp-signup-row">
+    <input id="signup-main" type="email" placeholder="Enter your work email" />
+    <button class="bvp-signup-btn" onclick="submitEmail('signup-main','msg-hero')">Get early access</button>
+  </div>
+  <div id="msg-hero" class="bvp-success"></div>
+  <p class="bvp-hero-sub">No credit card required. Free during beta.</p>
+</div>
+
+<div class="bvp-section">
+  <div class="bvp-section-label">Why BookValuePro</div>
+  <h2>Your book of business is your most valuable asset. Are you managing it like one?</h2>
+  <p>Most agents know their clients by name but not by value. BookValuePro changes that — giving you a clear picture of renewal opportunities, at-risk policies, and the NPV of your entire commission stream.</p>
+  <div class="bvp-features">
+    <div class="bvp-feature-card">
+      <div class="bvp-feature-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
+      <h3>Prioritized outreach</h3>
+      <p>Every client ranked by renewal opportunity, so you always know who to call first.</p>
+    </div>
+    <div class="bvp-feature-card">
+      <div class="bvp-feature-icon"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+      <h3>Commission projections</h3>
+      <p>See the NPV of your full book projected out 10 years — by client, by carrier, by state.</p>
+    </div>
+    <div class="bvp-feature-card">
+      <div class="bvp-feature-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+      <h3>Anniversary scheduling</h3>
+      <p>Outreach calendar built from policy anniversary dates — never miss a renewal window again.</p>
+    </div>
+    <div class="bvp-feature-card">
+      <div class="bvp-feature-icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+      <h3>Built for agencies too</h3>
+      <p>Manage multiple agents' books in one place. See opportunity across your whole team.</p>
+    </div>
+    <div class="bvp-feature-card">
+      <div class="bvp-feature-icon"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
+      <h3>Multi-carrier support</h3>
+      <p>Works across carriers and states. Commission schedules built in for AARP/UHC, Aetna, and more.</p>
+    </div>
+    <div class="bvp-feature-card">
+      <div class="bvp-feature-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+      <h3>Save time every week</h3>
+      <p>Stop managing spreadsheets. Upload your book and get a prioritized action plan in minutes.</p>
+    </div>
+  </div>
+</div>
+
+<hr class="bvp-divider"/>
+
+<div class="bvp-how">
+  <div class="bvp-how-inner">
+    <div class="bvp-section-label">How it works</div>
+    <h2 style="font-size:28px;font-weight:500;color:#1a1a1a;margin-bottom:1rem;">Up and running in minutes</h2>
+    <p style="font-size:15px;color:#555;line-height:1.7;">No complicated setup. No IT department required.</p>
+    <div class="bvp-steps">
+      <div class="bvp-step">
+        <div class="bvp-step-num">Step 01</div>
+        <h3>Upload your book</h3>
+        <p>Import your client list — DOB, carrier, state, effective date, and premium. That's all we need.</p>
+      </div>
+      <div class="bvp-step">
+        <div class="bvp-step-num">Step 02</div>
+        <h3>We run the model</h3>
+        <p>BookValuePro calculates NPV, renewal opportunity, and priority class for every policy in your book.</p>
+      </div>
+      <div class="bvp-step">
+        <div class="bvp-step-num">Step 03</div>
+        <h3>See your dashboard</h3>
+        <p>A ranked outreach schedule, commission projections, and book value summary — all in one view.</p>
+      </div>
+      <div class="bvp-step">
+        <div class="bvp-step-num">Step 04</div>
+        <h3>Start making calls</h3>
+        <p>Work your priority list. Every call you make is backed by data on exactly what's at stake.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="bvp-testimonials">
+  <div class="bvp-section-label">Early feedback</div>
+  <h2 style="font-size:28px;font-weight:500;color:#1a1a1a;margin-bottom:2rem;">What agents are saying</h2>
+  <div class="bvp-tcard">
+    <div class="bvp-tcard-quote">"I had no idea how much renewal commission I was leaving on the table. BookValuePro showed me exactly who to call in the next 30 days."</div>
+    <div class="bvp-tcard-author"><span>Independent agent</span> — Florida, 180-policy book</div>
+  </div>
+  <div class="bvp-tcard">
+    <div class="bvp-tcard-quote">"As an agency owner, seeing the projected value of our entire team's book in one place is a game changer for planning."</div>
+    <div class="bvp-tcard-author"><span>Agency principal</span> — New Jersey, 12-agent team</div>
+  </div>
+</div>
+
+<div class="bvp-cta-section">
+  <h2>Ready to see what your book is really worth?</h2>
+  <p>Join agents already on the early access list. Free during beta.</p>
+  <div class="bvp-signup-row">
+    <input id="signup-bottom" type="email" placeholder="Enter your work email" style="padding:10px 16px;border-radius:8px;border:0.5px solid #3da272;background:#1a5c3a;color:white;font-size:14px;width:280px;outline:none;"/>
+    <button class="bvp-signup-btn" onclick="submitEmail('signup-bottom','msg-bottom')">Get early access</button>
+  </div>
+  <div id="msg-bottom" class="bvp-success"></div>
+</div>
+
+<div class="bvp-footer">
+  <p>© 2026 BookValuePro · bookvaluepro.com · Built for Medicare Supplement agents</p>
+</div>
+
+<script>
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw8JAYoTyml5Z6hN2Y-WK7W3jfow1kuEAFuEvzEh97Pvjn-F7qoLhI5gqNigyRrrf4U/exec";
+
+function submitEmail(inputId, msgId) {
+  var input = document.getElementById(inputId);
+  var msg = document.getElementById(msgId);
+  var email = input.value.trim();
+
+  if (!email || !email.includes("@")) {
+    msg.textContent = "Please enter a valid email address.";
+    msg.style.display = "block";
+    msg.style.color = "#e05a5a";
+    return;
+  }
+
+  msg.textContent = "Submitting...";
+  msg.style.display = "block";
+  msg.style.color = "#7abf9a";
+
+  fetch(SCRIPT_URL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: email, source: inputId === "signup-main" ? "Hero" : "Bottom CTA" })
+  })
+  .then(function() {
+    msg.textContent = "You're on the list! We'll be in touch soon.";
+    msg.style.color = "#3da272";
+    input.value = "";
+  })
+  .catch(function() {
+    msg.textContent = "Something went wrong. Please try again.";
+    msg.style.color = "#e05a5a";
+  });
+}
+</script>
+</body>
+</html>
