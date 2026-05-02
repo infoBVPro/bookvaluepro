@@ -1,0 +1,1284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BookValuePro — Upload Your Book</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="bvp-supabase.js"></script>
+
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ink:     #0f1214;
+  --ink-2:   #3a3f45;
+  --ink-3:   #7a8290;
+  --cream:   #f7f4ef;
+  --cream-2: #ede9e2;
+  --accent:  #1a5c3e;
+  --accent-2:#2a8558;
+  --gold:    #c8943a;
+  --danger:  #c0392b;
+  --radius:  10px;
+  --mono: 'DM Mono', monospace;
+  --serif: 'DM Serif Display', serif;
+  --sans: 'DM Sans', sans-serif;
+}
+
+html, body {
+  height: 100%;
+  background: var(--cream);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── LAYOUT ── */
+.shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  grid-template-columns: 1fr;
+}
+
+/* ── HEADER ── */
+header {
+  padding: 28px 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--cream-2);
+}
+
+.logo {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.logo-mark {
+  font-family: var(--serif);
+  font-size: 22px;
+  color: var(--accent);
+  letter-spacing: -.01em;
+}
+
+.logo-tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  border: 1px solid var(--cream-2);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.header-hint {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+/* ── MAIN ── */
+main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+}
+
+.upload-card {
+  width: 100%;
+  max-width: 680px;
+}
+
+.upload-headline {
+  font-family: var(--serif);
+  font-size: 40px;
+  line-height: 1.1;
+  color: var(--ink);
+  margin-bottom: 10px;
+  letter-spacing: -.02em;
+}
+
+.upload-headline em {
+  font-style: italic;
+  color: var(--accent);
+}
+
+.upload-subhead {
+  font-size: 15px;
+  color: var(--ink-3);
+  margin-bottom: 36px;
+  font-weight: 300;
+}
+
+/* ── DROP ZONE ── */
+.drop-zone {
+  border: 1.5px dashed var(--cream-2);
+  border-radius: 16px;
+  background: #fff;
+  padding: 52px 40px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .2s, background .2s, box-shadow .2s;
+  position: relative;
+  outline: none;
+}
+
+.drop-zone:hover,
+.drop-zone.drag-over {
+  border-color: var(--accent-2);
+  background: #f4faf7;
+  box-shadow: 0 0 0 4px rgba(42,133,88,.08);
+}
+
+.drop-zone.drag-over {
+  border-style: solid;
+}
+
+.drop-icon {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 18px;
+  background: var(--cream);
+  border: 1px solid var(--cream-2);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.drop-icon svg {
+  width: 26px;
+  height: 26px;
+  stroke: var(--accent);
+}
+
+.drop-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.drop-title span {
+  color: var(--accent-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.drop-sub {
+  font-size: 13px;
+  color: var(--ink-3);
+  font-weight: 300;
+}
+
+#file-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* ── FORMAT BADGES ── */
+.format-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 22px;
+}
+
+.badge {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .06em;
+  padding: 4px 10px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.badge-xlsx { background: #e8f5e9; color: #2e7d32; }
+.badge-csv  { background: #e3f2fd; color: #1565c0; }
+.badge-pdf  { background: #fce4ec; color: #c62828; }
+
+.badge-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.badge-xlsx .badge-dot { background: #2e7d32; }
+.badge-csv  .badge-dot { background: #1565c0; }
+.badge-pdf  .badge-dot { background: #c62828; }
+
+/* ── FILE PREVIEW (after selection) ── */
+.file-preview {
+  display: none;
+  margin-top: 20px;
+  background: #fff;
+  border: 1px solid var(--cream-2);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  align-items: center;
+  gap: 14px;
+}
+
+.file-preview.visible { display: flex; }
+
+.file-icon {
+  width: 40px; height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.file-icon.xlsx { background: #e8f5e9; color: #2e7d32; }
+.file-icon.csv  { background: #e3f2fd; color: #1565c0; }
+.file-icon.pdf  { background: #fce4ec; color: #c62828; }
+.file-icon.unknown { background: var(--cream); color: var(--ink-3); }
+
+.file-meta { flex: 1; min-width: 0; }
+
+.file-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-size {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: 1px;
+}
+
+.file-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ink-3);
+  padding: 4px;
+  border-radius: 6px;
+  line-height: 0;
+  transition: color .15s, background .15s;
+}
+
+.file-remove:hover { color: var(--danger); background: #fce4ec; }
+
+/* ── FIELD MAPPING ── */
+.mapping-section {
+  display: none;
+  margin-top: 28px;
+}
+
+.mapping-section.visible { display: block; }
+
+.section-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--cream-2);
+}
+
+.mapping-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.map-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid var(--cream-2);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+}
+
+.map-field {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-2);
+  width: 120px;
+  flex-shrink: 0;
+}
+
+.map-field .required {
+  color: var(--gold);
+  margin-left: 3px;
+  font-size: 11px;
+}
+
+.map-arrow {
+  color: var(--ink-3);
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.map-select {
+  flex: 1;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--cream);
+  border: 1px solid var(--cream-2);
+  border-radius: 6px;
+  padding: 5px 8px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color .15s;
+}
+
+.map-select:focus { border-color: var(--accent-2); }
+
+.map-status {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--cream-2);
+}
+
+.map-status.ok { background: var(--accent-2); }
+.map-status.warn { background: var(--gold); }
+
+/* ── VALIDATION BANNER ── */
+.validation-banner {
+  display: none;
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.validation-banner.visible { display: flex; }
+.validation-banner.error   { background: #fce4ec; color: #c62828; border: 1px solid #f8bbd0; }
+.validation-banner.success { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; }
+.validation-banner.warning { background: #fff8e1; color: #f57f17; border: 1px solid #ffe082; }
+
+.val-icon { flex-shrink: 0; font-size: 15px; margin-top: 1px; }
+.val-list { margin-top: 4px; padding-left: 16px; }
+.val-list li { margin-top: 2px; }
+
+/* ── CTA ── */
+.cta-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 28px;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 500;
+  padding: 14px 32px;
+  cursor: pointer;
+  transition: background .15s, transform .1s, box-shadow .15s;
+  letter-spacing: -.01em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-primary:hover { background: #143f2b; box-shadow: 0 4px 16px rgba(26,92,62,.25); }
+.btn-primary:active { transform: translateY(1px); }
+.btn-primary:disabled { background: var(--cream-2); color: var(--ink-3); cursor: not-allowed; box-shadow: none; }
+
+.btn-primary .btn-arrow {
+  transition: transform .2s;
+}
+.btn-primary:not(:disabled):hover .btn-arrow {
+  transform: translateX(4px);
+}
+
+.btn-secondary {
+  background: none;
+  border: 1px solid var(--cream-2);
+  color: var(--ink-2);
+  border-radius: var(--radius);
+  font-family: var(--sans);
+  font-size: 14px;
+  padding: 13px 22px;
+  cursor: pointer;
+  transition: border-color .15s, color .15s;
+}
+.btn-secondary:hover { border-color: var(--ink-3); color: var(--ink); }
+
+.cta-hint {
+  font-size: 12px;
+  color: var(--ink-3);
+  font-weight: 300;
+}
+
+/* ── SAMPLE DATA LINK ── */
+.sample-row {
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.sample-row a {
+  color: var(--accent-2);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color .15s;
+}
+.sample-row a:hover { border-color: var(--accent-2); }
+
+/* ── STEP INDICATOR ── */
+.steps {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 36px;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.step.active { color: var(--ink); }
+
+.step-num {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--cream-2);
+  color: var(--ink-3);
+  flex-shrink: 0;
+}
+
+.step.active .step-num {
+  background: var(--accent);
+  color: #fff;
+}
+
+.step.done .step-num {
+  background: var(--accent-2);
+  color: #fff;
+}
+
+.step-sep {
+  width: 32px;
+  height: 1px;
+  background: var(--cream-2);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* ── FOOTER ── */
+footer {
+  padding: 20px 48px;
+  border-top: 1px solid var(--cream-2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footer-brand {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: .06em;
+}
+
+.footer-tagline {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+/* ── PARSING STATE OVERLAY ── */
+.parsing-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(247,244,239,.85);
+  backdrop-filter: blur(4px);
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.parsing-overlay.visible { display: flex; }
+
+.parse-spinner {
+  width: 40px; height: 40px;
+  border: 3px solid var(--cream-2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.parse-label {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink-2);
+  letter-spacing: .04em;
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 600px) {
+  header { padding: 20px 24px; }
+  footer { padding: 16px 24px; flex-direction: column; gap: 8px; text-align: center; }
+  .upload-headline { font-size: 30px; }
+  .mapping-grid { grid-template-columns: 1fr; }
+  .cta-row { flex-wrap: wrap; }
+}
+
+/* ── UPLOAD MODE MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(15,18,20,.45);display:flex;align-items:center;justify-content:center;z-index:200;padding:24px;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.visible{opacity:1;pointer-events:all}
+.modal-card{background:#fff;border-radius:16px;padding:40px 36px;max-width:440px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.18)}
+.modal-title{font-family:'DM Serif Display',serif;font-size:22px;color:#0f1214;letter-spacing:-.01em;margin-bottom:8px}
+.modal-sub{font-size:13px;color:#7a8290;font-weight:300;margin-bottom:28px;line-height:1.5}
+.modal-field{margin-bottom:16px}
+.modal-field label{display:block;font-size:12px;font-weight:500;color:#3a3f45;margin-bottom:6px}
+.modal-field input{width:100%;padding:10px 14px;border:1.5px solid #ede9e2;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:14px;color:#0f1214;outline:none}
+.modal-field input:focus{border-color:#2a8558}
+.modal-btns{display:flex;gap:10px;margin-top:24px}
+.modal-btn{flex:1;padding:12px;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;border:none;transition:all .15s}
+.modal-btn.primary{background:#1a5c3e;color:#fff}
+.modal-btn.primary:hover{background:#2a8558}
+.modal-btn.secondary{background:#f7f4ef;color:#3a3f45;border:1.5px solid #ede9e2}
+.modal-btn.secondary:hover{background:#ede9e2}
+.mode-options{display:flex;flex-direction:column;gap:10px;margin-bottom:20px}
+.mode-option{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border:1.5px solid #ede9e2;border-radius:10px;cursor:pointer;transition:border-color .15s}
+.mode-option:hover{border-color:#2a8558}
+.mode-option.selected{border-color:#1a5c3e;background:#e8f5ee}
+.mode-option input[type=radio]{margin-top:3px;accent-color:#1a5c3e}
+.mode-option-label{font-size:13px;font-weight:500;color:#0f1214}
+.mode-option-desc{font-size:12px;color:#7a8290;margin-top:2px}
+
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <span class="logo-mark">BookValuePro</span>
+    <span class="logo-tag">Beta</span>
+  </div>
+  <span class="header-hint">Medicare Supplement book analysis</span>
+</header>
+
+<!-- MAIN -->
+<main>
+  <div class="upload-card">
+
+    <!-- Steps -->
+    <div class="steps">
+      <div class="step active">
+        <div class="step-num">1</div>
+        <span>Upload book</span>
+      </div>
+      <div class="step-sep"></div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <span>Dashboard</span>
+      </div>
+      <div class="step-sep"></div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <span>Outreach schedule</span>
+      </div>
+    </div>
+
+    <h1 class="upload-headline">Upload your<br><em>book of business.</em></h1>
+    <p class="upload-subhead">We'll calculate NPV, identify renewal opportunities, and build your outreach schedule — in seconds.</p>
+
+    <!-- Drop zone -->
+    <div class="drop-zone" id="drop-zone" tabindex="0" role="button" aria-label="Upload your book of business file">
+      <input type="file" id="file-input" accept=".xlsx,.xls,.csv,.pdf" aria-hidden="true">
+
+      <div class="drop-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+      </div>
+
+      <div class="drop-title"><span>Choose a file</span> or drag it here</div>
+      <div class="drop-sub">Your data stays in your browser — nothing is sent to a server</div>
+    </div>
+
+    <!-- Format badges -->
+    <div class="format-row">
+      <span class="badge badge-xlsx"><span class="badge-dot"></span>Excel .xlsx</span>
+      <span class="badge badge-csv"><span class="badge-dot"></span>CSV</span>
+      <span class="badge badge-pdf"><span class="badge-dot"></span>PDF</span>
+    </div>
+
+    <!-- File preview -->
+    <div class="file-preview" id="file-preview">
+      <div class="file-icon" id="file-icon">–</div>
+      <div class="file-meta">
+        <div class="file-name" id="file-name"></div>
+        <div class="file-size" id="file-size"></div>
+      </div>
+      <button class="file-remove" id="file-remove" aria-label="Remove file" title="Remove file">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Column mapping -->
+    <div class="mapping-section" id="mapping-section">
+      <div class="section-label">Map your columns</div>
+      <div class="mapping-grid" id="mapping-grid">
+        <!-- populated by JS -->
+      </div>
+    </div>
+
+    <!-- Validation banner -->
+    <div class="validation-banner" id="validation-banner">
+      <span class="val-icon" id="val-icon"></span>
+      <div>
+        <strong id="val-title"></strong>
+        <ul class="val-list" id="val-list"></ul>
+      </div>
+    </div>
+
+    <!-- CTA -->
+    <div class="cta-row">
+      <button class="btn-primary" id="btn-analyze" disabled>
+        Analyze book
+        <span class="btn-arrow">→</span>
+      </button>
+      <button class="btn-secondary" id="btn-reset" style="display:none">Start over</button>
+      <span class="cta-hint" id="cta-hint">Upload a file to get started</span>
+    </div>
+
+    <!-- Sample data -->
+    <div class="sample-row">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Don't have your book handy? <a href="#" id="load-sample">Load sample data</a> to see a demo.
+    </div>
+
+  </div>
+</main>
+
+<!-- FOOTER -->
+<footer>
+  <span class="footer-brand">BOOKVALUEPRO © 2025</span>
+  <span class="footer-tagline">See the value others miss.</span>
+</footer>
+
+</div><!-- /shell -->
+
+<!-- Parsing overlay -->
+<div class="parsing-overlay" id="parsing-overlay">
+  <div class="parse-spinner"></div>
+  <div class="parse-label" id="parse-label">Reading file…</div>
+</div>
+
+<!-- SheetJS for Excel parsing -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- PDF.js for PDF parsing -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────────────────────────
+const REQUIRED_FIELDS = [
+  { key: 'DOB',       label: 'DOB',                  required: true },
+  { key: 'Company',   label: 'Carrier / Company',    required: true },
+  { key: 'IssuedState',label:'Issued State',          required: true },
+  { key: 'EffectiveDte',label:'Effective Date',       required: true },
+  { key: 'CommPremium',label:'Commissionable Premium',required: true },
+  { key: 'CurrPremium',label:'Current Premium',       required: true },
+];
+
+const OPTIONAL_FIELDS = [
+  { key: 'FirstName', label: 'First Name',  required: false },
+  { key: 'LastName',  label: 'Last Name',   required: false },
+  { key: 'Email',     label: 'Email',       required: false },
+  { key: 'Phone',     label: 'Phone',       required: false },
+];
+
+const ALL_FIELDS = [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS];
+
+// Common header aliases for auto-detection
+const ALIASES = {
+  DOB:          ['dob','date of birth','birthdate','birth date','birth_date','dateofbirth'],
+  Company:      ['company','carrier','insurer','insurance company','ins company'],
+  IssuedState:  ['issuedstate','issued state','state','st','issued_state'],
+  EffectiveDte: ['effectivedte','effective date','eff date','effdate','effective_date','start date','policy date'],
+  CommPremium:  ['commissionable premium','commissionablepremium','comm premium','comm_premium','commissionable','comp premium'],
+  CurrPremium:  ['current premium','currentpremium','curr premium','current_premium','monthly premium','premium'],
+  FirstName:    ['first name','firstname','first_name','fname'],
+  LastName:     ['last name','lastname','last_name','lname'],
+  Email:        ['email','email address','e-mail'],
+  Phone:        ['phone','phone number','phonenumber','phone_number','telephone'],
+};
+
+// ── STATE ──────────────────────────────────────────────────────────────────
+let state = {
+  file: null,
+  headers: [],
+  rowCount: 0,
+  mappings: {},   // fieldKey -> columnName
+  ready: false,
+};
+
+// ── ELEMENTS ──────────────────────────────────────────────────────────────
+const dropZone      = document.getElementById('drop-zone');
+const fileInput     = document.getElementById('file-input');
+const filePreview   = document.getElementById('file-preview');
+const fileIcon      = document.getElementById('file-icon');
+const fileName      = document.getElementById('file-name');
+const fileSize      = document.getElementById('file-size');
+const fileRemove    = document.getElementById('file-remove');
+const mappingSection= document.getElementById('mapping-section');
+const mappingGrid   = document.getElementById('mapping-grid');
+const valBanner     = document.getElementById('validation-banner');
+const valIcon       = document.getElementById('val-icon');
+const valTitle      = document.getElementById('val-title');
+const valList       = document.getElementById('val-list');
+const btnAnalyze    = document.getElementById('btn-analyze');
+const btnReset      = document.getElementById('btn-reset');
+const ctaHint       = document.getElementById('cta-hint');
+const parseOverlay  = document.getElementById('parsing-overlay');
+const parseLabel    = document.getElementById('parse-label');
+const loadSample    = document.getElementById('load-sample');
+
+// ── DRAG & DROP ─────────────────────────────────────────────────────────
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+dropZone.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') fileInput.click();
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) handleFile(e.target.files[0]);
+});
+
+// ── FILE HANDLING ─────────────────────────────────────────────────────
+function handleFile(file) {
+  state.file = file;
+  const ext = file.name.split('.').pop().toLowerCase();
+
+  // Preview
+  filePreview.classList.add('visible');
+  fileName.textContent = file.name;
+  fileSize.textContent = formatBytes(file.size);
+
+  const iconMap = { xlsx: 'XLSX', xls: 'XLSX', csv: 'CSV', pdf: 'PDF' };
+  const classMap = { xlsx: 'xlsx', xls: 'xlsx', csv: 'csv', pdf: 'pdf' };
+  fileIcon.textContent = iconMap[ext] || '?';
+  fileIcon.className = 'file-icon ' + (classMap[ext] || 'unknown');
+
+  // Parse
+  showParsing(true, 'Reading file…');
+
+  if (ext === 'xlsx' || ext === 'xls') {
+    parseExcel(file);
+  } else if (ext === 'csv') {
+    parseCSV(file);
+  } else if (ext === 'pdf') {
+    parsePDF(file);
+  } else {
+    showParsing(false);
+    showValidation('error', 'Unsupported file type', [`Please upload an .xlsx, .csv, or .pdf file.`]);
+  }
+}
+
+function parseExcel(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      // Try to find the MedSuppCustomers sheet, fall back to first sheet
+      const sheetName = wb.SheetNames.find(n => /medsupp|medsup|customer|book/i.test(n)) || wb.SheetNames[0];
+      const ws = wb.Sheets[sheetName];
+      const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      // Find header row (first row with 3+ non-empty cells)
+      let headerRow = 0;
+      for (let i = 0; i < Math.min(5, data.length); i++) {
+        if (data[i].filter(c => c !== '').length >= 3) { headerRow = i; break; }
+      }
+      const headers = data[headerRow].map(h => String(h).trim()).filter(h => h);
+      const rows = data.slice(headerRow + 1).filter(r => r.some(c => c !== ''));
+      showParsing(false);
+      onHeadersDetected(headers, rows.length);
+    } catch(err) {
+      showParsing(false);
+      showValidation('error', 'Could not read Excel file', [err.message]);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseCSV(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const text = e.target.result;
+      const lines = text.split('\n').filter(l => l.trim());
+      const headers = lines[0].split(',').map(h => h.replace(/^["']|["']$/g, '').trim());
+      const rowCount = lines.length - 1;
+      showParsing(false);
+      onHeadersDetected(headers, rowCount);
+    } catch(err) {
+      showParsing(false);
+      showValidation('error', 'Could not read CSV file', [err.message]);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function parsePDF(file) {
+  parseLabel.textContent = 'Extracting text from PDF…';
+  if (!window.pdfjsLib) {
+    showParsing(false);
+    showValidation('warning', 'PDF support loading', ['Please try again in a moment, or use Excel/CSV for faster processing.']);
+    return;
+  }
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      const pdf = await pdfjsLib.getDocument({ data: e.target.result }).promise;
+      let allText = '';
+      for (let p = 1; p <= pdf.numPages; p++) {
+        const page = await pdf.getPage(p);
+        const content = await page.getTextContent();
+        allText += content.items.map(i => i.str).join(' ') + '\n';
+      }
+      // Heuristic: find header-like line (row with 4+ short words)
+      const lines = allText.split('\n').filter(l => l.trim());
+      let headerLine = lines[0];
+      for (const line of lines) {
+        const words = line.trim().split(/\s{2,}|\t/);
+        if (words.length >= 4) { headerLine = line; break; }
+      }
+      const headers = headerLine.trim().split(/\s{2,}|\t/).map(h => h.trim()).filter(h => h);
+      const rowCount = Math.max(0, lines.length - 2);
+      showParsing(false);
+      if (headers.length < 2) {
+        showValidation('warning', 'PDF parsed — manual mapping needed',
+          ['We extracted text but couldn\'t auto-detect columns. Please map fields below.',
+           'For best results, use the Excel template or a CSV export.']);
+        // Show mapping with blank options
+        onHeadersDetected(['Column A', 'Column B', 'Column C', 'Column D', 'Column E', 'Column F'], rowCount, true);
+      } else {
+        onHeadersDetected(headers, rowCount);
+      }
+    } catch(err) {
+      showParsing(false);
+      showValidation('error', 'Could not read PDF', [
+        'PDF parsing works best with text-based (not scanned) PDFs.',
+        'Try exporting as Excel or CSV from your CRM for reliable results.',
+        'Error: ' + err.message,
+      ]);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── AFTER HEADERS DETECTED ────────────────────────────────────────────
+function onHeadersDetected(headers, rowCount, isManual = false) {
+  state.headers = headers;
+  state.rowCount = rowCount;
+
+  // Auto-map
+  state.mappings = {};
+  for (const field of ALL_FIELDS) {
+    const aliases = ALIASES[field.key] || [];
+    const match = headers.find(h => {
+      const norm = h.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return norm === field.key.toLowerCase() || aliases.some(a => a.replace(/[^a-z0-9]/g, '') === norm);
+    });
+    if (match) state.mappings[field.key] = match;
+  }
+
+  buildMappingUI();
+  validateAndUpdate();
+}
+
+// ── MAPPING UI ────────────────────────────────────────────────────────
+function buildMappingUI() {
+  mappingGrid.innerHTML = '';
+
+  for (const field of ALL_FIELDS) {
+    const row = document.createElement('div');
+    row.className = 'map-row';
+    row.id = 'map-row-' + field.key;
+
+    const label = document.createElement('div');
+    label.className = 'map-field';
+    label.innerHTML = field.label + (field.required ? '<span class="required">*</span>' : '');
+
+    const arrow = document.createElement('div');
+    arrow.className = 'map-arrow';
+    arrow.textContent = '→';
+
+    const sel = document.createElement('select');
+    sel.className = 'map-select';
+    sel.id = 'map-sel-' + field.key;
+
+    const blank = document.createElement('option');
+    blank.value = '';
+    blank.textContent = field.required ? '— select column —' : '— optional —';
+    sel.appendChild(blank);
+
+    for (const h of state.headers) {
+      const opt = document.createElement('option');
+      opt.value = h;
+      opt.textContent = h;
+      sel.appendChild(opt);
+    }
+
+    sel.value = state.mappings[field.key] || '';
+    sel.addEventListener('change', () => {
+      state.mappings[field.key] = sel.value || undefined;
+      updateRowStatus(field.key);
+      validateAndUpdate();
+    });
+
+    const dot = document.createElement('div');
+    dot.className = 'map-status';
+    dot.id = 'map-dot-' + field.key;
+
+    row.appendChild(label);
+    row.appendChild(arrow);
+    row.appendChild(sel);
+    row.appendChild(dot);
+    mappingGrid.appendChild(row);
+    updateRowStatus(field.key);
+  }
+
+  mappingSection.classList.add('visible');
+  btnReset.style.display = '';
+}
+
+function updateRowStatus(key) {
+  const dot = document.getElementById('map-dot-' + key);
+  const field = ALL_FIELDS.find(f => f.key === key);
+  if (!dot || !field) return;
+  if (state.mappings[key]) {
+    dot.className = 'map-status ok';
+  } else if (field.required) {
+    dot.className = 'map-status warn';
+  } else {
+    dot.className = 'map-status';
+  }
+}
+
+// ── VALIDATION ────────────────────────────────────────────────────────
+function validateAndUpdate() {
+  const missing = REQUIRED_FIELDS.filter(f => !state.mappings[f.key]);
+
+  if (missing.length === 0) {
+    // All required fields mapped
+    const optMapped = OPTIONAL_FIELDS.filter(f => state.mappings[f.key]).length;
+    if (optMapped > 0) {
+      showValidation('success',
+        `Ready — ${state.rowCount.toLocaleString()} policies detected`,
+        [`${6 - missing.length} required fields mapped, ${optMapped} optional field${optMapped > 1 ? 's' : ''} included`]
+      );
+    } else {
+      hideValidation();
+    }
+    btnAnalyze.disabled = false;
+    ctaHint.textContent = `${state.rowCount.toLocaleString()} polic${state.rowCount === 1 ? 'y' : 'ies'} ready to analyze`;
+    state.ready = true;
+  } else {
+    showValidation('warning',
+      `${missing.length} required field${missing.length > 1 ? 's' : ''} not mapped`,
+      missing.map(f => `"${f.label}" is required`)
+    );
+    btnAnalyze.disabled = true;
+    ctaHint.textContent = 'Map all required fields to continue';
+    state.ready = false;
+  }
+}
+
+function showValidation(type, title, items) {
+  valBanner.className = 'validation-banner visible ' + type;
+  valIcon.textContent = type === 'error' ? '✕' : type === 'warning' ? '!' : '✓';
+  valTitle.textContent = title;
+  valList.innerHTML = '';
+  if (items && items.length) {
+    for (const item of items) {
+      const li = document.createElement('li');
+      li.textContent = item;
+      valList.appendChild(li);
+    }
+    valList.style.display = 'block';
+  } else {
+    valList.style.display = 'none';
+  }
+}
+
+function hideValidation() {
+  valBanner.className = 'validation-banner';
+}
+
+// ── RESET ─────────────────────────────────────────────────────────────
+fileRemove.addEventListener('click', resetUpload);
+btnReset.addEventListener('click', resetUpload);
+
+function resetUpload() {
+  state = { file: null, headers: [], rowCount: 0, mappings: {}, ready: false };
+  fileInput.value = '';
+  filePreview.classList.remove('visible');
+  mappingSection.classList.remove('visible');
+  mappingGrid.innerHTML = '';
+  hideValidation();
+  btnAnalyze.disabled = true;
+  btnReset.style.display = 'none';
+  ctaHint.textContent = 'Upload a file to get started';
+}
+
+// ── ANALYZE ──────────────────────────────────────────────────────────
+// ── SUPABASE AUTH GUARD ──────────────────────────────────────
+let bvpSession = null;
+bvpRequireAuth().then(session => {
+  bvpSession = session;
+  if (session) {
+    // Show agent email in header if present
+    const nameEl = document.getElementById('agent-name');
+    if (nameEl) nameEl.textContent = session.user.email;
+  }
+});
+
+// ── ANALYZE & UPLOAD ─────────────────────────────────────────
+// ── UPLOAD MODE MODAL ────────────────────────────────────────
+let _pendingUpload = false;
+
+document.querySelectorAll('input[name="upload-mode"]').forEach(radio => {
+  radio.addEventListener('change', function() {
+    document.getElementById('version-name-field').style.display =
+      this.value === 'version' ? '' : 'none';
+    document.querySelectorAll('.mode-option').forEach(el => el.classList.remove('selected'));
+    this.closest('.mode-option').classList.add('selected');
+  });
+});
+
+function closeUploadModal() {
+  document.getElementById('upload-modal').classList.remove('visible');
+  _pendingUpload = false;
+}
+
+async function confirmUpload() {
+  closeUploadModal();
+  const mode = document.querySelector('input[name="upload-mode"]:checked').value;
+  const versionName = document.getElementById('version-name-input').value.trim()
+    || state.fileName || 'New Upload';
+  await _doUpload(mode, versionName);
+}
+
+btnAnalyze.addEventListener('click', async () => {
+  if (!state.ready || !bvpSession) return;
+
+  // Check if agent already has a book — if so, show modal
+  const existingBook = await bvpGetActiveBook(bvpSession.user.id);
+  if (existingBook) {
+    // Pre-fill version name with today's date
+    const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    document.getElementById('version-name-input').value = today + ' Upload';
+    document.getElementById('upload-modal').classList.add('visible');
+    return;
+  }
+
+  // No existing book — go straight to upload as new version
+  await _doUpload('version', state.fileName || 'Initial Upload');
+});
+
+async function _doUpload(mode, versionName) {
+  if (!state.ready || !bvpSession) return;
+  showParsing(true, 'Calculating NPV and uploading to your account…');
+
+  try {
+    // Build policy rows from parsed state data
+    const VALUATION = new Date('2026-05-02');
+    function attainedAge(dobStr) {
+      if (!dobStr) return null;
+      const d = new Date(dobStr);
+      let age = VALUATION.getFullYear() - d.getFullYear();
+      if ((VALUATION.getMonth() * 100 + VALUATION.getDate()) < (d.getMonth() * 100 + d.getDate())) age--;
+      return age;
+    }
+    function effMonth(dateStr) {
+      if (!dateStr) return null;
+      return new Date(dateStr).getMonth() + 1;
+    }
+
+    const policies = (state.rows || []).map((row, i) => ({
+      policy_idx:   parseInt(row['Number'] || row['number'] || i + 1),
+      first_name:   row['First Name'] || row['first_name'] || null,
+      last_name:    row['Last Name']  || row['last_name']  || null,
+      dob:          row['DOB'] || row['dob'] || null,
+      attained_age: attainedAge(row['DOB'] || row['dob']),
+      email:        row['Email'] || row['email'] || null,
+      phone:        row['Phone'] || row['phone'] || null,
+      company:      row['Company'] || row['company'] || null,
+      issued_state: row['IssuedState'] || row['issued_state'] || row['State'] || null,
+      eff_month:    effMonth(row['EffectiveDte'] || row['effective_date'] || row['EffDate']),
+      duration_yr:  null, // calculated server-side or on dashboard
+      priority:     parseInt(row['Priority'] || row['priority'] || 2),
+      comm_prem:    parseFloat(row['Commissionable Premium'] || row['comm_prem'] || 0),
+      curr_prem:    parseFloat(row['Current Premium'] || row['curr_prem'] || 0),
+      curr_pcts:    [],
+      ren_pcts:     [],
+      curr_npv:     null,
+      ren_npv:      null,
+    }));
+
+    const book = await bvpUploadBook(
+      bvpSession.user.id,
+      state.fileName || 'book.csv',
+      policies
+    );
+
+    showParsing(false);
+
+    if (!book) {
+      showValidation('error', 'Upload failed', ['There was a problem saving your book. Please try again.']);
+      return;
+    }
+
+    showValidation('success',
+      `${policies.length} policies uploaded successfully`,
+      ['Redirecting to your dashboard…']
+    );
+    btnAnalyze.disabled = true;
+    setTimeout(() => { window.location.href = 'bookvaluepro-dashboard.html'; }, 1500);
+
+  } catch (err) {
+    console.error(err);
+    showParsing(false);
+    showValidation('error', 'Unexpected error', [err.message]);
+  }
+}
+
+// ── SAMPLE DATA ──────────────────────────────────────────────────────
+loadSample.addEventListener('click', e => {
+  e.preventDefault();
+  // Build a sample CSV matching the template structure
+  const csv = [
+    'Number,DOB,Company,IssuedState,EffectiveDte,Commissionable Premium,Current Premium,First Name,Last Name,Email',
+    '1,1958-04-15,AARP/UHC,FL,2021-01-01,185.25,254.31,Jane,Smith,jane@example.com',
+    '2,1951-09-22,AETNA,NJ,2019-06-01,174.33,213.83,Robert,Davis,',
+    '3,1947-03-10,AETNA,NJ,2015-01-01,267.84,681.95,Margaret,Chen,',
+    '4,1960-11-05,AARP/UHC,CA,2022-03-01,228.50,290.25,Thomas,Wilson,tom@email.com',
+    '5,1955-07-18,AETNA,PA,2018-01-01,152.50,324.58,,,'
+  ].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const f = new File([blob], 'sample_book.csv', { type: 'text/csv' });
+  handleFile(f);
+});
+
+// ── UTILITIES ─────────────────────────────────────────────────────────
+function showParsing(show, label) {
+  parseOverlay.classList.toggle('visible', show);
+  if (label) parseLabel.textContent = label;
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+</script>
+
+<!-- UPLOAD MODE MODAL -->
+<div class="modal-overlay" id="upload-modal">
+  <div class="modal-card">
+    <div class="modal-title">How would you like to upload?</div>
+    <div class="modal-sub">You already have an active book. Choose how to handle the new data.</div>
+    <div class="mode-options">
+      <label class="mode-option selected" id="opt-version">
+        <input type="radio" name="upload-mode" value="version" checked>
+        <div>
+          <div class="mode-option-label">New version</div>
+          <div class="mode-option-desc">Save as a separate book you can name and switch between. Your current book is preserved.</div>
+        </div>
+      </label>
+      <label class="mode-option" id="opt-append">
+        <input type="radio" name="upload-mode" value="append">
+        <div>
+          <div class="mode-option-label">Add to current book</div>
+          <div class="mode-option-desc">Append these policies to your existing active book.</div>
+        </div>
+      </label>
+    </div>
+    <div class="modal-field" id="version-name-field">
+      <label for="version-name-input">Version name</label>
+      <input type="text" id="version-name-input" placeholder="e.g. Q2 2026 Upload">
+    </div>
+    <div class="modal-btns">
+      <button class="modal-btn secondary" onclick="closeUploadModal()">Cancel</button>
+      <button class="modal-btn primary" onclick="confirmUpload()">Upload</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
