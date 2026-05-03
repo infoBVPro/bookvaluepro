@@ -1157,6 +1157,17 @@ async function _doUpload(mode, versionName) {
 
   try {
     const VALUATION = new Date('2026-05-02');
+
+    // ── Helper functions ──────────────────────────────────────────
+    function issueAge(dobStr, effDateStr) {
+      if (!dobStr || !effDateStr) return null;
+      const dob = new Date(dobStr);
+      const eff = new Date(effDateStr);
+      let age = eff.getFullYear() - dob.getFullYear();
+      if ((eff.getMonth() * 100 + eff.getDate()) < (dob.getMonth() * 100 + dob.getDate())) age--;
+      return age;
+    }
+
     function attainedAge(dobStr) {
       if (!dobStr) return null;
       const d = new Date(dobStr);
@@ -1164,10 +1175,12 @@ async function _doUpload(mode, versionName) {
       if ((VALUATION.getMonth() * 100 + VALUATION.getDate()) < (d.getMonth() * 100 + d.getDate())) age--;
       return age;
     }
+
     function effMonth(dateStr) {
       if (!dateStr) return null;
       return new Date(dateStr).getMonth() + 1;
     }
+
     function durationYr(effDateStr) {
       if (!effDateStr) return 1;
       const eff = new Date(effDateStr);
@@ -1176,14 +1189,43 @@ async function _doUpload(mode, versionName) {
       return Math.max(1, Math.min(yrs + 1, 11));
     }
 
-    // ── Load all commission rates from Supabase once ──────────────
+    // ── Priority business rules from BusinessRules sheet ──────────
+    // Based on Issue Age x Policy Duration lookup table
+    // Issue age 63       -> always 3
+    // Issue age 64-75    -> starts 2, transitions to 1, then 3 at long durations
+    // Issue age 76+      -> always 3
+    const PRIORITY_RULES = {
+      63: [3,3,3,3,3,3,3,3,3,3,3],
+      64: [2,2,2,2,1,1,1,1,1,3,3],
+      65: [2,2,2,2,1,1,1,1,1,3,3],
+      66: [2,2,2,2,1,1,1,1,1,3,3],
+      67: [2,2,2,2,1,1,1,1,1,3,3],
+      68: [2,2,2,2,1,1,1,1,1,3,3],
+      69: [2,2,2,2,1,1,1,1,1,3,3],
+      70: [2,2,2,1,1,1,1,1,1,3,3],
+      71: [2,2,1,1,1,1,1,1,1,3,3],
+      72: [2,1,1,1,1,1,1,1,1,3,3],
+      73: [2,1,1,1,1,1,1,1,1,3,3],
+      74: [2,1,1,1,1,1,1,1,1,3,3],
+      75: [3,1,1,1,1,1,1,1,1,3,3],
+    };
+
+    function calcPriority(dobStr, effDateStr, durYr) {
+      const iAge = issueAge(dobStr, effDateStr);
+      if (iAge === null) return 2; // default if missing data
+      if (iAge <= 63) return 3;
+      if (iAge >= 76) return 3;
+      const rules = PRIORITY_RULES[iAge] || PRIORITY_RULES[75];
+      const idx = Math.min(Math.max(durYr - 1, 0), 10);
+      return rules[idx];
+    }
+
+    // ── Load commission rates from Supabase once ──────────────────
     showParsing(true, 'Loading commission schedules…');
     const allComms = await bvpGetCommissions(bvpSession.user.id);
 
-    // Build a lookup: carrier|enrollment_type -> array of 11 rates (index = duration_yr - 1)
     function buildRateArray(carrier, enrollmentType) {
       const rates = Array(11).fill(0);
-      // Try exact carrier match first, fall back to Generic
       const carriers = [carrier, 'Generic'];
       for (const co of carriers) {
         const rows = allComms.filter(r =>
@@ -1200,33 +1242,34 @@ async function _doUpload(mode, versionName) {
       return rates;
     }
 
+    // ── Build policy records ──────────────────────────────────────
     showParsing(true, 'Building policy records…');
     const policies = (state.rows || []).map((row, i) => {
-      const carrier       = row['Company'] || row['company'] || 'Generic';
-      const enrollType    = row['EnrollmentType'] || row['enrollment_type'] || row['Enrollment Type'] || 'Open Enrollment';
-      const effDateStr    = row['EffectiveDte'] || row['effective_date'] || row['EffDate'] || null;
-      const currDurYr     = durationYr(effDateStr);
+      const carrier    = row['Company'] || row['company'] || 'Generic';
+      const dobStr     = row['DOB'] || row['dob'] || null;
+      const effDateStr = row['EffectiveDte'] || row['effective_date'] || row['EffDate'] || null;
+      const currDurYr  = durationYr(effDateStr);
 
-      // curr_pcts: commission schedule starting at current duration year
-      const fullSchedule  = buildRateArray(carrier, enrollType);
-      const curr_pcts     = fullSchedule.slice(); // full 11-yr schedule, dashboard uses current duration offset
+      // Priority calculated from business rules — not an input field
+      const priority = calcPriority(dobStr, effDateStr, currDurYr);
 
-      // ren_pcts: renewal schedule always starts at year 1 using Open Enrollment rates
-      const ren_pcts      = buildRateArray(carrier, 'Open Enrollment');
+      // Always use Open Enrollment — agents don't know enrollment type
+      const curr_pcts = buildRateArray(carrier, 'Open Enrollment');
+      const ren_pcts  = buildRateArray(carrier, 'Open Enrollment');
 
       return {
-        policy_idx:   parseInt(row['Number'] || row['number'] || i + 1),
+        policy_idx:   i + 1, // auto-generated row number
         first_name:   row['First Name']  || row['first_name']  || null,
         last_name:    row['Last Name']   || row['last_name']   || null,
-        dob:          row['DOB'] || row['dob'] || null,
-        attained_age: attainedAge(row['DOB'] || row['dob']),
+        dob:          dobStr,
+        attained_age: attainedAge(dobStr),
         email:        row['Email'] || row['email'] || null,
         phone:        row['Phone'] || row['phone'] || null,
         company:      carrier,
         issued_state: row['IssuedState'] || row['issued_state'] || row['State'] || null,
         eff_month:    effMonth(effDateStr),
         duration_yr:  currDurYr,
-        priority:     parseInt(row['Priority'] || row['priority'] || 2),
+        priority,
         comm_prem:    parseFloat(row['Commissionable Premium'] || row['comm_prem'] || 0),
         curr_prem:    parseFloat(row['Current Premium'] || row['curr_prem'] || 0),
         curr_pcts,
@@ -1269,12 +1312,12 @@ loadSample.addEventListener('click', e => {
   e.preventDefault();
   // Build a sample CSV matching the template structure
   const csv = [
-    'Number,DOB,Company,IssuedState,EffectiveDte,Commissionable Premium,Current Premium,First Name,Last Name,Email',
-    '1,1958-04-15,AARP/UHC,FL,2021-01-01,185.25,254.31,Jane,Smith,jane@example.com',
-    '2,1951-09-22,AETNA,NJ,2019-06-01,174.33,213.83,Robert,Davis,',
-    '3,1947-03-10,AETNA,NJ,2015-01-01,267.84,681.95,Margaret,Chen,',
-    '4,1960-11-05,AARP/UHC,CA,2022-03-01,228.50,290.25,Thomas,Wilson,tom@email.com',
-    '5,1955-07-18,AETNA,PA,2018-01-01,152.50,324.58,,,'
+    'DOB,Company,IssuedState,EffectiveDte,Commissionable Premium,Current Premium,First Name,Last Name,Email',
+    '1958-04-15,AARP/UHC,FL,2021-01-01,185.25,254.31,Jane,Smith,jane@example.com',
+    '1951-09-22,AETNA,NJ,2019-06-01,174.33,213.83,Robert,Davis,',
+    '1947-03-10,AETNA,NJ,2015-01-01,267.84,681.95,Margaret,Chen,',
+    '1960-11-05,AARP/UHC,CA,2022-03-01,228.50,290.25,Thomas,Wilson,tom@email.com',
+    '1955-07-18,AETNA,PA,2018-01-01,152.50,324.58,,,',
   ].join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
   const f = new File([blob], 'sample_book.csv', { type: 'text/csv' });
