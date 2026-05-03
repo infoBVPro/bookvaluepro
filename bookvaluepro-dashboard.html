@@ -472,6 +472,12 @@ tfoot td.num { text-align: right; }
   height: 320px;
 }
 
+/* ── REFRESH BANNER ANIMATION ── */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
 /* ── RESPONSIVE ── */
 @media (max-width: 900px) {
   .page { padding: 24px 20px 60px; }
@@ -1058,6 +1064,9 @@ async function initFromSupabase() {
   }
 
   renderAll();
+
+  // Start listening for real-time book changes
+  startRealtimeListener(bvpSession.user.id);
 }
 
 // Save assumptions back to Supabase when sliders change
@@ -1074,6 +1083,71 @@ document.getElementById('savings-pct').addEventListener('input', saveAssumptions
 document.getElementById('discount-rate').addEventListener('input', saveAssumptionsDebounced);
 
 initFromSupabase();
+
+// ── REAL-TIME LISTENER ────────────────────────────────────────
+// Automatically refresh dashboard when a new book is uploaded
+async function startRealtimeListener(agentId) {
+  bvp
+    .channel('books-changes')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'books',
+        filter: `agent_id=eq.${agentId}`,
+      },
+      async (payload) => {
+        // New book uploaded or existing book changed — reload everything
+        bvpBook = await bvpGetActiveBook(agentId);
+        if (bvpBook) {
+          const dbPolicies = await bvpGetPolicies(bvpBook.id);
+          if (dbPolicies.length > 0) {
+            POLICIES.length = 0;
+            dbPolicies.forEach(p => {
+              POLICIES.push({
+                pr: p.priority,
+                co: p.company,
+                mp: p.comm_prem,
+                cp: p.curr_prem,
+                curr_pcts: p.curr_pcts || [],
+                ren_pcts:  p.ren_pcts  || [],
+              });
+            });
+          }
+          const bnEl = document.getElementById('book-name');
+          if (bnEl) bnEl.textContent = bvpBook.file_name + ' — ' + bvpBook.policy_count + ' policies';
+          renderAll();
+          showRefreshBanner();
+        }
+      }
+    )
+    .subscribe();
+}
+
+// ── REFRESH BANNER ────────────────────────────────────────────
+function showRefreshBanner() {
+  let banner = document.getElementById('refresh-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'refresh-banner';
+    banner.style.cssText = `
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: #1a5c3a; color: white; padding: 12px 24px; border-radius: 10px;
+      font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.2); z-index: 999;
+      display: flex; align-items: center; gap: 10px;
+      animation: slideUp 0.3s ease;
+    `;
+    document.body.appendChild(banner);
+  }
+  banner.innerHTML = '✓ Dashboard updated with your latest book data';
+  banner.style.display = 'flex';
+  clearTimeout(window._bannerTimer);
+  window._bannerTimer = setTimeout(() => {
+    banner.style.display = 'none';
+  }, 4000);
+}
 </script>
 </body>
 </html>
