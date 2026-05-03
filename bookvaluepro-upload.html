@@ -1156,7 +1156,6 @@ async function _doUpload(mode, versionName) {
   showParsing(true, 'Calculating NPV and uploading to your account…');
 
   try {
-    // Build policy rows from parsed state data
     const VALUATION = new Date('2026-05-02');
     function attainedAge(dobStr) {
       if (!dobStr) return null;
@@ -1169,28 +1168,75 @@ async function _doUpload(mode, versionName) {
       if (!dateStr) return null;
       return new Date(dateStr).getMonth() + 1;
     }
+    function durationYr(effDateStr) {
+      if (!effDateStr) return 1;
+      const eff = new Date(effDateStr);
+      let yrs = VALUATION.getFullYear() - eff.getFullYear();
+      if ((VALUATION.getMonth() * 100 + VALUATION.getDate()) < (eff.getMonth() * 100 + eff.getDate())) yrs--;
+      return Math.max(1, Math.min(yrs + 1, 11));
+    }
 
-    const policies = (state.rows || []).map((row, i) => ({
-      policy_idx:   parseInt(row['Number'] || row['number'] || i + 1),
-      first_name:   row['First Name'] || row['first_name'] || null,
-      last_name:    row['Last Name']  || row['last_name']  || null,
-      dob:          row['DOB'] || row['dob'] || null,
-      attained_age: attainedAge(row['DOB'] || row['dob']),
-      email:        row['Email'] || row['email'] || null,
-      phone:        row['Phone'] || row['phone'] || null,
-      company:      row['Company'] || row['company'] || null,
-      issued_state: row['IssuedState'] || row['issued_state'] || row['State'] || null,
-      eff_month:    effMonth(row['EffectiveDte'] || row['effective_date'] || row['EffDate']),
-      duration_yr:  null, // calculated server-side or on dashboard
-      priority:     parseInt(row['Priority'] || row['priority'] || 2),
-      comm_prem:    parseFloat(row['Commissionable Premium'] || row['comm_prem'] || 0),
-      curr_prem:    parseFloat(row['Current Premium'] || row['curr_prem'] || 0),
-      curr_pcts:    [],
-      ren_pcts:     [],
-      curr_npv:     null,
-      ren_npv:      null,
-    }));
+    // ── Load all commission rates from Supabase once ──────────────
+    showParsing(true, 'Loading commission schedules…');
+    const allComms = await bvpGetCommissions(bvpSession.user.id);
 
+    // Build a lookup: carrier|enrollment_type -> array of 11 rates (index = duration_yr - 1)
+    function buildRateArray(carrier, enrollmentType) {
+      const rates = Array(11).fill(0);
+      // Try exact carrier match first, fall back to Generic
+      const carriers = [carrier, 'Generic'];
+      for (const co of carriers) {
+        const rows = allComms.filter(r =>
+          r.carrier === co && r.enrollment_type === enrollmentType
+        );
+        if (rows.length > 0) {
+          rows.forEach(r => {
+            const idx = Math.min(Math.max((r.duration_yr || 1) - 1, 0), 10);
+            rates[idx] = parseFloat(r.rate) || 0;
+          });
+          return rates;
+        }
+      }
+      return rates;
+    }
+
+    showParsing(true, 'Building policy records…');
+    const policies = (state.rows || []).map((row, i) => {
+      const carrier       = row['Company'] || row['company'] || 'Generic';
+      const enrollType    = row['EnrollmentType'] || row['enrollment_type'] || row['Enrollment Type'] || 'Open Enrollment';
+      const effDateStr    = row['EffectiveDte'] || row['effective_date'] || row['EffDate'] || null;
+      const currDurYr     = durationYr(effDateStr);
+
+      // curr_pcts: commission schedule starting at current duration year
+      const fullSchedule  = buildRateArray(carrier, enrollType);
+      const curr_pcts     = fullSchedule.slice(); // full 11-yr schedule, dashboard uses current duration offset
+
+      // ren_pcts: renewal schedule always starts at year 1 using Open Enrollment rates
+      const ren_pcts      = buildRateArray(carrier, 'Open Enrollment');
+
+      return {
+        policy_idx:   parseInt(row['Number'] || row['number'] || i + 1),
+        first_name:   row['First Name']  || row['first_name']  || null,
+        last_name:    row['Last Name']   || row['last_name']   || null,
+        dob:          row['DOB'] || row['dob'] || null,
+        attained_age: attainedAge(row['DOB'] || row['dob']),
+        email:        row['Email'] || row['email'] || null,
+        phone:        row['Phone'] || row['phone'] || null,
+        company:      carrier,
+        issued_state: row['IssuedState'] || row['issued_state'] || row['State'] || null,
+        eff_month:    effMonth(effDateStr),
+        duration_yr:  currDurYr,
+        priority:     parseInt(row['Priority'] || row['priority'] || 2),
+        comm_prem:    parseFloat(row['Commissionable Premium'] || row['comm_prem'] || 0),
+        curr_prem:    parseFloat(row['Current Premium'] || row['curr_prem'] || 0),
+        curr_pcts,
+        ren_pcts,
+        curr_npv:     null,
+        ren_npv:      null,
+      };
+    });
+
+    showParsing(true, 'Saving to your account…');
     const book = await bvpUploadBook(
       bvpSession.user.id,
       state.fileName || 'book.csv',
