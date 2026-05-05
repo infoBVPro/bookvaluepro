@@ -25,13 +25,13 @@ const BVP_CARRIERS = [
 // ── AUTH ──────────────────────────────────────────────────────
 async function bvpRequireAuth() {
   const { data: { session } } = await bvp.auth.getSession();
-  if (!session) { window.location.href = 'bookvaluepro-login.html'; return null; }
+  if (!session) { window.location.href = 'index.html'; return null; }
   return session;
 }
 
 async function bvpSignOut() {
   await bvp.auth.signOut();
-  window.location.href = 'bookvaluepro-login.html';
+  window.location.href = 'index.html';
 }
 
 // ── BOOKS ─────────────────────────────────────────────────────
@@ -67,10 +67,9 @@ async function bvpSetActiveBook(agentId, bookId) {
   return true;
 }
 
-// mode: 'append' adds to current active book
-// mode: 'version' creates a new named version (new active book)
 async function bvpUploadBook(agentId, fileName, policies, mode = 'version', versionName = null) {
   let bookId;
+  console.log('bvpUploadBook: starting upload for', policies.length, 'policies');
 
   if (mode === 'append') {
     const active = await bvpGetActiveBook(agentId);
@@ -81,7 +80,6 @@ async function bvpUploadBook(agentId, fileName, policies, mode = 'version', vers
       uploaded_at:  new Date().toISOString(),
     }).eq('id', bookId);
   } else {
-    // Deactivate existing books, create new version
     await bvp.from('books').update({ is_active: false }).eq('agent_id', agentId);
     const { data: book, error } = await bvp.from('books').insert({
       agent_id:     agentId,
@@ -90,17 +88,20 @@ async function bvpUploadBook(agentId, fileName, policies, mode = 'version', vers
       is_active:    true,
       policy_count: policies.length,
     }).select().single();
-    if (error) { console.error('bvpUploadBook insert book:', error); return null; }
+    if (error) { console.error('bvpUploadBook insert book error:', error); return null; }
     bookId = book.id;
+    console.log('bvpUploadBook: book created with id', bookId);
   }
 
   // Bulk insert in chunks of 100
   const CHUNK = 100;
   for (let i = 0; i < policies.length; i += CHUNK) {
     const chunk = policies.slice(i, i + CHUNK).map(p => ({ ...p, book_id: bookId, agent_id: agentId }));
+    console.log('bvpUploadBook: inserting chunk', i, 'to', i + chunk.length, '— sample policy:', JSON.stringify(chunk[0]).substring(0, 200));
     const { error } = await bvp.from('policies').insert(chunk);
-    if (error) { console.error('bvpUploadBook policies chunk:', error); return null; }
+    if (error) { console.error('bvpUploadBook policies chunk error:', error); return null; }
   }
+  console.log('bvpUploadBook: all policies inserted successfully');
   return bookId;
 }
 
@@ -115,27 +116,30 @@ async function bvpGetPolicies(bookId) {
 
 // ── COMMISSIONS ───────────────────────────────────────────────
 
-// Returns merged commission schedule — agent overrides win over system defaults
+// Returns all commission rates — agent overrides win over system defaults
 async function bvpGetCommissions(agentId, state = null, carrier = null) {
   let query = bvp.from('commissions').select('*')
     .or(`is_default.eq.true,agent_id.eq.${agentId}`)
-    .order('issued_state').order('carrier').order('enrollment_type').order('duration_yr');
+    .order('carrier').order('enrollment_type').order('duration_yr');
   if (state)   query = query.eq('issued_state', state);
   if (carrier) query = query.eq('carrier', carrier);
   const { data, error } = await query;
   if (error) { console.error('bvpGetCommissions:', error); return []; }
+  if (!data || data.length === 0) {
+    console.warn('bvpGetCommissions: no commission data returned — check RLS policies on commissions table');
+    return [];
+  }
+  console.log('bvpGetCommissions: loaded', data.length, 'rate rows');
 
   // Agent overrides replace defaults for same key
   const map = new Map();
   data.filter(r => r.is_default).forEach(r => {
-    map.set(`${r.issued_state}|${r.carrier}|${r.enrollment_type}|${r.duration_yr}`, r);
+    map.set(`${r.carrier}|${r.enrollment_type}|${r.duration_yr}`, r);
   });
   data.filter(r => !r.is_default && r.agent_id === agentId).forEach(r => {
-    map.set(`${r.issued_state}|${r.carrier}|${r.enrollment_type}|${r.duration_yr}`, r);
+    map.set(`${r.carrier}|${r.enrollment_type}|${r.duration_yr}`, r);
   });
-  return Array.from(map.values())
-    .sort((a,b) => `${a.issued_state}${a.carrier}${a.enrollment_type}${a.duration_yr}`
-      .localeCompare(`${b.issued_state}${b.carrier}${b.enrollment_type}${b.duration_yr}`));
+  return Array.from(map.values());
 }
 
 // Get a single rate via DB function (handles fallback to Generic)
