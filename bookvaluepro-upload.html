@@ -1171,6 +1171,19 @@ async function _doUpload(mode, versionName) {
     const VALUATION = new Date('2026-05-02');
 
     // ── Helper functions ──────────────────────────────────────────
+    function parseDate(val) {
+      if (!val || val === '') return null;
+      // Handle Excel serial number dates (e.g. 21035)
+      if (!isNaN(val) && Number(val) > 10000) {
+        const excelEpoch = new Date(1899, 11, 30);
+        const d = new Date(excelEpoch.getTime() + Number(val) * 86400000);
+        return d.toISOString().split('T')[0];
+      }
+      // Handle string dates
+      const d = new Date(val);
+      if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+      return null;
+    }
     function issueAge(dobStr, effDateStr) {
       if (!dobStr || !effDateStr) return null;
       const dob = new Date(dobStr);
@@ -1262,8 +1275,8 @@ async function _doUpload(mode, versionName) {
     }
     const policies = (state.rows || []).map((row, i) => {
       const carrier    = row['Company'] || row['company'] || 'Generic';
-      const dobStr     = row['DOB'] || row['dob'] || null;
-      const effDateStr = row['EffectiveDte'] || row['effective_date'] || row['EffDate'] || null;
+      const dobStr     = parseDate(row['DOB'] || row['dob'] || null);
+      const effDateStr = parseDate(row['EffectiveDte'] || row['effective_date'] || row['EffDate'] || null);
       const currDurYr  = durationYr(effDateStr);
 
       // Priority calculated from business rules — not an input field
