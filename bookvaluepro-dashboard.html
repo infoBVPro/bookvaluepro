@@ -1020,8 +1020,11 @@ async function initFromSupabase() {
   if (nameEl) nameEl.textContent = bvpSession.user.email;
 
   showLoadingState();
+  console.log('Dashboard: session found for', bvpSession.user.email);
+  console.log('Dashboard: fetching active book for agent', bvpSession.user.id);
 
   bvpBook = await bvpGetActiveBook(bvpSession.user.id);
+  console.log('Dashboard: active book result:', bvpBook ? bvpBook.file_name : 'NULL — no active book found');
 
   if (bvpBook) {
     if (bvpBook.discount_rate) {
@@ -1042,6 +1045,8 @@ async function initFromSupabase() {
     }
 
     const dbPolicies = await bvpGetPolicies(bvpBook.id);
+    console.log('Dashboard: book found:', bvpBook.file_name, '| policy_count:', bvpBook.policy_count);
+    console.log('Dashboard: policies returned from Supabase:', dbPolicies.length);
     if (dbPolicies.length > 0) {
       POLICIES.length = 0;
       dbPolicies.forEach(p => {
