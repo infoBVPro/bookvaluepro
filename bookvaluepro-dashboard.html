@@ -1048,6 +1048,15 @@ async function initFromSupabase() {
     console.log('Dashboard: book found:', bvpBook.file_name, '| policy_count:', bvpBook.policy_count);
     console.log('Dashboard: policies returned from Supabase:', dbPolicies.length);
     if (dbPolicies.length > 0) {
+      console.log('Dashboard: first policy sample:', JSON.stringify({
+        company:   dbPolicies[0].company,
+        comm_prem: dbPolicies[0].comm_prem,
+        curr_prem: dbPolicies[0].curr_prem,
+        priority:  dbPolicies[0].priority,
+        duration_yr: dbPolicies[0].duration_yr,
+        curr_pcts: dbPolicies[0].curr_pcts,
+        ren_pcts:  dbPolicies[0].ren_pcts,
+      }));
       POLICIES.length = 0;
       dbPolicies.forEach(p => {
         POLICIES.push({
