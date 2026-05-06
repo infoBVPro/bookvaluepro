@@ -1261,9 +1261,11 @@ async function _doUpload(mode, versionName) {
             const idx = Math.min(Math.max((r.duration_yr || 1) - 1, 0), 10);
             rates[idx] = parseFloat(r.rate) || 0;
           });
+          console.log('buildRateArray:', co, enrollmentType, '-> rates:', rates);
           return rates;
         }
       }
+      console.warn('buildRateArray: NO MATCH for carrier:', carrier, 'type:', enrollmentType, '— sample allComms carriers:', [...new Set(allComms.map(r => r.carrier))].slice(0,5));
       return rates;
     }
 
