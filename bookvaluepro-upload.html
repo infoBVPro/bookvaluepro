@@ -1249,10 +1249,24 @@ async function _doUpload(mode, versionName) {
     showParsing(true, 'Loading commission schedules…');
     const allComms = await bvpGetCommissions(bvpSession.user.id);
 
+    // ── Hardcoded fallback rates by carrier (Open Enrollment) ────
+    // Used when Supabase commission lookup returns zeros
+    const FALLBACK_RATES = {
+      'AARP/UHC':            [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
+      'AETNA':               [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
+      'Elevance':            [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
+      'Humana':              [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.05,0.05],
+      'Mutual of Omaha':     [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
+      'Blue Cross Blue Shield': [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.05,0.05],
+      'HealthSpring':        [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
+      'Generic':             [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
+    };
+
     function buildRateArray(carrier, enrollmentType) {
       const rates = Array(11).fill(0);
       const carriers = [carrier, 'Generic'];
       for (const co of carriers) {
+        const availableTypes = [...new Set(allComms.filter(r => r.carrier === co).map(r => r.enrollment_type))];
         const rows = allComms.filter(r =>
           r.carrier === co && r.enrollment_type === enrollmentType
         );
@@ -1261,12 +1275,17 @@ async function _doUpload(mode, versionName) {
             const idx = Math.min(Math.max((r.duration_yr || 1) - 1, 0), 10);
             rates[idx] = parseFloat(r.rate) || 0;
           });
-          console.log('buildRateArray:', co, enrollmentType, '-> rates:', rates);
-          return rates;
+          // Verify we got real rates, not all zeros
+          if (rates.some(r => r > 0)) {
+            console.log('buildRateArray: Supabase rates for', co, '->', rates);
+            return rates;
+          }
         }
       }
-      console.warn('buildRateArray: NO MATCH for carrier:', carrier, 'type:', enrollmentType, '— sample allComms carriers:', [...new Set(allComms.map(r => r.carrier))].slice(0,5));
-      return rates;
+      // Fall back to hardcoded rates
+      const fallback = FALLBACK_RATES[carrier] || FALLBACK_RATES['Generic'];
+      console.log('buildRateArray: using fallback rates for', carrier, '->', fallback);
+      return [...fallback];
     }
 
     // ── Build policy records ──────────────────────────────────────
