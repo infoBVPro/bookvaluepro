@@ -225,7 +225,7 @@ async function handleLogin(){
   btn.disabled=true;btn.textContent='Signing in...';
   const{error}=await bvp.auth.signInWithPassword({email,password:pw});
   if(error){showMsg('login',error.message,true);btn.disabled=false;btn.textContent='Sign in →';}
-  else{showMsg('login','✓ Signed in! Redirecting...',false);setTimeout(()=>{window.location.href='bookvaluepro-upload.html';},1000);}
+  else{showMsg('login','✓ Signed in! Redirecting...',false);bvpTrackActivity();setTimeout(async()=>{const{data:{user}}=await bvp.auth.getUser();await bvpSmartRedirect(user.id);},1000);}
 }
 
 document.querySelectorAll('.modal-overlay').forEach(o=>{o.addEventListener('click',e=>{if(e.target===o)closeModal(o.id.replace('modal-',''));});});
@@ -237,7 +237,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){closeModal('signup');closeModal('login');}
 });
 
-(async()=>{const{data:{session}}=await bvp.auth.getSession();if(session)window.location.href='bookvaluepro-upload.html';})();
+(async()=>{const{data:{session}}=await bvp.auth.getSession();if(session){bvpTrackActivity();await bvpSmartRedirect(session.user.id);}})();
 </script>
 </body>
 </html>

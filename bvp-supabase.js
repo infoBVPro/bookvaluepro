@@ -23,15 +23,65 @@ const BVP_CARRIERS = [
 ];
 
 // ── AUTH ──────────────────────────────────────────────────────
+const BVP_IDLE_TIMEOUT_MS = 4 * 60 * 60 * 1000; // 4 hours
+const BVP_LAST_ACTIVE_KEY = 'bvp_last_active';
+
+function bvpTrackActivity() {
+  localStorage.setItem(BVP_LAST_ACTIVE_KEY, Date.now().toString());
+}
+
+function bvpIsSessionExpired() {
+  const last = parseInt(localStorage.getItem(BVP_LAST_ACTIVE_KEY) || '0');
+  if (!last) return false;
+  return (Date.now() - last) > BVP_IDLE_TIMEOUT_MS;
+}
+
+let _bvpIdleTimer = null;
+function bvpStartIdleTimer() {
+  if (_bvpIdleTimer) return;
+  const reset = () => bvpTrackActivity();
+  ['mousedown','mousemove','keydown','touchstart','scroll','click'].forEach(evt => {
+    document.addEventListener(evt, reset, { passive: true });
+  });
+  _bvpIdleTimer = setInterval(async () => {
+    if (bvpIsSessionExpired()) {
+      clearInterval(_bvpIdleTimer);
+      await bvp.auth.signOut();
+      localStorage.removeItem(BVP_LAST_ACTIVE_KEY);
+      window.location.href = 'index.html';
+    }
+  }, 5 * 60 * 1000);
+}
+
 async function bvpRequireAuth() {
+  if (bvpIsSessionExpired()) {
+    await bvp.auth.signOut();
+    localStorage.removeItem(BVP_LAST_ACTIVE_KEY);
+    window.location.href = 'index.html';
+    return null;
+  }
   const { data: { session } } = await bvp.auth.getSession();
   if (!session) { window.location.href = 'index.html'; return null; }
+  bvpTrackActivity();
+  bvpStartIdleTimer();
   return session;
 }
 
 async function bvpSignOut() {
+  clearInterval(_bvpIdleTimer);
+  localStorage.removeItem(BVP_LAST_ACTIVE_KEY);
   await bvp.auth.signOut();
   window.location.href = 'index.html';
+}
+
+// Smart redirect — dashboard if book exists, upload if not
+async function bvpSmartRedirect(agentId) {
+  const book = await bvpGetActiveBook(agentId);
+  if (book && book.policy_count > 0) {
+    window.location.href = 'bookvaluepro-dashboard.html';
+  } else {
+    window.location.href = 'bookvaluepro-upload.html';
+  }
 }
 
 // ── BOOKS ─────────────────────────────────────────────────────
