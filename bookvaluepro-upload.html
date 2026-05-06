@@ -1329,7 +1329,8 @@ async function _doUpload(mode, versionName) {
       ['Redirecting to your dashboard…']
     );
     btnAnalyze.disabled = true;
-    setTimeout(() => { window.location.href = 'bookvaluepro-dashboard.html'; }, 1500);
+    console.log('Upload complete — redirecting in 8 seconds. Screenshot console now!');
+    setTimeout(() => { window.location.href = 'bookvaluepro-dashboard.html'; }, 8000);
 
   } catch (err) {
     console.error(err);
