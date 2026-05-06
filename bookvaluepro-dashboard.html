@@ -48,9 +48,10 @@ html, body {
 
 /* ── HEADER ── */
 header {
-  background: var(--white);
-  border-bottom: 1px solid var(--cream-2);
-  padding: 18px 40px;
+  background: var(--deep, #0d2e1e);
+  border-bottom: 1px solid rgba(61,162,114,0.15);
+  padding: 0 2rem;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -89,33 +90,24 @@ header {
 }
 
 .step {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--ink-3);
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: #7abf9a;
 }
-
-.step.active { color: var(--ink); font-weight: 500; }
-.step.done   { color: var(--accent-2); }
+.step.active { color: white; font-weight: 500; }
+.step.done   { color: #3da272; }
 
 .step-num {
-  width: 20px; height: 20px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--mono);
-  font-size: 10px;
-  background: var(--cream-2);
-  color: var(--ink-3);
+  width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 10px;
+  background: rgba(255,255,255,0.1); color: #7abf9a;
   flex-shrink: 0;
 }
 
-.step.active .step-num { background: var(--accent); color: #fff; }
-.step.done   .step-num { background: var(--accent-2); color: #fff; }
+.step.active .step-num { background: #3da272; color: #fff; }
+.step.done   .step-num { background: #1a5c3a; color: #3da272; }
 
-.step-sep { width: 24px; height: 1px; background: var(--cream-2); margin: 0 4px; }
+.step-sep { width: 24px; height: 1px; background: rgba(122,191,154,0.2); margin: 0 4px; }
 
 /* ── LAYOUT ── */
 .page { max-width: 1200px; margin: 0 auto; padding: 36px 40px 80px; }
@@ -495,11 +487,14 @@ tfoot td.num { text-align: right; }
 
 <!-- HEADER -->
 <header>
-  <span class="logo-mark">BookValuePro</span>
+  <a href="#" style="text-decoration:none;display:flex;align-items:center;gap:10px;">
+    <div style="width:34px;height:34px;border-radius:50%;background:#1a5c3a;border:1.5px solid #3da272;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:white;font-family:var(--sans);">BV</div>
+    <span style="font-family:var(--serif);font-size:17px;color:white;">Book<span style="color:#3da272;">Value</span>Pro</span>
+  </a>
   <div class="header-right">
-    <span id="agent-name" style="font-family:var(--mono);font-size:12px;color:var(--ink-3)"></span>
-    <button onclick="bvpSignOut()" style="font-size:12px;color:var(--ink-3);background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:6px;border:1px solid var(--cream-2)">Sign out</button>
-    <span class="book-name" id="book-name">No book uploaded</span>
+    <span id="agent-name" style="font-family:var(--mono);font-size:12px;color:#7abf9a;"></span>
+    <button onclick="bvpSignOut()" style="font-size:12px;color:#7abf9a;background:transparent;border:1px solid rgba(122,191,154,0.3);cursor:pointer;padding:6px 14px;border-radius:6px;font-family:var(--sans);transition:all 0.2s;">Sign out</button>
+    <span class="book-name" id="book-name" style="font-size:11px;color:#7abf9a;background:rgba(26,92,58,0.4);border:1px solid rgba(61,162,114,0.2);padding:4px 12px;border-radius:20px;font-family:var(--mono);">No book uploaded</span>
     <div class="steps">
       <a href="bookvaluepro-upload.html" class="step done" style="text-decoration:none;cursor:pointer;">
         <div class="step-num">✓</div>
@@ -510,6 +505,11 @@ tfoot td.num { text-align: right; }
         <div class="step-num">2</div>
         <span>Dashboard</span>
       </div>
+      <div class="step-sep"></div>
+      <a href="bookvaluepro-clients.html" class="step" style="text-decoration:none;cursor:pointer;">
+        <div class="step-num">4</div>
+        <span>Clients</span>
+      </a>
       <div class="step-sep"></div>
       <a href="bookvaluepro-outreach.html" class="step" style="text-decoration:none;cursor:pointer;">
         <div class="step-num">3</div>
