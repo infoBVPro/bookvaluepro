@@ -130,16 +130,10 @@ async function bvpGetCommissions(agentId, state = null, carrier = null) {
     return [];
   }
   console.log('bvpGetCommissions: loaded', data.length, 'rate rows');
-
-  // Agent overrides replace defaults for same key
-  const map = new Map();
-  data.filter(r => r.is_default).forEach(r => {
-    map.set(`${r.carrier}|${r.enrollment_type}|${r.duration_yr}`, r);
-  });
-  data.filter(r => !r.is_default && r.agent_id === agentId).forEach(r => {
-    map.set(`${r.carrier}|${r.enrollment_type}|${r.duration_yr}`, r);
-  });
-  return Array.from(map.values());
+  // Log unique carriers and enrollment types for debugging
+  console.log('bvpGetCommissions: unique carriers:', [...new Set(data.map(r => r.carrier))]);
+  console.log('bvpGetCommissions: unique enrollment types:', [...new Set(data.map(r => r.enrollment_type))]);
+  return data;
 }
 
 // Get a single rate via DB function (handles fallback to Generic)
