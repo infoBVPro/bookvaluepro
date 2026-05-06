@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BookValuePro — Clients</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="bvp-supabase.js"></script>
+<style>
+:root {
+  --forest: #1a5c3a; --emerald: #3da272; --deep: #0d2e1e;
+  --slate: #5a6472; --mist: #e6f5ee; --sage: #7abf9a;
+  --border: #dde8e2; --text: #1a1a1a; --text-muted: #556b5e;
+  --light-bg: #f7faf8; --white: #fff;
+  --p1: #1a5c3a; --p1-bg: #e6f5ee;
+  --p2: #2563a8; --p2-bg: #e8f1fb;
+  --p3: #b45309; --p3-bg: #fef3e2;
+  --sans: 'DM Sans', sans-serif;
+  --serif: 'DM Serif Display', serif;
+  --mono: 'DM Mono', monospace;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--sans); color: var(--text); background: var(--light-bg); overflow-x: hidden; }
+
+/* ── HEADER ── */
+header {
+  background: var(--deep); height: 64px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 2rem; border-bottom: 1px solid rgba(61,162,114,0.15);
+  position: sticky; top: 0; z-index: 100;
+}
+.logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+.logo-mark {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--forest); border: 1.5px solid var(--emerald);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; color: white;
+}
+.logo-word { font-family: var(--serif); font-size: 17px; color: white; }
+.logo-word span { color: var(--emerald); }
+.header-right { display: flex; align-items: center; gap: 16px; }
+.agent-email { font-size: 13px; color: var(--sage); }
+.btn-signout {
+  font-size: 12px; color: var(--sage); background: transparent;
+  border: 1px solid rgba(122,191,154,0.3); padding: 6px 14px;
+  border-radius: 6px; cursor: pointer; font-family: var(--sans);
+  transition: all 0.2s;
+}
+.btn-signout:hover { border-color: var(--emerald); color: white; }
+
+/* ── NAV STEPS ── */
+.steps-bar {
+  background: var(--deep); padding: 0 2rem 12px;
+  display: flex; align-items: center; gap: 0;
+  border-bottom: 1px solid rgba(61,162,114,0.1);
+}
+.book-chip {
+  font-size: 11px; color: var(--sage); background: rgba(26,92,58,0.4);
+  border: 1px solid rgba(61,162,114,0.2); padding: 4px 12px;
+  border-radius: 20px; font-family: var(--mono); margin-right: auto;
+}
+.steps { display: flex; align-items: center; gap: 0; }
+.step {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--sage); padding: 4px 10px;
+  border-radius: 6px; text-decoration: none; transition: all 0.2s;
+}
+.step:hover { color: white; }
+.step.active { color: white; font-weight: 500; }
+.step.done { color: var(--emerald); }
+.step-num {
+  width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 10px;
+  background: rgba(255,255,255,0.1); color: var(--sage);
+}
+.step.active .step-num { background: var(--emerald); color: white; }
+.step.done .step-num { background: var(--forest); color: var(--emerald); }
+.step-sep { width: 20px; height: 1px; background: rgba(122,191,154,0.2); }
+
+/* ── PAGE LAYOUT ── */
+.page { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+.page-header { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+.page-title { font-family: var(--serif); font-size: 32px; color: var(--deep); line-height: 1; }
+.page-sub { font-size: 14px; color: var(--text-muted); margin-top: 4px; }
+.client-count { font-size: 13px; color: var(--text-muted); font-family: var(--mono); }
+
+/* ── TOOLBAR ── */
+.toolbar {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: 14px; padding: 1rem 1.25rem;
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 1.25rem; flex-wrap: wrap;
+}
+.search-wrap { position: relative; flex: 1; min-width: 200px; }
+.search-wrap svg {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  width: 15px; height: 15px; stroke: var(--slate); fill: none; stroke-width: 1.5;
+  pointer-events: none;
+}
+.search-input {
+  width: 100%; padding: 9px 12px 9px 36px;
+  border: 1.5px solid var(--border); border-radius: 8px;
+  font-size: 13px; font-family: var(--sans); color: var(--text);
+  background: var(--light-bg); outline: none; transition: border-color 0.2s;
+}
+.search-input:focus { border-color: var(--emerald); background: white; }
+.search-input::placeholder { color: #aab8b2; }
+.filter-select {
+  padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 8px;
+  font-size: 13px; font-family: var(--sans); color: var(--text);
+  background: var(--light-bg); outline: none; cursor: pointer;
+  transition: border-color 0.2s; min-width: 130px;
+}
+.filter-select:focus { border-color: var(--emerald); }
+.toolbar-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.btn-clear {
+  font-size: 12px; color: var(--text-muted); background: none;
+  border: 1px solid var(--border); padding: 7px 14px;
+  border-radius: 7px; cursor: pointer; font-family: var(--sans);
+  transition: all 0.2s;
+}
+.btn-clear:hover { border-color: var(--slate); color: var(--text); }
+
+/* ── TABLE ── */
+.table-wrap {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: 14px; overflow: hidden;
+}
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead { background: var(--light-bg); border-bottom: 1px solid var(--border); }
+th {
+  padding: 11px 16px; text-align: left;
+  font-size: 11px; font-weight: 600; color: var(--slate);
+  letter-spacing: 0.07em; text-transform: uppercase;
+  white-space: nowrap; cursor: pointer; user-select: none;
+  transition: color 0.15s;
+}
+th:hover { color: var(--forest); }
+th.sort-asc::after { content: ' ↑'; color: var(--emerald); }
+th.sort-desc::after { content: ' ↓'; color: var(--emerald); }
+tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s; cursor: pointer;
+}
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: var(--mist); }
+td { padding: 12px 16px; vertical-align: middle; }
+.policy-num {
+  font-family: var(--mono); font-size: 12px;
+  color: var(--text-muted); white-space: nowrap;
+}
+.client-name { font-weight: 500; color: var(--deep); }
+.client-name.unnamed { color: var(--text-muted); font-style: italic; font-weight: 400; }
+.priority-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+}
+.p1 { background: var(--p1-bg); color: var(--p1); }
+.p2 { background: var(--p2-bg); color: var(--p2); }
+.p3 { background: var(--p3-bg); color: var(--p3); }
+.carrier-tag {
+  font-size: 12px; color: var(--text-muted);
+  background: var(--light-bg); padding: 2px 8px;
+  border-radius: 4px; font-family: var(--mono);
+}
+.premium-val { font-family: var(--mono); font-size: 13px; }
+.npv-val { font-family: var(--mono); font-size: 13px; color: var(--forest); font-weight: 500; }
+.contact-cell { font-size: 12px; color: var(--text-muted); }
+.contact-cell a { color: var(--emerald); text-decoration: none; }
+.contact-cell a:hover { text-decoration: underline; }
+.no-contact { color: #ccc; }
+.empty-state {
+  text-align: center; padding: 60px 20px;
+  color: var(--text-muted); font-size: 14px;
+}
+.empty-state div:first-child { font-size: 32px; margin-bottom: 12px; }
+
+/* ── DETAIL PANEL ── */
+.panel-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(7,22,13,0.6); backdrop-filter: blur(4px);
+  display: none; justify-content: flex-end;
+}
+.panel-overlay.active { display: flex; }
+.detail-panel {
+  width: 440px; max-width: 100vw; height: 100vh;
+  background: white; overflow-y: auto;
+  box-shadow: -8px 0 40px rgba(0,0,0,0.15);
+  animation: slideIn 0.25s ease;
+  display: flex; flex-direction: column;
+}
+@keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+.panel-header {
+  background: var(--deep); padding: 1.25rem 1.5rem;
+  display: flex; align-items: flex-start; justify-content: space-between;
+  position: sticky; top: 0; z-index: 10;
+}
+.panel-title { font-family: var(--serif); font-size: 20px; color: white; margin-bottom: 4px; }
+.panel-subtitle { font-size: 12px; color: var(--sage); font-family: var(--mono); }
+.panel-close {
+  background: rgba(255,255,255,0.1); border: none; color: white;
+  width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; transition: background 0.2s; flex-shrink: 0;
+}
+.panel-close:hover { background: rgba(255,255,255,0.2); }
+.panel-body { padding: 1.5rem; flex: 1; }
+.panel-section { margin-bottom: 1.75rem; }
+.panel-section-title {
+  font-size: 11px; font-weight: 600; color: var(--slate);
+  letter-spacing: 0.1em; text-transform: uppercase;
+  margin-bottom: 0.75rem; padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field-group { display: flex; flex-direction: column; gap: 4px; }
+.field-group.full { grid-column: 1 / -1; }
+.field-label {
+  font-size: 11px; font-weight: 600; color: var(--slate);
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+.field-value {
+  font-size: 14px; color: var(--text); padding: 8px 10px;
+  background: var(--light-bg); border-radius: 8px;
+  border: 1.5px solid var(--border);
+  font-family: var(--sans);
+}
+.field-value.mono { font-family: var(--mono); font-size: 13px; }
+.field-value.highlight { color: var(--forest); font-weight: 600; }
+.field-input {
+  font-size: 14px; color: var(--text); padding: 8px 10px;
+  background: white; border-radius: 8px;
+  border: 1.5px solid var(--emerald);
+  font-family: var(--sans); outline: none; width: 100%;
+  transition: box-shadow 0.2s;
+}
+.field-input:focus { box-shadow: 0 0 0 3px rgba(61,162,114,0.12); }
+.panel-actions {
+  padding: 1.25rem 1.5rem; border-top: 1px solid var(--border);
+  display: flex; gap: 10px; background: var(--light-bg);
+  position: sticky; bottom: 0;
+}
+.btn-save {
+  flex: 1; background: var(--forest); color: white; border: none;
+  padding: 11px; border-radius: 9px; font-size: 14px;
+  font-family: var(--sans); font-weight: 600; cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-save:hover { background: var(--emerald); }
+.btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-cancel {
+  background: white; color: var(--text-muted); border: 1px solid var(--border);
+  padding: 11px 20px; border-radius: 9px; font-size: 14px;
+  font-family: var(--sans); cursor: pointer; transition: all 0.2s;
+}
+.btn-cancel:hover { border-color: var(--slate); }
+.edit-toggle {
+  background: var(--mist); color: var(--forest); border: 1px solid var(--border);
+  padding: 7px 16px; border-radius: 7px; font-size: 13px;
+  font-family: var(--sans); font-weight: 500; cursor: pointer;
+  transition: all 0.2s; margin-left: auto;
+}
+.edit-toggle:hover { background: var(--emerald); color: white; border-color: var(--emerald); }
+.save-msg {
+  font-size: 12px; padding: 8px 12px; border-radius: 7px;
+  margin-bottom: 10px; display: none;
+}
+.save-msg.success { background: var(--mist); color: var(--forest); border: 1px solid #b8dfc8; display: block; }
+.save-msg.error { background: #fdecea; color: #c0392b; border: 1px solid #f5c6c2; display: block; }
+
+/* ── PAGINATION ── */
+.pagination {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem 1.25rem; border-top: 1px solid var(--border);
+  background: var(--light-bg); border-radius: 0 0 14px 14px;
+  font-size: 13px; color: var(--text-muted); flex-wrap: wrap; gap: 8px;
+}
+.page-btns { display: flex; gap: 6px; }
+.page-btn {
+  width: 32px; height: 32px; border-radius: 7px;
+  border: 1px solid var(--border); background: white;
+  font-size: 13px; cursor: pointer; font-family: var(--mono);
+  transition: all 0.2s; display: flex; align-items: center; justify-content: center;
+}
+.page-btn:hover { border-color: var(--emerald); color: var(--emerald); }
+.page-btn.active { background: var(--forest); color: white; border-color: var(--forest); }
+.page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── LOADING ── */
+.loading-state {
+  text-align: center; padding: 60px 20px;
+  color: var(--text-muted); font-size: 14px;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <a class="logo" href="bookvaluepro-dashboard.html">
+    <div class="logo-mark">BV</div>
+    <div class="logo-word">Book<span>Value</span>Pro</div>
+  </a>
+  <div class="header-right">
+    <span class="agent-email" id="agent-name"></span>
+    <button class="btn-signout" onclick="bvpSignOut()">Sign out</button>
+  </div>
+</header>
+
+<div class="steps-bar">
+  <span class="book-name book-chip" id="book-name">Loading...</span>
+  <div class="steps">
+    <a href="bookvaluepro-upload.html" class="step done"><div class="step-num">✓</div><span>Upload</span></a>
+    <div class="step-sep"></div>
+    <a href="bookvaluepro-dashboard.html" class="step done"><div class="step-num">✓</div><span>Dashboard</span></a>
+    <div class="step-sep"></div>
+    <a href="bookvaluepro-clients.html" class="step active"><div class="step-num">4</div><span>Clients</span></a>
+    <div class="step-sep"></div>
+    <a href="bookvaluepro-outreach.html" class="step"><div class="step-num">3</div><span>Outreach</span></a>
+  </div>
+</div>
+
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Clients</div>
+      <div class="page-sub">Your full book of business — search, filter, and manage individual clients</div>
+    </div>
+    <div class="client-count" id="client-count">— policies</div>
+  </div>
+
+  <!-- TOOLBAR -->
+  <div class="toolbar">
+    <div class="search-wrap">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input class="search-input" type="text" id="search-input" placeholder="Search by name or policy #..."/>
+    </div>
+    <select class="filter-select" id="filter-carrier">
+      <option value="">All carriers</option>
+    </select>
+    <select class="filter-select" id="filter-priority">
+      <option value="">All priorities</option>
+      <option value="1">Priority 1 — Save & Switch</option>
+      <option value="2">Priority 2 — Steady Book</option>
+      <option value="3">Priority 3 — Loyalty Watch</option>
+    </select>
+    <select class="filter-select" id="filter-state">
+      <option value="">All states</option>
+    </select>
+    <div class="toolbar-right">
+      <button class="btn-clear" onclick="clearFilters()">Clear filters</button>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="table-wrap">
+    <div id="loading-state" class="loading-state">
+      <div>⏳</div>
+      <div>Loading your clients...</div>
+    </div>
+    <table id="clients-table" style="display:none;">
+      <thead>
+        <tr>
+          <th onclick="sortBy('policy_idx')" id="th-policy_idx">#</th>
+          <th onclick="sortBy('name')" id="th-name">Client</th>
+          <th onclick="sortBy('priority')" id="th-priority">Priority</th>
+          <th onclick="sortBy('company')" id="th-company">Carrier</th>
+          <th onclick="sortBy('issued_state')" id="th-issued_state">State</th>
+          <th onclick="sortBy('dob')" id="th-dob">DOB</th>
+          <th onclick="sortBy('eff_month')" id="th-eff_month">Eff. Date</th>
+          <th onclick="sortBy('duration_yr')" id="th-duration_yr">Duration</th>
+          <th onclick="sortBy('curr_prem')" id="th-curr_prem">Curr. Premium</th>
+          <th onclick="sortBy('comm_prem')" id="th-comm_prem">Comm. Premium</th>
+          <th onclick="sortBy('curr_npv')" id="th-curr_npv">NPV</th>
+          <th>Contact</th>
+        </tr>
+      </thead>
+      <tbody id="clients-tbody"></tbody>
+    </table>
+    <div id="empty-state" class="empty-state" style="display:none;">
+      <div>🔍</div>
+      <div>No clients match your filters</div>
+    </div>
+    <div class="pagination" id="pagination" style="display:none;">
+      <span id="page-info">Showing 1–50 of 262</span>
+      <div class="page-btns" id="page-btns"></div>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL PANEL -->
+<div class="panel-overlay" id="panel-overlay" onclick="closePanelOnOverlay(event)">
+  <div class="detail-panel" id="detail-panel">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title" id="panel-title">Client Detail</div>
+        <div class="panel-subtitle" id="panel-subtitle"></div>
+      </div>
+      <button class="panel-close" onclick="closePanel()">✕</button>
+    </div>
+    <div class="panel-body" id="panel-body">
+      <!-- populated by JS -->
+    </div>
+    <div class="panel-actions" id="panel-actions">
+      <button class="btn-save" id="btn-save" onclick="saveClient()" style="display:none;">Save changes</button>
+      <button class="btn-cancel" id="btn-cancel" onclick="toggleEdit(false)" style="display:none;">Cancel</button>
+      <button class="edit-toggle" id="edit-toggle" onclick="toggleEdit(true)">✏️ Edit client</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── STATE ─────────────────────────────────────────────────────────────
+let allClients = [];
+let filtered   = [];
+let sortCol    = 'policy_idx';
+let sortDir    = 'asc';
+let currentPage = 1;
+const PAGE_SIZE = 50;
+let activeClient = null;
+let editMode = false;
+let bvpSession = null;
+let bvpBook = null;
+
+// ── INIT ──────────────────────────────────────────────────────────────
+(async () => {
+  bvpSession = await bvpRequireAuth();
+  if (!bvpSession) return;
+
+  document.getElementById('agent-name').textContent = bvpSession.user.email;
+
+  bvpBook = await bvpGetActiveBook(bvpSession.user.id);
+  if (bvpBook) {
+    document.getElementById('book-name').textContent = bvpBook.file_name + ' — ' + bvpBook.policy_count + ' policies';
+    const policies = await bvpGetPolicies(bvpBook.id);
+    allClients = policies.map(p => ({
+      ...p,
+      name: [p.first_name, p.last_name].filter(Boolean).join(' ') || null,
+    }));
+    buildFilterOptions();
+    applyFilters();
+    document.getElementById('loading-state').style.display = 'none';
+    document.getElementById('clients-table').style.display = 'table';
+    document.getElementById('client-count').textContent = allClients.length + ' policies';
+  } else {
+    document.getElementById('loading-state').innerHTML = '<div>📂</div><div>No book uploaded yet. <a href="bookvaluepro-upload.html" style="color:var(--emerald)">Upload your book →</a></div>';
+  }
+})();
+
+// ── FILTER OPTIONS ────────────────────────────────────────────────────
+function buildFilterOptions() {
+  const carriers = [...new Set(allClients.map(c => c.company).filter(Boolean))].sort();
+  const states   = [...new Set(allClients.map(c => c.issued_state).filter(Boolean))].sort();
+
+  const carrierSel = document.getElementById('filter-carrier');
+  carriers.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; carrierSel.appendChild(o); });
+
+  const stateSel = document.getElementById('filter-state');
+  states.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; stateSel.appendChild(o); });
+}
+
+// ── FILTER + SORT ─────────────────────────────────────────────────────
+function applyFilters() {
+  const search   = document.getElementById('search-input').value.toLowerCase();
+  const carrier  = document.getElementById('filter-carrier').value;
+  const priority = document.getElementById('filter-priority').value;
+  const state    = document.getElementById('filter-state').value;
+
+  filtered = allClients.filter(c => {
+    if (carrier  && c.company      !== carrier)           return false;
+    if (priority && String(c.priority) !== priority)      return false;
+    if (state    && c.issued_state  !== state)            return false;
+    if (search) {
+      const nameMatch   = c.name && c.name.toLowerCase().includes(search);
+      const policyMatch = String(c.policy_idx).includes(search);
+      const emailMatch  = c.email && c.email.toLowerCase().includes(search);
+      if (!nameMatch && !policyMatch && !emailMatch) return false;
+    }
+    return true;
+  });
+
+  // Sort
+  filtered.sort((a, b) => {
+    let av = a[sortCol], bv = b[sortCol];
+    if (sortCol === 'name') { av = a.name || 'zzz'; bv = b.name || 'zzz'; }
+    if (av === null || av === undefined) av = sortDir === 'asc' ? Infinity : -Infinity;
+    if (bv === null || bv === undefined) bv = sortDir === 'asc' ? Infinity : -Infinity;
+    if (av < bv) return sortDir === 'asc' ? -1 : 1;
+    if (av > bv) return sortDir === 'asc' ?  1 : -1;
+    return 0;
+  });
+
+  currentPage = 1;
+  renderTable();
+}
+
+function sortBy(col) {
+  if (sortCol === col) { sortDir = sortDir === 'asc' ? 'desc' : 'asc'; }
+  else { sortCol = col; sortDir = 'asc'; }
+  document.querySelectorAll('th').forEach(th => { th.className = ''; });
+  const th = document.getElementById('th-' + col);
+  if (th) th.className = 'sort-' + sortDir;
+  applyFilters();
+}
+
+function clearFilters() {
+  document.getElementById('search-input').value = '';
+  document.getElementById('filter-carrier').value = '';
+  document.getElementById('filter-priority').value = '';
+  document.getElementById('filter-state').value = '';
+  applyFilters();
+}
+
+// ── RENDER TABLE ──────────────────────────────────────────────────────
+function renderTable() {
+  const tbody = document.getElementById('clients-tbody');
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const page  = filtered.slice(start, start + PAGE_SIZE);
+
+  const empty = document.getElementById('empty-state');
+  const pagination = document.getElementById('pagination');
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    pagination.style.display = 'none';
+    document.getElementById('client-count').textContent = '0 matches';
+    return;
+  }
+
+  empty.style.display = 'none';
+  document.getElementById('client-count').textContent = filtered.length + ' of ' + allClients.length + ' policies';
+
+  tbody.innerHTML = page.map(c => `
+    <tr onclick="openPanel('${c.id}')">
+      <td><span class="policy-num">#${String(c.policy_idx).padStart(4,'0')}</span></td>
+      <td><span class="${c.name ? 'client-name' : 'client-name unnamed'}">${c.name || 'Unnamed client'}</span></td>
+      <td>${priorityBadge(c.priority)}</td>
+      <td><span class="carrier-tag">${c.company || '—'}</span></td>
+      <td>${c.issued_state || '—'}</td>
+      <td>${c.dob ? formatDate(c.dob) : '—'}</td>
+      <td>${c.eff_month ? monthName(c.eff_month) : '—'}</td>
+      <td>Yr ${c.duration_yr || '—'}</td>
+      <td class="premium-val">${c.curr_prem ? '$' + c.curr_prem.toFixed(2) : '—'}</td>
+      <td class="premium-val">${c.comm_prem ? '$' + c.comm_prem.toFixed(2) : '—'}</td>
+      <td class="npv-val">${c.curr_npv ? '$' + Math.round(c.curr_npv).toLocaleString() : '—'}</td>
+      <td class="contact-cell">${contactCell(c)}</td>
+    </tr>
+  `).join('');
+
+  renderPagination();
+}
+
+function renderPagination() {
+  const total = filtered.length;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const start = (currentPage - 1) * PAGE_SIZE + 1;
+  const end   = Math.min(currentPage * PAGE_SIZE, total);
+  const pagination = document.getElementById('pagination');
+  pagination.style.display = totalPages > 1 ? 'flex' : 'none';
+  document.getElementById('page-info').textContent = `Showing ${start}–${end} of ${total}`;
+
+  const btns = document.getElementById('page-btns');
+  btns.innerHTML = '';
+
+  const prevBtn = document.createElement('button');
+  prevBtn.className = 'page-btn'; prevBtn.textContent = '←';
+  prevBtn.disabled = currentPage === 1;
+  prevBtn.onclick = () => { currentPage--; renderTable(); };
+  btns.appendChild(prevBtn);
+
+  for (let i = 1; i <= totalPages; i++) {
+    if (totalPages > 7 && i > 2 && i < totalPages - 1 && Math.abs(i - currentPage) > 1) {
+      if (i === 3 || i === totalPages - 2) { const dots = document.createElement('span'); dots.textContent = '…'; dots.style.padding = '0 4px'; btns.appendChild(dots); }
+      continue;
+    }
+    const btn = document.createElement('button');
+    btn.className = 'page-btn' + (i === currentPage ? ' active' : '');
+    btn.textContent = i;
+    btn.onclick = (pg => () => { currentPage = pg; renderTable(); })(i);
+    btns.appendChild(btn);
+  }
+
+  const nextBtn = document.createElement('button');
+  nextBtn.className = 'page-btn'; nextBtn.textContent = '→';
+  nextBtn.disabled = currentPage === totalPages;
+  nextBtn.onclick = () => { currentPage++; renderTable(); };
+  btns.appendChild(nextBtn);
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────
+function priorityBadge(p) {
+  const labels = { 1: 'Save & Switch', 2: 'Steady Book', 3: 'Loyalty Watch' };
+  const cls    = { 1: 'p1', 2: 'p2', 3: 'p3' };
+  return `<span class="priority-badge ${cls[p] || 'p2'}">P${p} ${labels[p] || ''}</span>`;
+}
+function formatDate(d) { return d ? d.substring(0, 10) : '—'; }
+function monthName(m) {
+  return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m-1] || '—';
+}
+function contactCell(c) {
+  if (!c.phone && !c.email) return '<span class="no-contact">—</span>';
+  const parts = [];
+  if (c.phone) parts.push(`<a href="tel:${c.phone}" onclick="event.stopPropagation()">${c.phone}</a>`);
+  if (c.email) parts.push(`<a href="mailto:${c.email}" onclick="event.stopPropagation()">${c.email}</a>`);
+  return parts.join(' · ');
+}
+function fmt$(n) { return n != null ? '$' + Number(n).toFixed(2) : '—'; }
+function fmtNPV(n) { return n != null ? '$' + Math.round(n).toLocaleString() : '—'; }
+
+// ── DETAIL PANEL ──────────────────────────────────────────────────────
+function openPanel(id) {
+  activeClient = allClients.find(c => c.id === id);
+  if (!activeClient) return;
+  editMode = false;
+  renderPanel();
+  document.getElementById('panel-overlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+function closePanel() {
+  document.getElementById('panel-overlay').classList.remove('active');
+  document.body.style.overflow = '';
+  activeClient = null; editMode = false;
+}
+function closePanelOnOverlay(e) {
+  if (e.target === document.getElementById('panel-overlay')) closePanel();
+}
+
+function renderPanel() {
+  const c = activeClient;
+  document.getElementById('panel-title').textContent = c.name || 'Unnamed Client';
+  document.getElementById('panel-subtitle').textContent = `Policy #${String(c.policy_idx).padStart(4,'0')} · ${c.company || ''} · ${c.issued_state || ''}`;
+
+  const saveMsg = `<div class="save-msg" id="save-msg"></div>`;
+
+  document.getElementById('panel-body').innerHTML = saveMsg + `
+    <div class="panel-section">
+      <div class="panel-section-title">Identity</div>
+      <div class="field-grid">
+        <div class="field-group">
+          <div class="field-label">Policy #</div>
+          <div class="field-value mono">#${String(c.policy_idx).padStart(4,'0')}</div>
+        </div>
+        <div class="field-group">
+          <div class="field-label">Priority</div>
+          <div class="field-value">${priorityBadge(c.priority)}</div>
+        </div>
+        <div class="field-group">
+          <div class="field-label">First Name</div>
+          ${editMode
+            ? `<input class="field-input" id="edit-first_name" value="${c.first_name || ''}" placeholder="First name"/>`
+            : `<div class="field-value">${c.first_name || '—'}</div>`}
+        </div>
+        <div class="field-group">
+          <div class="field-label">Last Name</div>
+          ${editMode
+            ? `<input class="field-input" id="edit-last_name" value="${c.last_name || ''}" placeholder="Last name"/>`
+            : `<div class="field-value">${c.last_name || '—'}</div>`}
+        </div>
+        <div class="field-group">
+          <div class="field-label">Date of Birth</div>
+          <div class="field-value mono">${formatDate(c.dob)}</div>
+        </div>
+        <div class="field-group">
+          <div class="field-label">Attained Age</div>
+          <div class="field-value">${c.attained_age || '—'}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">Policy Details</div>
+      <div class="field-grid">
+        <div class="field-group">
+          <div class="field-label">Carrier</div>
+          <div class="field-value">${c.company || '—'}</div>
+        </div>
+        <div class="field-group">
+          <div class="field-label">State</div>
+          <div class="field-value">${c.issued_state || '—'}</div>
+        </div>
+        <div class="field-group">
+          <div class="field-label">Effective Month</div>
+          <div class="field-value">${monthName(c.eff_month)}</div>
+        </div>
+        <div class="field-group">
+          <div class="field-label">Duration Year</div>
+          <div class="field-value">Year ${c.duration_yr || '—'}</div>
+        </div>
+        <div class="field-group">
+          <div class="field-label">Current Premium</div>
+          <div class="field-value mono">${fmt$(c.curr_prem)}</div>
+        </div>
+        <div class="field-group">
+          <div class="field-label">Comm. Premium</div>
+          <div class="field-value mono">${fmt$(c.comm_prem)}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">Financial</div>
+      <div class="field-grid">
+        <div class="field-group">
+          <div class="field-label">Current NPV</div>
+          <div class="field-value mono highlight">${fmtNPV(c.curr_npv)}</div>
+        </div>
+        <div class="field-group">
+          <div class="field-label">Renewal NPV</div>
+          <div class="field-value mono highlight">${fmtNPV(c.ren_npv)}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">Contact</div>
+      <div class="field-grid">
+        <div class="field-group full">
+          <div class="field-label">Email</div>
+          ${editMode
+            ? `<input class="field-input" id="edit-email" type="email" value="${c.email || ''}" placeholder="email@example.com"/>`
+            : `<div class="field-value">${c.email ? `<a href="mailto:${c.email}" style="color:var(--emerald)">${c.email}</a>` : '—'}</div>`}
+        </div>
+        <div class="field-group full">
+          <div class="field-label">Phone</div>
+          ${editMode
+            ? `<input class="field-input" id="edit-phone" type="tel" value="${c.phone || ''}" placeholder="(555) 000-0000"/>`
+            : `<div class="field-value">${c.phone ? `<a href="tel:${c.phone}" style="color:var(--emerald)">${c.phone}</a>` : '—'}</div>`}
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('btn-save').style.display   = editMode ? 'flex' : 'none';
+  document.getElementById('btn-cancel').style.display = editMode ? 'block' : 'none';
+  document.getElementById('edit-toggle').style.display = editMode ? 'none' : 'block';
+}
+
+function toggleEdit(on) {
+  editMode = on;
+  renderPanel();
+}
+
+async function saveClient() {
+  const btn = document.getElementById('btn-save');
+  btn.disabled = true; btn.textContent = 'Saving...';
+
+  const updates = {
+    first_name: document.getElementById('edit-first_name')?.value.trim() || null,
+    last_name:  document.getElementById('edit-last_name')?.value.trim()  || null,
+    email:      document.getElementById('edit-email')?.value.trim()      || null,
+    phone:      document.getElementById('edit-phone')?.value.trim()      || null,
+  };
+
+  const { error } = await bvp.from('policies').update(updates).eq('id', activeClient.id);
+
+  if (error) {
+    const msg = document.getElementById('save-msg');
+    msg.textContent = 'Save failed: ' + error.message;
+    msg.className = 'save-msg error';
+    btn.disabled = false; btn.textContent = 'Save changes';
+  } else {
+    // Update local state
+    Object.assign(activeClient, updates);
+    activeClient.name = [updates.first_name, updates.last_name].filter(Boolean).join(' ') || null;
+    const idx = allClients.findIndex(c => c.id === activeClient.id);
+    if (idx >= 0) allClients[idx] = { ...activeClient };
+
+    editMode = false;
+    renderPanel();
+    renderTable();
+
+    const msg = document.getElementById('save-msg');
+    msg.textContent = '✓ Client updated successfully';
+    msg.className = 'save-msg success';
+    btn.disabled = false; btn.textContent = 'Save changes';
+  }
+}
+
+// ── EVENT LISTENERS ───────────────────────────────────────────────────
+document.getElementById('search-input').addEventListener('input', applyFilters);
+document.getElementById('filter-carrier').addEventListener('change', applyFilters);
+document.getElementById('filter-priority').addEventListener('change', applyFilters);
+document.getElementById('filter-state').addEventListener('change', applyFilters);
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closePanel();
+});
+</script>
+</body>
+</html>
