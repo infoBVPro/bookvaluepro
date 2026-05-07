@@ -93,27 +93,113 @@ tbody td.name-cell{font-weight:500;color:var(--ink);min-width:140px}
 .dur-badge{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
 .no-policies-row td{padding:16px 24px;font-size:13px;color:var(--ink-3);font-style:italic;text-align:center}
 @media(max-width:768px){.page{padding:20px 16px 60px}header{padding:14px 20px}.summary-strip{grid-template-columns:repeat(2,1fr)}}
+
+/* ── STANDARD HEADER ── */
+.bvp-header {
+  background: #0d2e1e;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2rem;
+  border-bottom: 1px solid rgba(61,162,114,0.15);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  gap: 16px;
+}
+.bvp-logo {
+  display: flex; align-items: center; gap: 10px;
+  text-decoration: none; flex-shrink: 0;
+}
+.bvp-logo-mark {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: #1a5c3a; border: 1.5px solid #3da272;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; color: white;
+  font-family: 'DM Sans', sans-serif;
+}
+.bvp-logo-word {
+  font-family: 'DM Serif Display', serif;
+  font-size: 17px; color: white;
+}
+.bvp-logo-word span { color: #3da272; }
+.bvp-header-nav {
+  display: flex; align-items: center; gap: 0;
+  flex: 1; justify-content: center; flex-wrap: wrap;
+}
+.bvp-nav-step {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: #7abf9a;
+  padding: 4px 8px; border-radius: 6px;
+  text-decoration: none; transition: all 0.2s;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer; white-space: nowrap;
+}
+.bvp-nav-step:hover { color: white; }
+.bvp-nav-step.active { color: white; font-weight: 500; cursor: default; }
+.bvp-nav-step.done { color: #3da272; }
+.bvp-nav-step.locked { color: rgba(122,191,154,0.3); cursor: not-allowed; }
+.bvp-nav-num {
+  width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'DM Mono', monospace; font-size: 10px;
+  background: rgba(255,255,255,0.1); color: #7abf9a;
+  flex-shrink: 0;
+}
+.bvp-nav-step.active .bvp-nav-num { background: #3da272; color: white; }
+.bvp-nav-step.done .bvp-nav-num { background: #1a5c3a; color: #3da272; }
+.bvp-nav-step.locked .bvp-nav-num { background: rgba(255,255,255,0.05); color: rgba(122,191,154,0.3); }
+.bvp-nav-sep { width: 20px; height: 1px; background: rgba(122,191,154,0.2); margin: 0 2px; flex-shrink: 0; }
+.bvp-header-right {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+}
+.bvp-book-chip {
+  font-size: 11px; color: #7abf9a;
+  background: rgba(26,92,58,0.4);
+  border: 1px solid rgba(61,162,114,0.2);
+  padding: 4px 12px; border-radius: 20px;
+  font-family: 'DM Mono', monospace;
+  white-space: nowrap; max-width: 220px;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.bvp-agent-email {
+  font-size: 12px; color: #7abf9a;
+  font-family: 'DM Mono', monospace;
+  white-space: nowrap;
+}
+.bvp-signout {
+  font-size: 12px; color: #7abf9a; background: transparent;
+  border: 1px solid rgba(122,191,154,0.3); padding: 6px 14px;
+  border-radius: 6px; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; transition: all 0.2s;
+  white-space: nowrap;
+}
+.bvp-signout:hover { border-color: #3da272; color: white; }
+
 </style>
 </head>
 <body>
-<header>
-  <a href="#" style="text-decoration:none;display:flex;align-items:center;gap:10px;">
-    <div style="width:34px;height:34px;border-radius:50%;background:#1a5c3a;border:1.5px solid #3da272;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:white;">BV</div>
-    <span style="font-family:var(--serif);font-size:17px;color:white;">Book<span style="color:#3da272;">Value</span>Pro</span>
+<header class="bvp-header">
+  <a class="bvp-logo" href="bookvaluepro-dashboard.html">
+    <div class="bvp-logo-mark">BV</div>
+    <div class="bvp-logo-word">Book<span>Value</span>Pro</div>
   </a>
-  <div class="header-right">
-    <span id="agent-name" style="font-size:12px;color:#7abf9a;font-family:var(--mono);"></span>
-    <button onclick="bvpSignOut()" style="font-size:12px;color:#7abf9a;background:transparent;border:1px solid rgba(122,191,154,0.3);cursor:pointer;padding:6px 14px;border-radius:6px;transition:all 0.2s;">Sign out</button>
-    <span class="book-name" id="book-name" style="font-size:11px;color:#7abf9a;background:rgba(26,92,58,0.4);border:1px solid rgba(61,162,114,0.2);padding:4px 12px;border-radius:20px;font-family:var(--mono);">No book uploaded</span>
-    <div class="steps">
-      <a href="bookvaluepro-upload.html" class="step done" style="text-decoration:none;cursor:pointer;"><div class="step-num">✓</div><span>Upload</span></a>
-      <div class="step-sep"></div>
-      <a href="bookvaluepro-dashboard.html" class="step done" style="text-decoration:none;cursor:pointer;"><div class="step-num">✓</div><span>Dashboard</span></a>
-      <div class="step-sep"></div>
-      <a href="bookvaluepro-clients.html" class="step done" style="text-decoration:none;cursor:pointer;"><div class="step-num">4</div><span>Clients</span></a>
-      <div class="step-sep"></div>
-      <div class="step active"><div class="step-num">3</div><span>Outreach</span></div>
-    </div>
+  <nav class="bvp-header-nav">
+    <a href="bookvaluepro-upload.html" class="bvp-nav-step done"><div class="bvp-nav-num">✓</div><span>Upload</span></a>
+      <div class="bvp-nav-sep"></div>
+      <a href="bookvaluepro-dashboard.html" class="bvp-nav-step done"><div class="bvp-nav-num">2</div><span>Dashboard</span></a>
+      <div class="bvp-nav-sep"></div>
+      <a href="bookvaluepro-clients.html" class="bvp-nav-step done"><div class="bvp-nav-num">3</div><span>Clients</span></a>
+      <div class="bvp-nav-sep"></div>
+      <div class="bvp-nav-step active"><div class="bvp-nav-num">4</div><span>Outreach</span></div>
+      <div class="bvp-nav-sep"></div>
+      <a href="bookvaluepro-commissions.html" class="bvp-nav-step done"><div class="bvp-nav-num">5</div><span>Commissions</span></a>
+  </nav>
+  <div class="bvp-header-right">
+    <span class="bvp-book-chip" id="book-name">Loading...</span>
+    <span class="bvp-agent-email" id="agent-name"></span>
+    <button class="bvp-signout" onclick="bvpSignOut()">Sign out</button>
   </div>
 </header>
 <div class="page">
@@ -305,8 +391,10 @@ async function initFromSupabase() {
 
     const dbPolicies = await bvpGetPolicies(bvpBook.id);
     if (dbPolicies.length > 0) {
+      // Enrich with live NPV using current commission rates
+      const enriched = await bvpEnrichPolicies(bvpSession.user.id, dbPolicies, 10, SAVINGS_PCT);
       POLICIES.length = 0;
-      dbPolicies.forEach(p => {
+      enriched.forEach(p => {
         POLICIES.push({
           idx:      p.policy_idx,
           name:     [p.first_name, p.last_name].filter(Boolean).join(' ') || ('Policy #' + p.policy_idx),

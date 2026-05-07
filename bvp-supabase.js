@@ -240,11 +240,11 @@ function bvpCalcCurrentNPV(commPrem, currentDurationYr, commRates, discountPct =
   const r = discountPct / 100;
   let npv = 0;
   for (let i = 0; i < 11; i++) {
-    const durIdx = Math.min(currentDurationYr - 1 + i, 10); // 0-indexed, cap at 10
+    const durIdx = Math.min(currentDurationYr - 1 + i, 10);
     const rate = commRates[durIdx] || 0;
     npv += (commPrem * rate) / Math.pow(1 + r, i + 1);
   }
-  return npv * 12; // monthly → annual
+  return npv * 12;
 }
 
 function bvpCalcRenewalNPV(currPrem, savingsPct, commRates, discountPct = 10) {
@@ -252,8 +252,71 @@ function bvpCalcRenewalNPV(currPrem, savingsPct, commRates, discountPct = 10) {
   const newPrem = currPrem * (1 - savingsPct / 100);
   let npv = 0;
   for (let i = 0; i < 11; i++) {
-    const rate = commRates[i] || 0; // always restarts at duration 1
+    const rate = commRates[i] || 0;
     npv += (newPrem * rate) / Math.pow(1 + r, i + 1);
   }
   return npv * 12;
+}
+
+// ── LIVE NPV ENRICHMENT ───────────────────────────────────────
+// Calculates curr_npv and ren_npv live from current commission rates.
+// Call this after loading policies — replaces stored NPV values with
+// fresh calculations using the agent's current commission schedule.
+// discountPct: discount rate % (default 10)
+// savingsPct:  avg policyholder savings on switch % (default 10)
+
+const FALLBACK_RATES = {
+  'AARP/UHC':               [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
+  'AETNA':                  [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
+  'Elevance':               [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
+  'Humana':                 [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.05,0.05],
+  'Mutual of Omaha':        [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
+  'Blue Cross Blue Shield': [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.05,0.05],
+  'HealthSpring':           [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
+  'Generic':                [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
+};
+
+async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct = 10) {
+  // Load all commission rates for this agent
+  const comms = await bvpGetCommissions(agentId);
+
+  // Build rate lookup: carrier|enrollmentType -> array[11] of rates
+  function getRates(carrier, enrollmentType) {
+    const rows = comms.filter(r =>
+      r.carrier === carrier && r.enrollment_type === enrollmentType
+    );
+    if (rows.length > 0) {
+      const rates = Array(11).fill(0);
+      rows.forEach(r => {
+        const idx = Math.min(Math.max((r.duration_yr || 1) - 1, 0), 10);
+        rates[idx] = parseFloat(r.rate) || 0;
+      });
+      if (rates.some(r => r > 0)) return rates;
+    }
+    // Fallback to hardcoded defaults
+    return [...(FALLBACK_RATES[carrier] || FALLBACK_RATES['Generic'])];
+  }
+
+  // Enrich each policy with live NPV
+  return policies.map(p => {
+    const carrier     = p.company  || 'Generic';
+    const durYr       = p.duration_yr || 1;
+    const commPrem    = p.comm_prem   || 0;
+    const currPrem    = p.curr_prem   || 0;
+
+    // Use stored curr_pcts/ren_pcts if available and non-zero,
+    // otherwise look up from commissions table / fallback
+    let currRates = (p.curr_pcts && p.curr_pcts.some(r => r > 0))
+      ? p.curr_pcts
+      : getRates(carrier, 'Open Enrollment');
+
+    let renRates  = (p.ren_pcts  && p.ren_pcts.some(r => r > 0))
+      ? p.ren_pcts
+      : getRates(carrier, 'Open Enrollment');
+
+    const curr_npv = bvpCalcCurrentNPV(commPrem, durYr, currRates, discountPct);
+    const ren_npv  = bvpCalcRenewalNPV(currPrem, savingsPct, renRates, discountPct);
+
+    return { ...p, curr_npv, ren_npv, _currRates: currRates, _renRates: renRates };
+  });
 }
