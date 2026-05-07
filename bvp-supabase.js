@@ -119,7 +119,6 @@ async function bvpSetActiveBook(agentId, bookId) {
 
 async function bvpUploadBook(agentId, fileName, policies, mode = 'version', versionName = null) {
   let bookId;
-  console.log('bvpUploadBook: starting upload for', policies.length, 'policies');
 
   if (mode === 'append') {
     const active = await bvpGetActiveBook(agentId);
@@ -140,18 +139,15 @@ async function bvpUploadBook(agentId, fileName, policies, mode = 'version', vers
     }).select().single();
     if (error) { console.error('bvpUploadBook insert book error:', error); return null; }
     bookId = book.id;
-    console.log('bvpUploadBook: book created with id', bookId);
   }
 
   // Bulk insert in chunks of 100
   const CHUNK = 100;
   for (let i = 0; i < policies.length; i += CHUNK) {
     const chunk = policies.slice(i, i + CHUNK).map(p => ({ ...p, book_id: bookId, agent_id: agentId }));
-    console.log('bvpUploadBook: inserting chunk', i, 'to', i + chunk.length, '— sample policy:', JSON.stringify(chunk[0]).substring(0, 200));
     const { error } = await bvp.from('policies').insert(chunk);
     if (error) { console.error('bvpUploadBook policies chunk error:', error); return null; }
   }
-  console.log('bvpUploadBook: all policies inserted successfully');
   return bookId;
 }
 
@@ -209,9 +205,7 @@ async function bvpGetCommissions(agentId, state = null, carrier = null) {
     return [];
   }
 
-  console.log('bvpGetCommissions: loaded', defaults.length, 'defaults +', overrides.length, 'overrides =', combined.length, 'total');
-  console.log('bvpGetCommissions: unique carriers:', [...new Set(combined.map(r => r.carrier))]);
-  console.log('bvpGetCommissions: unique enrollment types:', [...new Set(combined.map(r => r.enrollment_type))]);
+
   return combined;
 }
 
