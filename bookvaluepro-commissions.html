@@ -521,9 +521,13 @@ function groupedRows() {
   });
 
   // Sort durations within each enrollment type
-  groups.forEach(g => g.states.forEach(sm => sm.forEach(em => {
-    em.forEach(rows => rows.sort((a,b) => a.duration_yr - b.duration_yr));
-  })));
+  groups.forEach(g => {
+    g.states.forEach(stateMap => {
+      stateMap.forEach(enrollRows => {
+        enrollRows.sort((a, b) => a.duration_yr - b.duration_yr);
+      });
+    });
+  });
 
   // Put book carriers first
   const bookKeys = new Set(bookCarriers.map(bc => bc.carrier));
