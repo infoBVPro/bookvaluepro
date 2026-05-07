@@ -423,6 +423,10 @@ let editingCell  = null;  // currently active input
   // Get agent's book to know which carriers/states they have
   const book = await bvpGetActiveBook(bvpSession.user.id);
   if (book) {
+    // Update book chip
+    const chip = document.getElementById('book-name');
+    if (chip) chip.textContent = book.file_name + ' — ' + book.policy_count + ' policies';
+
     const policies = await bvpGetPolicies(book.id);
     const seen = new Set();
     policies.forEach(p => {
@@ -432,10 +436,16 @@ let editingCell  = null;  // currently active input
         bookCarriers.push({ carrier: p.company, state: p.issued_state });
       }
     });
+  } else {
+    const chip = document.getElementById('book-name');
+    if (chip) chip.textContent = 'No book uploaded';
   }
 
   // Load all commission rates
   allComms = await bvpGetCommissions(bvpSession.user.id);
+  console.log('Commissions loaded:', allComms.length, 'rows');
+  console.log('Sample row:', allComms[0]);
+  console.log('Book carriers:', bookCarriers);
 
   buildFilterOptions();
   document.getElementById('loading-state').style.display = 'none';
@@ -464,28 +474,56 @@ function applyFilters() {
 
 // ── GROUP DATA ────────────────────────────────────────────────────────
 function groupedRows() {
-  // Filter
+  // For default rates (is_default=true), issued_state may be null —
+  // they apply to all states. We merge them with the agent's book states.
   let rows = allComms.filter(r => {
-    if (filterCarrier && r.carrier      !== filterCarrier) return false;
-    if (filterState   && r.issued_state !== filterState)   return false;
-    if (filterEnroll  && r.enrollment_type !== filterEnroll) return false;
+    if (filterCarrier && r.carrier !== filterCarrier) return false;
+    // For state filter: default rows (null state) pass through always
+    // Agent-specific overrides must match the filter
+    if (filterState && r.issued_state !== null && r.issued_state !== filterState) return false;
+    if (filterEnroll && r.enrollment_type !== filterEnroll) return false;
     return true;
   });
 
-  // Group by carrier → state → enrollment_type → array of 11 duration rows
+  // Determine which states to show for each carrier
+  // Use agent's book states; fall back to a generic "All states" label
+  const carrierStates = new Map();
+  bookCarriers.forEach(bc => {
+    if (!carrierStates.has(bc.carrier)) carrierStates.set(bc.carrier, new Set());
+    carrierStates.get(bc.carrier).add(bc.state);
+  });
+
+  // Group by carrier → state → enrollment_type → array of duration rows
   const groups = new Map();
   rows.forEach(r => {
     const cKey = r.carrier;
     if (!groups.has(cKey)) groups.set(cKey, { carrier: r.carrier, states: new Map() });
     const sMap = groups.get(cKey).states;
-    if (!sMap.has(r.issued_state)) sMap.set(r.issued_state, new Map());
-    const eMap = sMap.get(r.issued_state);
-    if (!eMap.has(r.enrollment_type)) eMap.set(r.enrollment_type, []);
-    eMap.get(r.enrollment_type).push(r);
+
+    // Determine which states this row should appear under
+    const rowState = r.issued_state;
+    const statesToUse = rowState
+      ? [rowState]
+      : (carrierStates.has(cKey) ? [...carrierStates.get(cKey)] : ['Default']);
+
+    statesToUse.forEach(state => {
+      // Apply state filter
+      if (filterState && state !== filterState) return;
+      if (!sMap.has(state)) sMap.set(state, new Map());
+      const eMap = sMap.get(state);
+      if (!eMap.has(r.enrollment_type)) eMap.set(r.enrollment_type, []);
+      // Avoid duplicate duration rows
+      const existing = eMap.get(r.enrollment_type);
+      if (!existing.find(e => e.duration_yr === r.duration_yr)) {
+        existing.push(r);
+      }
+    });
   });
 
   // Sort durations within each enrollment type
-  groups.forEach(g => g.states.forEach(sm => sm.forEach(em => em.forEach(rows => rows.sort((a,b) => a.duration_yr - b.duration_yr)))));
+  groups.forEach(g => g.states.forEach(sm => sm.forEach(em => {
+    em.forEach(rows => rows.sort((a,b) => a.duration_yr - b.duration_yr));
+  })));
 
   // Put book carriers first
   const bookKeys = new Set(bookCarriers.map(bc => bc.carrier));
