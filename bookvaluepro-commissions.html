@@ -441,8 +441,19 @@ let editingCell  = null;  // currently active input
     if (chip) chip.textContent = 'No book uploaded';
   }
 
-  // Load all commission rates
-  allComms = await bvpGetCommissions(bvpSession.user.id);
+  // Load commission rates — filtered to only carriers in agent's book
+  const bookCarrierNames = [...new Set(bookCarriers.map(bc => bc.carrier))];
+  console.log('Loading commissions for book carriers:', bookCarrierNames);
+
+  if (bookCarrierNames.length > 0) {
+    // Fetch commissions for each carrier in the book
+    const commsPerCarrier = await Promise.all(
+      bookCarrierNames.map(c => bvpGetCommissions(bvpSession.user.id, null, c))
+    );
+    allComms = commsPerCarrier.flat();
+  } else {
+    allComms = await bvpGetCommissions(bvpSession.user.id);
+  }
   console.log('Commissions loaded:', allComms.length, 'rows');
   console.log('Sample row:', allComms[0]);
   console.log('Book carriers:', bookCarriers);
@@ -455,8 +466,9 @@ let editingCell  = null;  // currently active input
 
 // ── BUILD FILTER DROPDOWNS ────────────────────────────────────────────
 function buildFilterOptions() {
-  const carriers = [...new Set(allComms.map(r => r.carrier).filter(Boolean))].sort();
-  const states   = [...new Set(allComms.map(r => r.issued_state).filter(Boolean))].sort();
+  // Only show carriers and states from the agent's book
+  const carriers = [...new Set(bookCarriers.map(bc => bc.carrier))].sort();
+  const states   = [...new Set(bookCarriers.map(bc => bc.state))].sort();
 
   const cs = document.getElementById('filter-carrier');
   carriers.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; cs.appendChild(o); });

@@ -168,22 +168,51 @@ async function bvpGetPolicies(bookId) {
 
 // Returns all commission rates — agent overrides win over system defaults
 async function bvpGetCommissions(agentId, state = null, carrier = null) {
-  let query = bvp.from('commissions').select('*')
-    .or(`is_default.eq.true,agent_id.eq.${agentId}`)
+  // Fetch ALL default rates using pagination to bypass the 1000-row limit
+  async function fetchAll(baseQuery) {
+    const PAGE = 1000;
+    let allRows = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await baseQuery.range(from, from + PAGE - 1);
+      if (error) { console.error('bvpGetCommissions fetchAll:', error); break; }
+      if (!data || data.length === 0) break;
+      allRows = allRows.concat(data);
+      if (data.length < PAGE) break; // last page
+      from += PAGE;
+    }
+    return allRows;
+  }
+
+  let defaultBase = bvp.from('commissions').select('*')
+    .eq('is_default', true)
     .order('carrier').order('enrollment_type').order('duration_yr');
-  if (state)   query = query.eq('issued_state', state);
-  if (carrier) query = query.eq('carrier', carrier);
-  const { data, error } = await query;
-  if (error) { console.error('bvpGetCommissions:', error); return []; }
-  if (!data || data.length === 0) {
-    console.warn('bvpGetCommissions: no commission data returned — check RLS policies on commissions table');
+  if (state)   defaultBase = defaultBase.eq('issued_state', state);
+  if (carrier) defaultBase = defaultBase.eq('carrier', carrier);
+
+  let overrideBase = bvp.from('commissions').select('*')
+    .eq('agent_id', agentId)
+    .eq('is_default', false)
+    .order('carrier').order('enrollment_type').order('duration_yr');
+  if (state)   overrideBase = overrideBase.eq('issued_state', state);
+  if (carrier) overrideBase = overrideBase.eq('carrier', carrier);
+
+  const [defaults, overrides] = await Promise.all([
+    fetchAll(defaultBase),
+    fetchAll(overrideBase),
+  ]);
+
+  const combined = [...defaults, ...overrides];
+
+  if (combined.length === 0) {
+    console.warn('bvpGetCommissions: no data returned — check RLS on commissions table');
     return [];
   }
-  console.log('bvpGetCommissions: loaded', data.length, 'rate rows');
-  // Log unique carriers and enrollment types for debugging
-  console.log('bvpGetCommissions: unique carriers:', [...new Set(data.map(r => r.carrier))]);
-  console.log('bvpGetCommissions: unique enrollment types:', [...new Set(data.map(r => r.enrollment_type))]);
-  return data;
+
+  console.log('bvpGetCommissions: loaded', defaults.length, 'defaults +', overrides.length, 'overrides =', combined.length, 'total');
+  console.log('bvpGetCommissions: unique carriers:', [...new Set(combined.map(r => r.carrier))]);
+  console.log('bvpGetCommissions: unique enrollment types:', [...new Set(combined.map(r => r.enrollment_type))]);
+  return combined;
 }
 
 // Get a single rate via DB function (handles fallback to Generic)
