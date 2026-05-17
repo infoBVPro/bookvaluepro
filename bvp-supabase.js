@@ -288,58 +288,65 @@ function bvpCalcRenewalNPV(currPrem, savingsPct, commRates, discountPct = 10) {
 // discountPct: discount rate % (default 10)
 // savingsPct:  avg policyholder savings on switch % (default 10)
 
-const FALLBACK_RATES = {
-  'AARP/UHC':               [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
-  'AETNA':                  [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
-  'Elevance':               [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
-  'Humana':                 [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.05,0.05],
-  'Mutual of Omaha':        [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
-  'Blue Cross Blue Shield': [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.05,0.05],
-  'HealthSpring':           [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
-  'Generic':                [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
-};
-
 async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct = 10) {
-  // Load all commission rates for this agent
+  // Always load fresh commission rates from Supabase —
+  // never use stale stored curr_pcts/ren_pcts from the policies table
   const comms = await bvpGetCommissions(agentId);
 
-  // Build rate lookup: carrier|enrollmentType -> array[11] of rates
-  function getRates(carrier, enrollmentType) {
-    const rows = comms.filter(r =>
-      r.carrier === carrier && r.enrollment_type === enrollmentType
-    );
-    if (rows.length > 0) {
-      const rates = Array(11).fill(0);
-      rows.forEach(r => {
-        const idx = Math.min(Math.max((r.duration_yr || 1) - 1, 0), 10);
-        rates[idx] = parseFloat(r.rate) || 0;
-      });
-      if (rates.some(r => r > 0)) return rates;
+  // Build rate array for carrier + state + enrollment type
+  // Falls back to same carrier without state, then Generic carrier
+  // This means agents can edit Generic rates on the Commissions page
+  // and those edits flow into NPV automatically — nothing is hardcoded
+  function getRates(carrier, state, enrollmentType) {
+    // Priority 1: exact carrier + state match
+    // Priority 2: carrier match (any state / null state)
+    // Priority 3: Generic carrier
+    const attempts = [
+      r => r.carrier === carrier && r.issued_state === state  && r.enrollment_type === enrollmentType,
+      r => r.carrier === carrier && !r.issued_state           && r.enrollment_type === enrollmentType,
+      r => r.carrier === carrier &&                              r.enrollment_type === enrollmentType,
+      r => r.carrier === 'Generic' && !r.issued_state         && r.enrollment_type === enrollmentType,
+      r => r.carrier === 'Generic' &&                            r.enrollment_type === enrollmentType,
+    ];
+
+    for (const match of attempts) {
+      const rows = comms.filter(match);
+      if (rows.length > 0) {
+        const rates = Array(11).fill(0);
+        rows.forEach(r => {
+          const idx = Math.min(Math.max((r.duration_yr || 1) - 1, 0), 10);
+          rates[idx] = parseFloat(r.rate) || 0;
+        });
+        if (rates.some(r => r > 0)) return rates;
+      }
     }
-    // Fallback to hardcoded defaults
-    return [...(FALLBACK_RATES[carrier] || FALLBACK_RATES['Generic'])];
+
+    // Last resort: flat zero array (should never happen if Generic is in Supabase)
+    console.error('bvpEnrichPolicies: no rates found for', carrier, state, enrollmentType);
+    return Array(11).fill(0);
   }
 
-  // Enrich each policy with live NPV
   return policies.map(p => {
-    const carrier     = p.company  || 'Generic';
-    const durYr       = p.duration_yr || 1;
-    const commPrem    = p.comm_prem   || 0;
-    const currPrem    = p.curr_prem   || 0;
+    const carrier  = p.company      || 'Generic';
+    const state    = p.issued_state || null;
+    const durYr    = p.duration_yr  || 1;
+    const commPrem = p.comm_prem    || 0;
+    const currPrem = p.curr_prem    || 0;
 
-    // Use stored curr_pcts/ren_pcts if available and non-zero,
-    // otherwise look up from commissions table / fallback
-    let currRates = (p.curr_pcts && p.curr_pcts.some(r => r > 0))
-      ? p.curr_pcts
-      : getRates(carrier, 'Open Enrollment');
-
-    let renRates  = (p.ren_pcts  && p.ren_pcts.some(r => r > 0))
-      ? p.ren_pcts
-      : getRates(carrier, 'Open Enrollment');
+    // Always look up from Supabase — never use stale stored rates
+    const currRates = getRates(carrier, state, 'Open Enrollment');
+    const renRates  = getRates(carrier, state, 'Open Enrollment');
 
     const curr_npv = bvpCalcCurrentNPV(commPrem, durYr, currRates, discountPct);
     const ren_npv  = bvpCalcRenewalNPV(currPrem, savingsPct, renRates, discountPct);
 
-    return { ...p, curr_npv, ren_npv, _currRates: currRates, _renRates: renRates };
+    // Build duration-offset rate array for dashboard engine
+    // dashboard's policyCurrentNPV uses rc[0] as the CURRENT year's rate
+    const offsetCurrRates = Array(11).fill(0).map((_, i) => {
+      const idx = Math.min(durYr - 1 + i, 10);
+      return currRates[idx] || 0;
+    });
+
+    return { ...p, curr_npv, ren_npv, _currRates: offsetCurrRates, _renRates: renRates };
   });
 }
