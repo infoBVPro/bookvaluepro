@@ -260,10 +260,13 @@ async function bvpSaveAssumptions(bookId, discountRate, savingsPct) {
 // Renewal NPV: restarts at duration 1, uses newPrem = currPrem * (1 - savingsPct/100)
 
 function bvpCalcCurrentNPV(commPrem, currentDurationYr, commRates, discountPct = 10) {
+  // 10-year projection starting at NEXT duration (post next renewal)
+  // Uses integer year discounting t=1..10 matching Excel model
   const r = discountPct / 100;
   let npv = 0;
-  for (let i = 0; i < 11; i++) {
-    const durIdx = Math.min(currentDurationYr - 1 + i, 10);
+  const nextDur = currentDurationYr + 1; // first payment is at next renewal
+  for (let i = 0; i < 10; i++) {
+    const durIdx = Math.min(nextDur - 1 + i, 10);
     const rate = commRates[durIdx] || 0;
     npv += (commPrem * rate) / Math.pow(1 + r, i + 1);
   }
@@ -271,10 +274,12 @@ function bvpCalcCurrentNPV(commPrem, currentDurationYr, commRates, discountPct =
 }
 
 function bvpCalcRenewalNPV(currPrem, savingsPct, commRates, discountPct = 10) {
+  // 10-year projection starting at Duration 1 (renewal restarts the clock)
+  // Uses integer year discounting t=1..10 matching Excel model
   const r = discountPct / 100;
   const newPrem = currPrem * (1 - savingsPct / 100);
   let npv = 0;
-  for (let i = 0; i < 11; i++) {
+  for (let i = 0; i < 10; i++) {
     const rate = commRates[i] || 0;
     npv += (newPrem * rate) / Math.pow(1 + r, i + 1);
   }
@@ -283,24 +288,16 @@ function bvpCalcRenewalNPV(currPrem, savingsPct, commRates, discountPct = 10) {
 
 // ── LIVE NPV ENRICHMENT ───────────────────────────────────────
 // Calculates curr_npv and ren_npv live from current commission rates.
-// Call this after loading policies — replaces stored NPV values with
-// fresh calculations using the agent's current commission schedule.
-// discountPct: discount rate % (default 10)
-// savingsPct:  avg policyholder savings on switch % (default 10)
+// Always reads from Supabase — never uses stale stored rates.
 
 async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct = 10) {
-  // Always load fresh commission rates from Supabase —
-  // never use stale stored curr_pcts/ren_pcts from the policies table
+  // Always load fresh commission rates from Supabase
   const comms = await bvpGetCommissions(agentId);
 
   // Build rate array for carrier + state + enrollment type
-  // Falls back to same carrier without state, then Generic carrier
-  // This means agents can edit Generic rates on the Commissions page
-  // and those edits flow into NPV automatically — nothing is hardcoded
+  // Priority: exact carrier+state → carrier only → Generic carrier
+  // Generic in Supabase is the true fallback — no hardcoded rates
   function getRates(carrier, state, enrollmentType) {
-    // Priority 1: exact carrier + state match
-    // Priority 2: carrier match (any state / null state)
-    // Priority 3: Generic carrier
     const attempts = [
       r => r.carrier === carrier && r.issued_state === state  && r.enrollment_type === enrollmentType,
       r => r.carrier === carrier && !r.issued_state           && r.enrollment_type === enrollmentType,
@@ -308,7 +305,6 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
       r => r.carrier === 'Generic' && !r.issued_state         && r.enrollment_type === enrollmentType,
       r => r.carrier === 'Generic' &&                            r.enrollment_type === enrollmentType,
     ];
-
     for (const match of attempts) {
       const rows = comms.filter(match);
       if (rows.length > 0) {
@@ -320,8 +316,6 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
         if (rates.some(r => r > 0)) return rates;
       }
     }
-
-    // Last resort: flat zero array (should never happen if Generic is in Supabase)
     console.error('bvpEnrichPolicies: no rates found for', carrier, state, enrollmentType);
     return Array(11).fill(0);
   }
@@ -340,10 +334,11 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
     const curr_npv = bvpCalcCurrentNPV(commPrem, durYr, currRates, discountPct);
     const ren_npv  = bvpCalcRenewalNPV(currPrem, savingsPct, renRates, discountPct);
 
-    // Build duration-offset rate array for dashboard engine
-    // dashboard's policyCurrentNPV uses rc[0] as the CURRENT year's rate
-    const offsetCurrRates = Array(11).fill(0).map((_, i) => {
-      const idx = Math.min(durYr - 1 + i, 10);
+    // Build 10-value duration-offset rate array for dashboard engine
+    // rc[0] = rate at NEXT duration (first future payment)
+    const nextDur = durYr + 1;
+    const offsetCurrRates = Array(10).fill(0).map((_, i) => {
+      const idx = Math.min(nextDur - 1 + i, 10);
       return currRates[idx] || 0;
     });
 
