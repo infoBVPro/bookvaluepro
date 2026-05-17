@@ -604,14 +604,13 @@ const POLICIES = []; // Populated from Supabase
 // ── LIVE CALCULATION ENGINE ──────────────────────────────────────────
 // Current NPV: CommPrem × curr_commission% at each duration / (1+r)^i × 12
 function policyCurrentNPV(p) {
-  // 10-year projection: rc is already offset to next duration
-  // rc[0] = rate at next renewal, rc[1] = year after, etc.
-  return p.rc.slice(0, 10).reduce((s, pct, i) => s + p.mp * pct / Math.pow(1+DISCOUNT, i+1), 0) * 12;
+  // 11-year projection: rc is offset to next duration, t=1..11 matching Excel
+  return p.rc.slice(0, 11).reduce((s, pct, i) => s + p.mp * pct / Math.pow(1+DISCOUNT, i+1), 0) * 12;
 }
 // Opportunity NPV: CurrPrem × (1-savPct%) × renewal_commission% at each duration / (1+r)^i × 12
 function policyOppNPV(p, savPct) {
   const np = p.cp * (1 - savPct/100);
-  return p.rr.slice(0, 10).reduce((s, pct, i) => s + np * pct / Math.pow(1+DISCOUNT, i+1), 0) * 12;
+  return p.rr.slice(0, 11).reduce((s, pct, i) => s + np * pct / Math.pow(1+DISCOUNT, i+1), 0) * 12;
 }
 // Annual current CF for policy in year slot i: CommPrem × curr% × 12
 function policyCurrCF(p, i) { return (p.rc[i] || 0) * p.mp * 12; }

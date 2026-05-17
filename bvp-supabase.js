@@ -260,12 +260,11 @@ async function bvpSaveAssumptions(bookId, discountRate, savingsPct) {
 // Renewal NPV: restarts at duration 1, uses newPrem = currPrem * (1 - savingsPct/100)
 
 function bvpCalcCurrentNPV(commPrem, currentDurationYr, commRates, discountPct = 10) {
-  // 10-year projection starting at NEXT duration (post next renewal)
-  // Uses integer year discounting t=1..10 matching Excel model
+  // 11-year projection starting at NEXT duration, t=1..11 matching Excel NPV()
   const r = discountPct / 100;
   let npv = 0;
-  const nextDur = currentDurationYr + 1; // first payment is at next renewal
-  for (let i = 0; i < 10; i++) {
+  const nextDur = currentDurationYr + 1;
+  for (let i = 0; i < 11; i++) {
     const durIdx = Math.min(nextDur - 1 + i, 10);
     const rate = commRates[durIdx] || 0;
     npv += (commPrem * rate) / Math.pow(1 + r, i + 1);
@@ -274,12 +273,11 @@ function bvpCalcCurrentNPV(commPrem, currentDurationYr, commRates, discountPct =
 }
 
 function bvpCalcRenewalNPV(currPrem, savingsPct, commRates, discountPct = 10) {
-  // 10-year projection starting at Duration 1 (renewal restarts the clock)
-  // Uses integer year discounting t=1..10 matching Excel model
+  // 11-year projection starting at Duration 1, t=1..11 matching Excel NPV()
   const r = discountPct / 100;
   const newPrem = currPrem * (1 - savingsPct / 100);
   let npv = 0;
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 11; i++) {
     const rate = commRates[i] || 0;
     npv += (newPrem * rate) / Math.pow(1 + r, i + 1);
   }
@@ -334,10 +332,10 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
     const curr_npv = bvpCalcCurrentNPV(commPrem, durYr, currRates, discountPct);
     const ren_npv  = bvpCalcRenewalNPV(currPrem, savingsPct, renRates, discountPct);
 
-    // Build 10-value duration-offset rate array for dashboard engine
-    // rc[0] = rate at NEXT duration (first future payment)
+    // Build 11-value duration-offset rate array for dashboard engine
+    // rc[0] = rate at NEXT duration (first future payment), 11 values matching Excel
     const nextDur = durYr + 1;
-    const offsetCurrRates = Array(10).fill(0).map((_, i) => {
+    const offsetCurrRates = Array(11).fill(0).map((_, i) => {
       const idx = Math.min(nextDur - 1 + i, 10);
       return currRates[idx] || 0;
     });
