@@ -259,21 +259,35 @@ async function bvpSaveAssumptions(bookId, discountRate, savingsPct) {
 // Current NPV: policy is at currentDurationYr, rates step through remaining schedule
 // Renewal NPV: restarts at duration 1, uses newPrem = currPrem * (1 - savingsPct/100)
 
-function bvpCalcCurrentNPV(commPrem, currentDurationYr, commRates, discountPct = 10) {
-  // 11-year projection starting at NEXT duration, t=1..11 matching Excel NPV()
-  const r = discountPct / 100;
+function bvpCalcCurrentNPV(commPrem, currentDurationYr, effMonth, commRates, discountPct = 10) {
+  // Build 11 annual cash flows matching Excel model:
+  // - Not yet renewed this year: cf[0..10] = rates starting at nextDur
+  // - Already renewed this year: cf[0] = $0, cf[1..10] = rates starting at nextDur
+  const VALUATION_MONTH = 5; // May 2026
+  const alreadyRenewed  = effMonth !== null && effMonth <= VALUATION_MONTH;
+  const nextDur         = currentDurationYr + 1;
+  const r               = discountPct / 100;
   let npv = 0;
-  const nextDur = currentDurationYr + 1;
+
   for (let i = 0; i < 11; i++) {
-    const durIdx = Math.min(nextDur - 1 + i, 10);
-    const rate = commRates[durIdx] || 0;
+    let rate = 0;
+    if (alreadyRenewed) {
+      if (i === 0) {
+        rate = 0; // already collected this year
+      } else {
+        const durIdx = Math.min(nextDur - 1 + (i - 1), 10);
+        rate = commRates[durIdx] || 0;
+      }
+    } else {
+      const durIdx = Math.min(nextDur - 1 + i, 10);
+      rate = commRates[durIdx] || 0;
+    }
     npv += (commPrem * rate) / Math.pow(1 + r, i + 1);
   }
   return npv * 12;
 }
 
 function bvpCalcRenewalNPV(currPrem, savingsPct, commRates, discountPct = 10) {
-  // 11-year projection starting at Duration 1, t=1..11 matching Excel NPV()
   const r = discountPct / 100;
   const newPrem = currPrem * (1 - savingsPct / 100);
   let npv = 0;
@@ -285,16 +299,14 @@ function bvpCalcRenewalNPV(currPrem, savingsPct, commRates, discountPct = 10) {
 }
 
 // ── LIVE NPV ENRICHMENT ───────────────────────────────────────
-// Calculates curr_npv and ren_npv live from current commission rates.
-// Always reads from Supabase — never uses stale stored rates.
+// Calculates curr_npv and ren_npv live from Supabase commission rates.
+// No hardcoded rates — Generic carrier in Supabase is the fallback.
 
 async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct = 10) {
-  // Always load fresh commission rates from Supabase
   const comms = await bvpGetCommissions(agentId);
 
-  // Build rate array for carrier + state + enrollment type
-  // Priority: exact carrier+state → carrier only → Generic carrier
-  // Generic in Supabase is the true fallback — no hardcoded rates
+  // Rate lookup: carrier + state + enrollment type
+  // Priority: exact carrier+state → carrier only → Generic
   function getRates(carrier, state, enrollmentType) {
     const attempts = [
       r => r.carrier === carrier && r.issued_state === state  && r.enrollment_type === enrollmentType,
@@ -318,26 +330,32 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
     return Array(11).fill(0);
   }
 
+  const VALUATION_MONTH = 5; // May 2026
+
   return policies.map(p => {
     const carrier  = p.company      || 'Generic';
     const state    = p.issued_state || null;
     const durYr    = p.duration_yr  || 1;
+    const effMonth = p.eff_month    || null;
     const commPrem = p.comm_prem    || 0;
     const currPrem = p.curr_prem    || 0;
 
-    // Always look up from Supabase — never use stale stored rates
     const currRates = getRates(carrier, state, 'Open Enrollment');
     const renRates  = getRates(carrier, state, 'Open Enrollment');
 
-    const curr_npv = bvpCalcCurrentNPV(commPrem, durYr, currRates, discountPct);
+    const curr_npv = bvpCalcCurrentNPV(commPrem, durYr, effMonth, currRates, discountPct);
     const ren_npv  = bvpCalcRenewalNPV(currPrem, savingsPct, renRates, discountPct);
 
-    // Build 11-value duration-offset rate array for dashboard engine
-    // rc[0] = rate at NEXT duration (first future payment), 11 values matching Excel
-    const nextDur = durYr + 1;
+    // Build 11-value offset rate array for dashboard engine
+    const alreadyRenewed = effMonth !== null && effMonth <= VALUATION_MONTH;
+    const nextDur        = durYr + 1;
     const offsetCurrRates = Array(11).fill(0).map((_, i) => {
-      const idx = Math.min(nextDur - 1 + i, 10);
-      return currRates[idx] || 0;
+      if (alreadyRenewed) {
+        if (i === 0) return 0;
+        return currRates[Math.min(nextDur - 1 + (i - 1), 10)] || 0;
+      } else {
+        return currRates[Math.min(nextDur - 1 + i, 10)] || 0;
+      }
     });
 
     return { ...p, curr_npv, ren_npv, _currRates: offsetCurrRates, _renRates: renRates };
