@@ -594,27 +594,31 @@ tfoot td.num { text-align: right; }
 
 <script>
 // ── YEARS & CONSTANTS ────────────────────────────────────────────────
-const YEARS    = [2026,2027,2028,2029,2030,2031,2032,2033,2034,2035];
+// Dynamic: 11-year projection starting from current year
+const CURRENT_YEAR = new Date().getFullYear();
+const NUM_YEARS    = 11;
+const YEARS        = Array.from({length: NUM_YEARS}, (_, i) => CURRENT_YEAR + i);
 let DISCOUNT = 0.10;
 
-
 // Fields: pr=priority, co=company, mp=commPrem, cp=currPrem,
-//         rc=curr_commission_%s (11 values), rr=renewal_commission_%s (11 values)
+//         rc=curr_commission_%s (11 values offset to next duration),
+//         rr=renewal_commission_%s (11 values starting at duration 1)
 const POLICIES = []; // Populated from Supabase
+
 // ── LIVE CALCULATION ENGINE ──────────────────────────────────────────
 // Current NPV: CommPrem × curr_commission% at each duration / (1+r)^i × 12
+// rc is already offset to next duration by bvpEnrichPolicies
 function policyCurrentNPV(p) {
-  // 11-year projection: rc is offset to next duration, t=1..11 matching Excel
-  return p.rc.slice(0, 11).reduce((s, pct, i) => s + p.mp * pct / Math.pow(1+DISCOUNT, i+1), 0) * 12;
+  return p.rc.slice(0, NUM_YEARS).reduce((s, pct, i) => s + p.mp * pct / Math.pow(1+DISCOUNT, i+1), 0) * 12;
 }
 // Opportunity NPV: CurrPrem × (1-savPct%) × renewal_commission% at each duration / (1+r)^i × 12
 function policyOppNPV(p, savPct) {
   const np = p.cp * (1 - savPct/100);
-  return p.rr.slice(0, 11).reduce((s, pct, i) => s + np * pct / Math.pow(1+DISCOUNT, i+1), 0) * 12;
+  return p.rr.slice(0, NUM_YEARS).reduce((s, pct, i) => s + np * pct / Math.pow(1+DISCOUNT, i+1), 0) * 12;
 }
-// Annual current CF for policy in year slot i: CommPrem × curr% × 12
+// Annual current CF for policy in year slot i
 function policyCurrCF(p, i) { return (p.rc[i] || 0) * p.mp * 12; }
-// Annual opportunity CF for policy in year slot i: CurrPrem × (1-sav%) × renewal% × 12
+// Annual opportunity CF for policy in year slot i
 function policyOppCF(p, i, savPct) { return (p.rr[i] || 0) * p.cp * (1 - savPct/100) * 12; }
 
 function cohortPolicies(pr) { return POLICIES.filter(p => p.pr === pr); }
@@ -632,9 +636,9 @@ function calcNPVByCohort(savPct) {
 }
 
 function calcCFByYear(savPct) {
-  const currTotal = Array(10).fill(0);
-  const currSS    = Array(10).fill(0);
-  const oppSS     = Array(10).fill(0);
+  const currTotal = Array(NUM_YEARS).fill(0);
+  const currSS    = Array(NUM_YEARS).fill(0);
+  const oppSS     = Array(NUM_YEARS).fill(0);
   POLICIES.forEach(p => {
     YEARS.forEach((_, i) => {
       currTotal[i] += policyCurrCF(p, i);

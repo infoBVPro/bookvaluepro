@@ -263,7 +263,7 @@ function bvpCalcCurrentNPV(commPrem, currentDurationYr, effMonth, commRates, dis
   // Build 11 annual cash flows matching Excel model:
   // - Not yet renewed this year: cf[0..10] = rates starting at nextDur
   // - Already renewed this year: cf[0] = $0, cf[1..10] = rates starting at nextDur
-  const VALUATION_MONTH = 5; // May 2026
+  const VALUATION_MONTH = new Date().getMonth() + 1; // dynamic: current month
   const alreadyRenewed  = effMonth !== null && effMonth <= VALUATION_MONTH;
   const nextDur         = currentDurationYr + 1;
   const r               = discountPct / 100;
@@ -330,7 +330,7 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
     return Array(11).fill(0);
   }
 
-  const VALUATION_MONTH = 5; // May 2026
+  const VALUATION_MONTH = new Date().getMonth() + 1; // dynamic: current month
 
   return policies.map(p => {
     const carrier  = p.company      || 'Generic';

@@ -1166,7 +1166,7 @@ async function _doUpload(mode, versionName) {
   showParsing(true, 'Calculating NPV and uploading to your account…');
 
   try {
-    const VALUATION = new Date('2026-05-02');
+    const VALUATION = new Date(); // today's date — always current
 
     // ── Helper functions ──────────────────────────────────────────
     function parseDate(val) {
