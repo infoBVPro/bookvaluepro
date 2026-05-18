@@ -435,7 +435,9 @@ let bvpBook = null;
   if (bvpBook) {
     document.getElementById('book-name').textContent = bvpBook.file_name + ' — ' + bvpBook.policy_count + ' policies';
     const policies = await bvpGetPolicies(bvpBook.id);
-    allClients = policies.map(p => ({
+    // Enrich with live NPV from Supabase commission rates
+    const enriched = await bvpEnrichPolicies(bvpSession.user.id, policies);
+    allClients = enriched.map(p => ({
       ...p,
       name: [p.first_name, p.last_name].filter(Boolean).join(' ') || null,
     }));
