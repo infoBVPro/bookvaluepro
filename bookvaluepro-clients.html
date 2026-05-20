@@ -938,19 +938,21 @@ function toggleEdit(on) {
 
 async function clearPriorityOverride() {
   if (!activeClient) return;
-  // We need the originally calculated priority — stored as calc_priority if present,
-  // otherwise fall back: re-derive from priority rules using dob + eff_date + duration
-  const calcPriority = activeClient.calc_priority || activeClient.priority_override || 2;
+  const calcPriority = activeClient.calc_priority;
+  if (!calcPriority) {
+    showExportToast('⚠ No calculated priority on record — cannot reset');
+    return;
+  }
   const ok = await bvpClearPriorityOverride(activeClient.id, calcPriority);
   if (ok) {
-    activeClient.priority          = calcPriority;
-    activeClient.priority_override = null;
+    activeClient.priority             = calcPriority;
+    activeClient.priority_override    = null;
     activeClient.priority_override_by = null;
     const idx = allClients.findIndex(c => c.id === activeClient.id);
     if (idx >= 0) allClients[idx] = { ...activeClient };
     renderPanel();
     renderTable();
-    showExportToast('Priority reset to calculated value');
+    showExportToast('Priority reset to P' + calcPriority + ' (calculated)');
   }
 }
 

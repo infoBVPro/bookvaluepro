@@ -1298,6 +1298,7 @@ async function _doUpload(mode, versionName) {
         eff_month:    effMonth(effDateStr),
         duration_yr:  currDurYr,
         priority,
+        calc_priority: priority,  // frozen at upload — never overwritten
         comm_prem:    parseFloat(row['Commissionable Premium'] || row['comm_prem'] || 0),
         curr_prem:    parseFloat(row['Current Premium'] || row['curr_prem'] || 0),
         curr_pcts,
