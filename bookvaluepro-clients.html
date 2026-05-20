@@ -950,6 +950,9 @@ async function clearPriorityOverride() {
     activeClient.priority_override_by = null;
     const idx = allClients.findIndex(c => c.id === activeClient.id);
     if (idx >= 0) allClients[idx] = { ...activeClient };
+    const fidx = filtered.findIndex(c => c.id === activeClient.id);
+    if (fidx >= 0) filtered[fidx] = { ...activeClient };
+    editMode = false;  // exit edit mode so badge renders immediately
     renderPanel();
     renderTable();
     showExportToast('Priority reset to P' + calcPriority + ' (calculated)');
@@ -995,13 +998,16 @@ async function saveClient() {
     const idx = allClients.findIndex(c => c.id === activeClient.id);
     if (idx >= 0) allClients[idx] = { ...activeClient };
 
+    // Also update filtered array — it holds separate references from allClients
+    const fidx = filtered.findIndex(c => c.id === activeClient.id);
+    if (fidx >= 0) filtered[fidx] = { ...activeClient };
+
     editMode = false;
     renderPanel();
     renderTable();
 
     const msg = document.getElementById('save-msg');
-    msg.textContent = '✓ Client updated successfully';
-    msg.className = 'save-msg success';
+    if (msg) { msg.textContent = '✓ Client updated successfully'; msg.className = 'save-msg success'; }
     btn.disabled = false; btn.textContent = 'Save changes';
   }
 }
