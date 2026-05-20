@@ -247,7 +247,7 @@ function policiesForMonth(m, leadMonths){
 
 // Recompute monthly savings using live savings %
 function liveMonSav(p){ return p.currPrem * (SAVINGS_PCT / 100); }
-function liveOppNPV(p){ return p.renNPV * (SAVINGS_PCT / 10); }  // renNPV stored at 10% baseline
+function liveOppNPV(p){ return p.renNPV; } // ren_npv already calculated at current SAVINGS_PCT
 const fmtK=v=>'$'+(Math.abs(v)>=1000?(Math.abs(v)/1000).toFixed(1)+'K':Math.round(Math.abs(v)));
 
 let activeFilter='all';

@@ -259,105 +259,118 @@ async function bvpSaveAssumptions(bookId, discountRate, savingsPct) {
 // Current NPV: policy is at currentDurationYr, rates step through remaining schedule
 // Renewal NPV: restarts at duration 1, uses newPrem = currPrem * (1 - savingsPct/100)
 
-function bvpCalcCurrentNPV(commPrem, currentDurationYr, effMonth, commRates, discountPct = 10) {
-  // Build 11 annual cash flows matching Excel model:
-  // - Not yet renewed this year: cf[0..10] = rates starting at nextDur
-  // - Already renewed this year: cf[0] = $0, cf[1..10] = rates starting at nextDur
-  const VALUATION_MONTH = new Date().getMonth() + 1; // dynamic: current month
-  const alreadyRenewed  = effMonth !== null && effMonth <= VALUATION_MONTH;
-  const nextDur         = currentDurationYr + 1;
-  const r               = discountPct / 100;
+function bvpCalcCurrentNPV(commPrem, currentDurationYr, commRates, discountPct = 10) {
+  const r = discountPct / 100;
   let npv = 0;
-
   for (let i = 0; i < 11; i++) {
-    let rate = 0;
-    if (alreadyRenewed) {
-      if (i === 0) {
-        rate = 0; // already collected this year
-      } else {
-        const durIdx = Math.min(nextDur - 1 + (i - 1), 10);
-        rate = commRates[durIdx] || 0;
-      }
-    } else {
-      const durIdx = Math.min(nextDur - 1 + i, 10);
-      rate = commRates[durIdx] || 0;
-    }
+    const durIdx = Math.min(currentDurationYr - 1 + i, 10);
+    const rate = commRates[durIdx] || 0;
     npv += (commPrem * rate) / Math.pow(1 + r, i + 1);
   }
   return npv * 12;
 }
 
-function bvpCalcRenewalNPV(currPrem, savingsPct, commRates, discountPct = 10) {
-  const r = discountPct / 100;
-  const newPrem = currPrem * (1 - savingsPct / 100);
+function bvpCalcRenewalNPV(currPrem, savingsPct, effMonth, commRates, discountPct = 10) {
+  // Same already-renewed logic as current NPV:
+  // If policy already renewed this year → cf[0] = $0, cf[1..10] = Dur1..10 rates
+  // If not yet renewed → cf[0..10] = Dur1..11 rates
+  // Renewal always restarts at Duration 1 commission rates
+  const VALUATION_MONTH = new Date().getMonth() + 1;
+  const alreadyRenewed  = effMonth !== null && effMonth <= VALUATION_MONTH;
+  const r               = discountPct / 100;
+  const newPrem         = currPrem * (1 - savingsPct / 100);
   let npv = 0;
   for (let i = 0; i < 11; i++) {
-    const rate = commRates[i] || 0;
+    let rate = 0;
+    if (alreadyRenewed) {
+      rate = i === 0 ? 0 : (commRates[Math.min(i - 1, 10)] || 0);
+    } else {
+      rate = commRates[Math.min(i, 10)] || 0;
+    }
     npv += (newPrem * rate) / Math.pow(1 + r, i + 1);
   }
   return npv * 12;
 }
 
 // ── LIVE NPV ENRICHMENT ───────────────────────────────────────
-// Calculates curr_npv and ren_npv live from Supabase commission rates.
-// No hardcoded rates — Generic carrier in Supabase is the fallback.
+// Calculates curr_npv and ren_npv live from current commission rates.
+// Call this after loading policies — replaces stored NPV values with
+// fresh calculations using the agent's current commission schedule.
+// discountPct: discount rate % (default 10)
+// savingsPct:  avg policyholder savings on switch % (default 10)
+
+const FALLBACK_RATES = {
+  'AARP/UHC':               [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
+  'AETNA':                  [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
+  'Elevance':               [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
+  'Humana':                 [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.05,0.05],
+  'Mutual of Omaha':        [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
+  'Blue Cross Blue Shield': [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.05,0.05],
+  'HealthSpring':           [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
+  'Generic':                [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
+};
 
 async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct = 10) {
+  // Load all commission rates for this agent
   const comms = await bvpGetCommissions(agentId);
 
-  // Rate lookup: carrier + state + enrollment type
-  // Priority: exact carrier+state → carrier only → Generic
-  function getRates(carrier, state, enrollmentType) {
-    const attempts = [
-      r => r.carrier === carrier && r.issued_state === state  && r.enrollment_type === enrollmentType,
-      r => r.carrier === carrier && !r.issued_state           && r.enrollment_type === enrollmentType,
-      r => r.carrier === carrier &&                              r.enrollment_type === enrollmentType,
-      r => r.carrier === 'Generic' && !r.issued_state         && r.enrollment_type === enrollmentType,
-      r => r.carrier === 'Generic' &&                            r.enrollment_type === enrollmentType,
-    ];
-    for (const match of attempts) {
-      const rows = comms.filter(match);
-      if (rows.length > 0) {
-        const rates = Array(11).fill(0);
-        rows.forEach(r => {
-          const idx = Math.min(Math.max((r.duration_yr || 1) - 1, 0), 10);
-          rates[idx] = parseFloat(r.rate) || 0;
-        });
-        if (rates.some(r => r > 0)) return rates;
-      }
+  // Build rate lookup: carrier|enrollmentType -> array[11] of rates
+  function getRates(carrier, enrollmentType) {
+    const rows = comms.filter(r =>
+      r.carrier === carrier && r.enrollment_type === enrollmentType
+    );
+    if (rows.length > 0) {
+      const rates = Array(11).fill(0);
+      rows.forEach(r => {
+        const idx = Math.min(Math.max((r.duration_yr || 1) - 1, 0), 10);
+        rates[idx] = parseFloat(r.rate) || 0;
+      });
+      if (rates.some(r => r > 0)) return rates;
     }
-    console.error('bvpEnrichPolicies: no rates found for', carrier, state, enrollmentType);
-    return Array(11).fill(0);
+    // Fallback to hardcoded defaults
+    return [...(FALLBACK_RATES[carrier] || FALLBACK_RATES['Generic'])];
   }
 
-  const VALUATION_MONTH = new Date().getMonth() + 1; // dynamic: current month
-
+  // Enrich each policy with live NPV
   return policies.map(p => {
-    const carrier  = p.company      || 'Generic';
-    const state    = p.issued_state || null;
-    const durYr    = p.duration_yr  || 1;
-    const effMonth = p.eff_month    || null;
-    const commPrem = p.comm_prem    || 0;
-    const currPrem = p.curr_prem    || 0;
+    const carrier     = p.company  || 'Generic';
+    const durYr       = p.duration_yr || 1;
+    const commPrem    = p.comm_prem   || 0;
+    const currPrem    = p.curr_prem   || 0;
 
-    const currRates = getRates(carrier, state, 'Open Enrollment');
-    const renRates  = getRates(carrier, state, 'Open Enrollment');
+    // Use stored curr_pcts/ren_pcts if available and non-zero,
+    // otherwise look up from commissions table / fallback
+    let currRates = (p.curr_pcts && p.curr_pcts.some(r => r > 0))
+      ? p.curr_pcts
+      : getRates(carrier, 'Open Enrollment');
 
-    const curr_npv = bvpCalcCurrentNPV(commPrem, durYr, effMonth, currRates, discountPct);
-    const ren_npv  = bvpCalcRenewalNPV(currPrem, savingsPct, renRates, discountPct);
+    let renRates  = (p.ren_pcts  && p.ren_pcts.some(r => r > 0))
+      ? p.ren_pcts
+      : getRates(carrier, 'Open Enrollment');
 
-    // Build 11-value offset rate array for dashboard engine
-    const alreadyRenewed = effMonth !== null && effMonth <= VALUATION_MONTH;
-    const nextDur        = durYr + 1;
+    const curr_npv = bvpCalcCurrentNPV(commPrem, durYr, currRates, discountPct);
+    const ren_npv  = bvpCalcRenewalNPV(currPrem, savingsPct, effMonth, renRates, discountPct);
+
+    // Build offset arrays for dashboard engine
+    const VALUATION_MONTH = new Date().getMonth() + 1;
+    const alreadyRenewed  = effMonth !== null && effMonth <= VALUATION_MONTH;
+    const nextDur         = durYr + 1;
+
     const offsetCurrRates = Array(11).fill(0).map((_, i) => {
       if (alreadyRenewed) {
         if (i === 0) return 0;
         return currRates[Math.min(nextDur - 1 + (i - 1), 10)] || 0;
-      } else {
-        return currRates[Math.min(nextDur - 1 + i, 10)] || 0;
       }
+      return currRates[Math.min(nextDur - 1 + i, 10)] || 0;
     });
 
-    return { ...p, curr_npv, ren_npv, _currRates: offsetCurrRates, _renRates: renRates };
+    const offsetRenRates = Array(11).fill(0).map((_, i) => {
+      if (alreadyRenewed) {
+        return i === 0 ? 0 : (renRates[Math.min(i - 1, 10)] || 0);
+      }
+      return renRates[Math.min(i, 10)] || 0;
+    });
+
+    return { ...p, curr_npv, ren_npv, _currRates: offsetCurrRates, _renRates: offsetRenRates };
   });
 }
