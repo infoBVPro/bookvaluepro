@@ -594,36 +594,27 @@ tfoot td.num { text-align: right; }
 
 <script>
 // ── YEARS & CONSTANTS ────────────────────────────────────────────────
-// Dynamic: 11-year projection starting from current year
-const CURRENT_YEAR = new Date().getFullYear();
-const NUM_YEARS    = 11;
-const YEARS        = Array.from({length: NUM_YEARS}, (_, i) => CURRENT_YEAR + i);
+const YEARS    = [2026,2027,2028,2029,2030,2031,2032,2033,2034,2035];
 let DISCOUNT = 0.10;
 
-// Fields: pr=priority, co=company, mp=commPrem, cp=currPrem,
-//         rc=curr_commission_%s (11 values offset to next duration),
-//         rr=renewal_commission_%s (11 values starting at duration 1)
-const POLICIES = []; // Populated from Supabase
 
+// Fields: pr=priority, co=company, mp=commPrem, cp=currPrem,
+//         rc=curr_commission_%s (11 values), rr=renewal_commission_%s (11 values)
+const POLICIES = []; // Populated from Supabase
 // ── LIVE CALCULATION ENGINE ──────────────────────────────────────────
-// curr_npv and ren_npv are pre-calculated by bvpEnrichPolicies in bvp-supabase.js
-// Dashboard uses these directly rather than recalculating
+// Current NPV: CommPrem × curr_commission% at each duration / (1+r)^i × 12
 function policyCurrentNPV(p) {
+  // Use pre-calculated curr_npv from bvpEnrichPolicies
   return p.curr_npv || 0;
 }
 function policyOppNPV(p, savPct) {
-  // Scale renewal NPV by savings percentage relative to base 10%
-  // ren_npv was calculated at base savingsPct — adjust for current slider value
-  if (!p.ren_npv) return 0;
-  const baseSavPct = 10;
-  if (savPct === baseSavPct) return p.ren_npv;
-  // Recalculate with current savings %
-  const np = p.cp * (1 - savPct/100);
-  return p.rr.slice(0, NUM_YEARS).reduce((s, pct, i) => s + np * pct / Math.pow(1+DISCOUNT, i+1), 0) * 12;
+  // Use pre-calculated ren_npv from bvpEnrichPolicies
+  // ren_npv is calculated at the current savingsPct so use directly
+  return p.ren_npv || 0;
 }
-// Annual current CF for policy in year slot i
+// Annual current CF for policy in year slot i: CommPrem × curr% × 12
 function policyCurrCF(p, i) { return (p.rc[i] || 0) * p.mp * 12; }
-// Annual opportunity CF for policy in year slot i
+// Annual opportunity CF for policy in year slot i: CurrPrem × (1-sav%) × renewal% × 12
 function policyOppCF(p, i, savPct) { return (p.rr[i] || 0) * p.cp * (1 - savPct/100) * 12; }
 
 function cohortPolicies(pr) { return POLICIES.filter(p => p.pr === pr); }
@@ -641,9 +632,9 @@ function calcNPVByCohort(savPct) {
 }
 
 function calcCFByYear(savPct) {
-  const currTotal = Array(NUM_YEARS).fill(0);
-  const currSS    = Array(NUM_YEARS).fill(0);
-  const oppSS     = Array(NUM_YEARS).fill(0);
+  const currTotal = Array(10).fill(0);
+  const currSS    = Array(10).fill(0);
+  const oppSS     = Array(10).fill(0);
   POLICIES.forEach(p => {
     YEARS.forEach((_, i) => {
       currTotal[i] += policyCurrCF(p, i);
@@ -1055,12 +1046,8 @@ async function initFromSupabase() {
     const dbPolicies = await bvpGetPolicies(bvpBook.id);
 
     if (dbPolicies.length > 0) {
-      // Enrich with live NPV from Supabase commission rates
       const enriched = await bvpEnrichPolicies(
-        bvpSession.user.id,
-        dbPolicies,
-        discountRate,
-        savingsPct
+        bvpSession.user.id, dbPolicies, discountRate, savingsPct
       );
       POLICIES.length = 0;
       enriched.forEach(p => {
@@ -1169,7 +1156,9 @@ async function startRealtimeListener(agentId) {
         if (bvpBook) {
           const dbPolicies = await bvpGetPolicies(bvpBook.id);
           if (dbPolicies.length > 0) {
-            const enriched = await bvpEnrichPolicies(agentId, dbPolicies, discountRate, savingsPct);
+            const enriched = await bvpEnrichPolicies(
+              agentId, dbPolicies, discountRate, savingsPct
+            );
             POLICIES.length = 0;
             enriched.forEach(p => {
               POLICIES.push({
