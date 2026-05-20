@@ -373,3 +373,73 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
     return { ...p, curr_npv, ren_npv, _currRates: offsetCurrRates, _renRates: offsetRenRates };
   });
 }
+
+// ── PRIORITY OVERRIDES ────────────────────────────────────────
+// Saves a manual priority override for a single policy.
+// Sets priority to the new value and records it was manually overridden.
+async function bvpSetPriorityOverride(policyId, newPriority, agentEmail) {
+  const { error } = await bvp.from('policies').update({
+    priority:             newPriority,
+    priority_override:    newPriority,
+    priority_override_by: agentEmail || 'agent',
+  }).eq('id', policyId);
+  if (error) { console.error('bvpSetPriorityOverride:', error); return false; }
+  return true;
+}
+
+// Clears a manual override, restoring the calculated priority.
+async function bvpClearPriorityOverride(policyId, calculatedPriority) {
+  const { error } = await bvp.from('policies').update({
+    priority:             calculatedPriority,
+    priority_override:    null,
+    priority_override_by: null,
+  }).eq('id', policyId);
+  if (error) { console.error('bvpClearPriorityOverride:', error); return false; }
+  return true;
+}
+
+// After uploading a new book, reapply any manual overrides from the agent's
+// previous books by matching on policy_idx. Call after bvpUploadBook completes.
+async function bvpReapplyPriorityOverrides(agentId, newBookId) {
+  // 1. Find all policies across ALL books for this agent that have an override
+  const { data: overridden, error: e1 } = await bvp
+    .from('policies')
+    .select('policy_idx, priority_override, priority_override_by')
+    .eq('agent_id', agentId)
+    .not('priority_override', 'is', null)
+    .neq('book_id', newBookId);
+  if (e1) { console.error('bvpReapplyPriorityOverrides fetch:', e1); return 0; }
+  if (!overridden || overridden.length === 0) return 0;
+
+  // Build a lookup map: policy_idx → override
+  const overrideMap = {};
+  overridden.forEach(p => {
+    // Last-write-wins if same policy_idx appears in multiple old books
+    overrideMap[p.policy_idx] = {
+      priority_override:    p.priority_override,
+      priority_override_by: p.priority_override_by,
+    };
+  });
+
+  // 2. Fetch new book's policies to find matching policy_idx values
+  const { data: newPolicies, error: e2 } = await bvp
+    .from('policies')
+    .select('id, policy_idx')
+    .eq('book_id', newBookId);
+  if (e2) { console.error('bvpReapplyPriorityOverrides fetch new:', e2); return 0; }
+
+  // 3. Apply overrides in chunks
+  const toUpdate = newPolicies.filter(p => overrideMap[p.policy_idx]);
+  let count = 0;
+  for (const p of toUpdate) {
+    const ov = overrideMap[p.policy_idx];
+    const { error } = await bvp.from('policies').update({
+      priority:             ov.priority_override,
+      priority_override:    ov.priority_override,
+      priority_override_by: ov.priority_override_by,
+    }).eq('id', p.id);
+    if (!error) count++;
+  }
+  console.log(`bvpReapplyPriorityOverrides: reapplied ${count} overrides to new book`);
+  return count;
+}

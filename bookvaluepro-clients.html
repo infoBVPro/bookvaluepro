@@ -296,6 +296,34 @@ td { padding: 12px 16px; vertical-align: middle; }
   color: var(--text-muted); font-size: 14px;
 }
 
+
+/* ── PRIORITY OVERRIDE ── */
+.priority-select-wrap { display: flex; flex-direction: column; gap: 6px; }
+.priority-select {
+  font-size: 13px; font-family: var(--sans); font-weight: 600;
+  padding: 8px 10px; border-radius: 8px; outline: none; cursor: pointer;
+  border: 1.5px solid var(--emerald); background: white; width: 100%;
+  transition: box-shadow 0.2s;
+}
+.priority-select:focus { box-shadow: 0 0 0 3px rgba(61,162,114,0.12); }
+.priority-select.p1-sel { color: var(--p1); background: var(--p1-bg); border-color: var(--p1); }
+.priority-select.p2-sel { color: var(--p2); background: var(--p2-bg); border-color: var(--p2); }
+.priority-select.p3-sel { color: var(--p3); background: var(--p3-bg); border-color: var(--p3); }
+.priority-override-hint {
+  font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 4px;
+}
+.priority-override-hint button {
+  font-size: 11px; color: var(--p2); background: none; border: none;
+  cursor: pointer; text-decoration: underline; padding: 0; font-family: var(--sans);
+}
+.badge-manual {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10px; font-weight: 600; padding: 1px 6px;
+  border-radius: 10px; background: #fff3cd; color: #856404;
+  border: 1px solid #ffc107; margin-left: 4px; vertical-align: middle;
+  letter-spacing: 0.03em;
+}
+
 /* ── EXPORT BUTTON ── */
 .btn-export {
   display: flex; align-items: center; gap: 6px;
@@ -685,7 +713,7 @@ function renderTable() {
     <tr onclick="openPanel('${c.id}')">
       <td><span class="policy-num">#${String(c.policy_idx).padStart(4,'0')}</span></td>
       <td><span class="${c.name ? 'client-name' : 'client-name unnamed'}">${c.name || 'Unnamed client'}</span></td>
-      <td>${priorityBadge(c.priority)}</td>
+      <td>${priorityBadge(c.priority, c.priority_override != null)}</td>
       <td><span class="carrier-tag">${c.company || '—'}</span></td>
       <td>${c.issued_state || '—'}</td>
       <td>${c.dob ? formatDate(c.dob) : '—'}</td>
@@ -739,10 +767,11 @@ function renderPagination() {
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────────
-function priorityBadge(p) {
+function priorityBadge(p, isOverride) {
   const labels = { 1: 'Save & Switch', 2: 'Steady Book', 3: 'Loyalty Watch' };
   const cls    = { 1: 'p1', 2: 'p2', 3: 'p3' };
-  return `<span class="priority-badge ${cls[p] || 'p2'}">P${p} ${labels[p] || ''}</span>`;
+  const manual = isOverride ? '<span class="badge-manual">✏ Manual</span>' : '';
+  return `<span class="priority-badge ${cls[p] || 'p2'}">P${p} ${labels[p] || ''}${manual}</span>`;
 }
 function formatDate(d) { return d ? d.substring(0, 10) : '—'; }
 function monthName(m) {
@@ -793,7 +822,23 @@ function renderPanel() {
         </div>
         <div class="field-group">
           <div class="field-label">Priority</div>
-          <div class="field-value">${priorityBadge(c.priority)}</div>
+          ${editMode ? `
+            <div class="priority-select-wrap">
+              <select class="priority-select ${c.priority === 1 ? 'p1-sel' : c.priority === 2 ? 'p2-sel' : 'p3-sel'}"
+                id="edit-priority"
+                onchange="this.className='priority-select '+(['','p1-sel','p2-sel','p3-sel'][+this.value]||'p2-sel')">
+                <option value="1" ${c.priority===1?'selected':''}>P1 — Save & Switch</option>
+                <option value="2" ${c.priority===2?'selected':''}>P2 — Steady Book</option>
+                <option value="3" ${c.priority===3?'selected':''}>P3 — Loyalty Watch</option>
+              </select>
+              ${c.priority_override != null ? `
+                <div class="priority-override-hint">
+                  ✏ Manually set · <button onclick="clearPriorityOverride()">Reset to calculated</button>
+                </div>` : `
+                <div class="priority-override-hint">Changing this will mark as manually assigned</div>`
+              }
+            </div>
+          ` : `<div class="field-value">${priorityBadge(c.priority, c.priority_override != null)}</div>`}
         </div>
         <div class="field-group">
           <div class="field-label">First Name</div>
@@ -891,9 +936,31 @@ function toggleEdit(on) {
   renderPanel();
 }
 
+async function clearPriorityOverride() {
+  if (!activeClient) return;
+  // We need the originally calculated priority — stored as calc_priority if present,
+  // otherwise fall back: re-derive from priority rules using dob + eff_date + duration
+  const calcPriority = activeClient.calc_priority || activeClient.priority_override || 2;
+  const ok = await bvpClearPriorityOverride(activeClient.id, calcPriority);
+  if (ok) {
+    activeClient.priority          = calcPriority;
+    activeClient.priority_override = null;
+    activeClient.priority_override_by = null;
+    const idx = allClients.findIndex(c => c.id === activeClient.id);
+    if (idx >= 0) allClients[idx] = { ...activeClient };
+    renderPanel();
+    renderTable();
+    showExportToast('Priority reset to calculated value');
+  }
+}
+
 async function saveClient() {
   const btn = document.getElementById('btn-save');
   btn.disabled = true; btn.textContent = 'Saving...';
+
+  const newPriority = parseInt(document.getElementById('edit-priority')?.value);
+  const oldPriority = activeClient.priority;
+  const priorityChanged = newPriority && newPriority !== oldPriority;
 
   const updates = {
     first_name: document.getElementById('edit-first_name')?.value.trim() || null,
@@ -901,6 +968,12 @@ async function saveClient() {
     email:      document.getElementById('edit-email')?.value.trim()      || null,
     phone:      document.getElementById('edit-phone')?.value.trim()      || null,
   };
+
+  if (priorityChanged) {
+    updates.priority             = newPriority;
+    updates.priority_override    = newPriority;
+    updates.priority_override_by = bvpSession?.user?.email || 'agent';
+  }
 
   const { error } = await bvp.from('policies').update(updates).eq('id', activeClient.id);
 
@@ -913,6 +986,10 @@ async function saveClient() {
     // Update local state
     Object.assign(activeClient, updates);
     activeClient.name = [updates.first_name, updates.last_name].filter(Boolean).join(' ') || null;
+    if (priorityChanged) {
+      activeClient.priority          = newPriority;
+      activeClient.priority_override = newPriority;
+    }
     const idx = allClients.findIndex(c => c.id === activeClient.id);
     if (idx >= 0) allClients[idx] = { ...activeClient };
 

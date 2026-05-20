@@ -1321,9 +1321,17 @@ async function _doUpload(mode, versionName) {
       return;
     }
 
+    // Reapply any manual priority overrides from previous books
+    showParsing(true, 'Restoring manual priority assignments…');
+    const reapplied = await bvpReapplyPriorityOverrides(bvpSession.user.id, book);
+    showParsing(false);
+
+    const successNotes = ['Redirecting to your dashboard…'];
+    if (reapplied > 0) successNotes.unshift(`✏ ${reapplied} manual priority override${reapplied > 1 ? 's' : ''} restored`);
+
     showValidation('success',
       `${policies.length} policies uploaded successfully`,
-      ['Redirecting to your dashboard…']
+      successNotes
     );
     btnAnalyze.disabled = true;
     setTimeout(() => { window.location.href = 'bookvaluepro-dashboard.html'; }, 1500);
