@@ -1166,7 +1166,7 @@ async function _doUpload(mode, versionName) {
   showParsing(true, 'Calculating NPV and uploading to your account…');
 
   try {
-    const VALUATION = new Date('2026-05-02');
+    const VALUATION = new Date(); // today's date — always current
 
     // ── Helper functions ──────────────────────────────────────────
     function parseDate(val) {
@@ -1186,61 +1186,57 @@ async function _doUpload(mode, versionName) {
       if (!dobStr || !effDateStr) return null;
       const dob = new Date(dobStr);
       const eff = new Date(effDateStr);
-      let age = eff.getFullYear() - dob.getFullYear();
-      if ((eff.getMonth() * 100 + eff.getDate()) < (dob.getMonth() * 100 + dob.getDate())) age--;
+      let age = eff.getUTCFullYear() - dob.getUTCFullYear();
+      if ((eff.getUTCMonth() * 100 + eff.getUTCDate()) < (dob.getUTCMonth() * 100 + dob.getUTCDate())) age--;
       return age;
     }
 
     function attainedAge(dobStr) {
       if (!dobStr) return null;
       const d = new Date(dobStr);
-      let age = VALUATION.getFullYear() - d.getFullYear();
-      if ((VALUATION.getMonth() * 100 + VALUATION.getDate()) < (d.getMonth() * 100 + d.getDate())) age--;
+      let age = VALUATION.getFullYear() - d.getUTCFullYear();
+      if ((VALUATION.getMonth() * 100 + VALUATION.getDate()) < (d.getUTCMonth() * 100 + d.getUTCDate())) age--;
       return age;
     }
 
     function effMonth(dateStr) {
       if (!dateStr) return null;
-      return new Date(dateStr).getMonth() + 1;
+      return new Date(dateStr).getUTCMonth() + 1;
     }
 
     function durationYr(effDateStr) {
       if (!effDateStr) return 1;
       const eff = new Date(effDateStr);
-      let yrs = VALUATION.getFullYear() - eff.getFullYear();
-      if ((VALUATION.getMonth() * 100 + VALUATION.getDate()) < (eff.getMonth() * 100 + eff.getDate())) yrs--;
+      let yrs = VALUATION.getFullYear() - eff.getUTCFullYear();
+      if ((VALUATION.getMonth() * 100 + VALUATION.getDate()) < (eff.getUTCMonth() * 100 + eff.getUTCDate())) yrs--;
       return Math.max(1, Math.min(yrs + 1, 11));
     }
 
-    // ── Priority business rules from BusinessRules sheet ──────────
-    // Based on Issue Age x Policy Duration lookup table
-    // Issue age 63       -> always 3
-    // Issue age 64-75    -> starts 2, transitions to 1, then 3 at long durations
-    // Issue age 76+      -> always 3
+    // ── Priority business rules — Issue Age x Policy Duration ─────
+    // Verified against CF_Template_Prototype_3_5_HTMLChecks.xlsx
     const PRIORITY_RULES = {
-      63: [3,3,3,3,3,3,3,3,3,3,3],
-      64: [2,2,2,2,1,1,1,1,1,3,3],
-      65: [2,2,2,2,1,1,1,1,1,3,3],
-      66: [2,2,2,2,1,1,1,1,1,3,3],
-      67: [2,2,2,2,1,1,1,1,1,3,3],
-      68: [2,2,2,2,1,1,1,1,1,3,3],
+      64: [2,2,2,2,2,1,1,1,1,1,3],
+      65: [2,2,2,2,2,1,1,1,1,1,3],
+      66: [2,2,2,2,2,1,1,1,1,1,3],
+      67: [2,2,2,2,2,1,1,1,1,1,3],
+      68: [2,2,2,2,2,1,1,1,1,1,3],
       69: [2,2,2,2,2,1,1,1,3,3,3],
-      70: [2,2,2,1,1,1,1,1,1,3,3],
-      71: [2,2,1,1,1,1,1,1,1,3,3],
-      72: [2,1,1,1,1,1,1,1,1,3,3],
-      73: [2,1,1,1,1,1,1,1,1,3,3],
-      74: [2,1,1,1,1,1,1,1,1,3,3],
-      75: [3,1,1,1,1,1,1,1,1,3,3],
+      70: [2,2,2,2,1,1,1,1,3,3,3],
+      71: [2,2,2,1,1,1,1,3,3,3,3],
+      72: [2,2,1,1,1,1,3,3,3,3,3],
+      73: [2,1,1,1,1,3,3,3,3,3,3],
+      74: [2,1,1,1,3,3,3,3,3,3,3],
+      75: [2,1,1,3,3,3,3,3,3,3,3],
     };
 
     function calcPriority(dobStr, effDateStr, durYr) {
       const iAge = issueAge(dobStr, effDateStr);
-      if (iAge === null) return 2; // default if missing data
+      if (iAge === null) return 2;
       if (iAge <= 63) return 3;
       if (iAge >= 76) return 3;
-      const rules = PRIORITY_RULES[iAge] || PRIORITY_RULES[75];
-      const idx = Math.min(Math.max(durYr - 1, 0), 10);
-      return rules[idx];
+      if (durYr >= 11) return 3;
+      const rules = PRIORITY_RULES[iAge] || [3,3,3,3,3,3,3,3,3,3,3];
+      return rules[Math.min(durYr - 1, 10)];
     }
 
     // ── Load commission rates from Supabase once ──────────────────
@@ -1249,47 +1245,35 @@ async function _doUpload(mode, versionName) {
 
     // ── Hardcoded fallback rates by carrier (Open Enrollment) ────
     // Used when Supabase commission lookup returns zeros
-    const FALLBACK_RATES = {
-      'AARP/UHC':            [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
-      'AETNA':               [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
-      'Elevance':            [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
-      'Humana':              [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.05,0.05],
-      'Mutual of Omaha':     [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
-      'Blue Cross Blue Shield': [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.05,0.05],
-      'HealthSpring':        [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
-      'Generic':             [0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.22,0.02,0.02],
-    };
-
-    function buildRateArray(carrier, enrollmentType) {
-      const rates = Array(11).fill(0);
-      const carriers = [carrier, 'Generic'];
-      for (const co of carriers) {
-        const availableTypes = [...new Set(allComms.filter(r => r.carrier === co).map(r => r.enrollment_type))];
-        const rows = allComms.filter(r =>
-          r.carrier === co && r.enrollment_type === enrollmentType
-        );
+    function buildRateArray(carrier, state, enrollmentType) {
+      // Priority: exact carrier+state → carrier only → Generic carrier
+      // Generic in Supabase is the true fallback — no hardcoded rates
+      const attempts = [
+        r => r.carrier === carrier && r.issued_state === state  && r.enrollment_type === enrollmentType,
+        r => r.carrier === carrier && !r.issued_state           && r.enrollment_type === enrollmentType,
+        r => r.carrier === carrier &&                              r.enrollment_type === enrollmentType,
+        r => r.carrier === 'Generic' && !r.issued_state         && r.enrollment_type === enrollmentType,
+        r => r.carrier === 'Generic' &&                            r.enrollment_type === enrollmentType,
+      ];
+      for (const match of attempts) {
+        const rows = allComms.filter(match);
         if (rows.length > 0) {
+          const rates = Array(11).fill(0);
           rows.forEach(r => {
             const idx = Math.min(Math.max((r.duration_yr || 1) - 1, 0), 10);
             rates[idx] = parseFloat(r.rate) || 0;
           });
-          // Verify we got real rates, not all zeros
-          if (rates.some(r => r > 0)) {
-            return rates;
-          }
+          if (rates.some(r => r > 0)) return rates;
         }
       }
-      // Fall back to hardcoded rates
-      const fallback = FALLBACK_RATES[carrier] || FALLBACK_RATES['Generic'];
-      return [...fallback];
+      return Array(11).fill(0);
     }
 
     // ── Build policy records ──────────────────────────────────────
     showParsing(true, 'Building policy records…');
-    if (state.rows && state.rows.length > 0) {
-    }
     const policies = (state.rows || []).map((row, i) => {
       const carrier    = row['Company'] || row['company'] || 'Generic';
+      const stateCode  = row['IssuedState'] || row['issued_state'] || row['State'] || null;
       const dobStr     = parseDate(row['DOB'] || row['dob'] || null);
       const effDateStr = parseDate(row['EffectiveDte'] || row['effective_date'] || row['EffDate'] || null);
       const currDurYr  = durationYr(effDateStr);
@@ -1298,11 +1282,11 @@ async function _doUpload(mode, versionName) {
       const priority = calcPriority(dobStr, effDateStr, currDurYr);
 
       // Always use Open Enrollment — agents don't know enrollment type
-      const curr_pcts = buildRateArray(carrier, 'Open Enrollment');
-      const ren_pcts  = buildRateArray(carrier, 'Open Enrollment');
+      const curr_pcts = buildRateArray(carrier, stateCode, 'Open Enrollment');
+      const ren_pcts  = buildRateArray(carrier, stateCode, 'Open Enrollment');
 
       return {
-        policy_idx:   i + 1, // auto-generated row number
+        policy_idx:   i + 1,
         first_name:   row['First Name']  || row['first_name']  || null,
         last_name:    row['Last Name']   || row['last_name']   || null,
         dob:          dobStr,
@@ -1310,7 +1294,7 @@ async function _doUpload(mode, versionName) {
         email:        row['Email'] || row['email'] || null,
         phone:        row['Phone'] || row['phone'] || null,
         company:      carrier,
-        issued_state: row['IssuedState'] || row['issued_state'] || row['State'] || null,
+        issued_state: stateCode,
         eff_month:    effMonth(effDateStr),
         duration_yr:  currDurYr,
         priority,
