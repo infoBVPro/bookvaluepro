@@ -1166,7 +1166,7 @@ async function _doUpload(mode, versionName) {
   showParsing(true, 'Calculating NPV and uploading to your account…');
 
   try {
-    const VALUATION = new Date(); // today's date — always current
+    const VALUATION = new Date('2026-05-02');
 
     // ── Helper functions ──────────────────────────────────────────
     function parseDate(val) {
@@ -1186,31 +1186,29 @@ async function _doUpload(mode, versionName) {
       if (!dobStr || !effDateStr) return null;
       const dob = new Date(dobStr);
       const eff = new Date(effDateStr);
-      let age = eff.getUTCFullYear() - dob.getUTCFullYear();
-      if ((eff.getUTCMonth() * 100 + eff.getUTCDate()) < (dob.getUTCMonth() * 100 + dob.getUTCDate())) age--;
+      let age = eff.getFullYear() - dob.getFullYear();
+      if ((eff.getMonth() * 100 + eff.getDate()) < (dob.getMonth() * 100 + dob.getDate())) age--;
       return age;
     }
 
     function attainedAge(dobStr) {
       if (!dobStr) return null;
       const d = new Date(dobStr);
-      let age = VALUATION.getFullYear() - d.getUTCFullYear();
-      if ((VALUATION.getMonth() * 100 + VALUATION.getDate()) < (d.getUTCMonth() * 100 + d.getUTCDate())) age--;
+      let age = VALUATION.getFullYear() - d.getFullYear();
+      if ((VALUATION.getMonth() * 100 + VALUATION.getDate()) < (d.getMonth() * 100 + d.getDate())) age--;
       return age;
     }
 
     function effMonth(dateStr) {
       if (!dateStr) return null;
-      // Use UTC to avoid timezone causing off-by-one month errors
-      const d = new Date(dateStr);
-      return d.getUTCMonth() + 1;
+      return new Date(dateStr).getMonth() + 1;
     }
 
     function durationYr(effDateStr) {
       if (!effDateStr) return 1;
       const eff = new Date(effDateStr);
-      let yrs = VALUATION.getFullYear() - eff.getUTCFullYear();
-      if ((VALUATION.getMonth() * 100 + VALUATION.getDate()) < (eff.getUTCMonth() * 100 + eff.getUTCDate())) yrs--;
+      let yrs = VALUATION.getFullYear() - eff.getFullYear();
+      if ((VALUATION.getMonth() * 100 + VALUATION.getDate()) < (eff.getMonth() * 100 + eff.getDate())) yrs--;
       return Math.max(1, Math.min(yrs + 1, 11));
     }
 
@@ -1226,7 +1224,7 @@ async function _doUpload(mode, versionName) {
       66: [2,2,2,2,1,1,1,1,1,3,3],
       67: [2,2,2,2,1,1,1,1,1,3,3],
       68: [2,2,2,2,1,1,1,1,1,3,3],
-      69: [2,2,2,2,1,1,1,1,1,3,3],
+      69: [2,2,2,2,2,1,1,1,3,3,3],
       70: [2,2,2,1,1,1,1,1,1,3,3],
       71: [2,2,1,1,1,1,1,1,1,3,3],
       72: [2,1,1,1,1,1,1,1,1,3,3],
