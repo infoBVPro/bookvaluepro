@@ -606,13 +606,18 @@ let DISCOUNT = 0.10;
 const POLICIES = []; // Populated from Supabase
 
 // ── LIVE CALCULATION ENGINE ──────────────────────────────────────────
-// Current NPV: CommPrem × curr_commission% at each duration / (1+r)^i × 12
-// rc is already offset to next duration by bvpEnrichPolicies
+// curr_npv and ren_npv are pre-calculated by bvpEnrichPolicies in bvp-supabase.js
+// Dashboard uses these directly rather than recalculating
 function policyCurrentNPV(p) {
-  return p.rc.slice(0, NUM_YEARS).reduce((s, pct, i) => s + p.mp * pct / Math.pow(1+DISCOUNT, i+1), 0) * 12;
+  return p.curr_npv || 0;
 }
-// Opportunity NPV: CurrPrem × (1-savPct%) × renewal_commission% at each duration / (1+r)^i × 12
 function policyOppNPV(p, savPct) {
+  // Scale renewal NPV by savings percentage relative to base 10%
+  // ren_npv was calculated at base savingsPct — adjust for current slider value
+  if (!p.ren_npv) return 0;
+  const baseSavPct = 10;
+  if (savPct === baseSavPct) return p.ren_npv;
+  // Recalculate with current savings %
   const np = p.cp * (1 - savPct/100);
   return p.rr.slice(0, NUM_YEARS).reduce((s, pct, i) => s + np * pct / Math.pow(1+DISCOUNT, i+1), 0) * 12;
 }
@@ -1050,15 +1055,24 @@ async function initFromSupabase() {
     const dbPolicies = await bvpGetPolicies(bvpBook.id);
 
     if (dbPolicies.length > 0) {
+      // Enrich with live NPV from Supabase commission rates
+      const enriched = await bvpEnrichPolicies(
+        bvpSession.user.id,
+        dbPolicies,
+        discountRate,
+        savingsPct
+      );
       POLICIES.length = 0;
-      dbPolicies.forEach(p => {
+      enriched.forEach(p => {
         POLICIES.push({
-          pr: p.priority,
-          co: p.company,
-          mp: p.comm_prem,
-          cp: p.curr_prem,
-          rc: p.curr_pcts || [],
-          rr: p.ren_pcts  || [],
+          pr:       p.priority,
+          co:       p.company,
+          mp:       p.comm_prem,
+          cp:       p.curr_prem,
+          rc:       p._currRates || [],
+          rr:       p._renRates  || [],
+          curr_npv: p.curr_npv,
+          ren_npv:  p.ren_npv,
         });
       });
       const bnEl = document.getElementById('book-name');
@@ -1155,15 +1169,18 @@ async function startRealtimeListener(agentId) {
         if (bvpBook) {
           const dbPolicies = await bvpGetPolicies(bvpBook.id);
           if (dbPolicies.length > 0) {
+            const enriched = await bvpEnrichPolicies(agentId, dbPolicies, discountRate, savingsPct);
             POLICIES.length = 0;
-            dbPolicies.forEach(p => {
+            enriched.forEach(p => {
               POLICIES.push({
-                pr: p.priority,
-                co: p.company,
-                mp: p.comm_prem,
-                cp: p.curr_prem,
-                rc: p.curr_pcts || [],
-                rr: p.ren_pcts  || [],
+                pr:       p.priority,
+                co:       p.company,
+                mp:       p.comm_prem,
+                cp:       p.curr_prem,
+                rc:       p._currRates || [],
+                rr:       p._renRates  || [],
+                curr_npv: p.curr_npv,
+                ren_npv:  p.ren_npv,
               });
             });
           }
