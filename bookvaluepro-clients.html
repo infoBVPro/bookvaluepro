@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="bvp-supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 :root {
   --forest: #1a5c3a; --emerald: #3da272; --deep: #0d2e1e;
@@ -294,6 +295,102 @@ td { padding: 12px 16px; vertical-align: middle; }
   text-align: center; padding: 60px 20px;
   color: var(--text-muted); font-size: 14px;
 }
+
+/* ── EXPORT BUTTON ── */
+.btn-export {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 500; font-family: var(--sans);
+  color: var(--forest); background: var(--mist);
+  border: 1.5px solid #b8dfc8; padding: 8px 16px;
+  border-radius: 8px; cursor: pointer; transition: all 0.2s;
+  white-space: nowrap;
+}
+.btn-export:hover { background: var(--forest); color: white; border-color: var(--forest); }
+.btn-export svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; flex-shrink: 0; }
+
+/* ── EXPORT MODAL ── */
+.export-overlay {
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(7,22,13,0.55); backdrop-filter: blur(4px);
+  display: none; align-items: center; justify-content: center; padding: 24px;
+}
+.export-overlay.active { display: flex; }
+.export-modal {
+  background: white; border-radius: 16px; width: 100%; max-width: 480px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  animation: modalIn 0.2s ease;
+}
+@keyframes modalIn { from { transform: scale(0.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.export-modal-header {
+  padding: 1.5rem 1.5rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.export-modal-title {
+  font-family: var(--serif); font-size: 22px; color: var(--deep); margin-bottom: 4px;
+}
+.export-modal-sub { font-size: 13px; color: var(--text-muted); }
+.export-modal-body { padding: 1.25rem 1.5rem; }
+.export-section-label {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--slate); margin-bottom: 10px;
+}
+.export-scope-options { display: flex; gap: 10px; margin-bottom: 1.25rem; }
+.export-scope-btn {
+  flex: 1; padding: 12px 10px; border-radius: 10px;
+  border: 1.5px solid var(--border); background: var(--light-bg);
+  cursor: pointer; text-align: center; transition: all 0.18s;
+  font-family: var(--sans);
+}
+.export-scope-btn.selected {
+  border-color: var(--emerald); background: var(--mist);
+}
+.export-scope-btn:hover:not(.selected) { border-color: #b8dfc8; }
+.export-scope-label { font-size: 13px; font-weight: 600; color: var(--deep); }
+.export-scope-count { font-size: 11px; color: var(--text-muted); font-family: var(--mono); margin-top: 2px; }
+.export-scope-btn.selected .export-scope-label { color: var(--forest); }
+.export-preview {
+  background: var(--light-bg); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 14px; margin-bottom: 1.25rem;
+  font-size: 12px; color: var(--text-muted);
+}
+.export-preview-row { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; }
+.export-preview-row:not(:last-child) { border-bottom: 1px dashed var(--border); padding-bottom: 6px; margin-bottom: 3px; }
+.export-preview-key { font-weight: 500; color: var(--slate); }
+.export-preview-val { font-family: var(--mono); color: var(--deep); font-size: 11px; }
+.export-filename-wrap { margin-bottom: 1rem; }
+.export-filename-input {
+  width: 100%; padding: 9px 12px; border: 1.5px solid var(--border);
+  border-radius: 8px; font-size: 13px; font-family: var(--mono);
+  color: var(--deep); background: white; outline: none; transition: border-color 0.2s;
+}
+.export-filename-input:focus { border-color: var(--emerald); }
+.export-modal-footer {
+  padding: 1rem 1.5rem; border-top: 1px solid var(--border);
+  display: flex; gap: 10px; background: var(--light-bg);
+  border-radius: 0 0 16px 16px;
+}
+.btn-export-go {
+  flex: 1; background: var(--forest); color: white; border: none;
+  padding: 12px; border-radius: 9px; font-size: 14px; font-weight: 600;
+  font-family: var(--sans); cursor: pointer; transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn-export-go:hover { background: var(--emerald); }
+.btn-export-go:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-export-cancel {
+  background: white; color: var(--text-muted); border: 1px solid var(--border);
+  padding: 12px 20px; border-radius: 9px; font-size: 14px;
+  font-family: var(--sans); cursor: pointer; transition: all 0.2s;
+}
+.btn-export-cancel:hover { border-color: var(--slate); color: var(--text); }
+.export-toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: var(--deep); color: white; padding: 12px 22px;
+  border-radius: 10px; font-size: 13px; font-family: var(--sans);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.2); z-index: 400;
+  display: none; align-items: center; gap: 8px; white-space: nowrap;
+}
+.export-toast.active { display: flex; }
 </style>
 </head>
 <body>
@@ -316,9 +413,9 @@ td { padding: 12px 16px; vertical-align: middle; }
     <div class="step-sep"></div>
     <a href="bookvaluepro-dashboard.html" class="step done"><div class="step-num">✓</div><span>Dashboard</span></a>
     <div class="step-sep"></div>
-    <a href="bookvaluepro-clients.html" class="step active"><div class="step-num">4</div><span>Clients</span></a>
+    <a href="bookvaluepro-clients.html" class="step active"><div class="step-num">3</div><span>Clients</span></a>
     <div class="step-sep"></div>
-    <a href="bookvaluepro-outreach.html" class="step"><div class="step-num">3</div><span>Outreach</span></a>
+    <a href="bookvaluepro-outreach.html" class="step"><div class="step-num">4</div><span>Outreach</span></a>
   </div>
 </div>
 
@@ -351,6 +448,10 @@ td { padding: 12px 16px; vertical-align: middle; }
     </select>
     <div class="toolbar-right">
       <button class="btn-clear" onclick="clearFilters()">Clear filters</button>
+      <button class="btn-export" onclick="openExportModal()">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export
+      </button>
     </div>
   </div>
 
@@ -388,6 +489,51 @@ td { padding: 12px 16px; vertical-align: middle; }
       <div class="page-btns" id="page-btns"></div>
     </div>
   </div>
+</div>
+
+<!-- EXPORT MODAL -->
+<div class="export-overlay" id="export-overlay">
+  <div class="export-modal">
+    <div class="export-modal-header">
+      <div class="export-modal-title">Export to Excel</div>
+      <div class="export-modal-sub">Download your book of business as a formatted .xlsx file</div>
+    </div>
+    <div class="export-modal-body">
+      <div class="export-section-label">What to export</div>
+      <div class="export-scope-options">
+        <div class="export-scope-btn selected" id="scope-filtered" onclick="setExportScope('filtered')">
+          <div class="export-scope-label">Filtered view</div>
+          <div class="export-scope-count" id="scope-filtered-count">— rows</div>
+        </div>
+        <div class="export-scope-btn" id="scope-all" onclick="setExportScope('all')">
+          <div class="export-scope-label">Full book</div>
+          <div class="export-scope-count" id="scope-all-count">— rows</div>
+        </div>
+      </div>
+      <div class="export-section-label">Preview</div>
+      <div class="export-preview" id="export-preview">
+        <div class="export-preview-row"><span class="export-preview-key">Rows</span><span class="export-preview-val" id="prev-rows">—</span></div>
+        <div class="export-preview-row"><span class="export-preview-key">Columns</span><span class="export-preview-val">12 (all fields)</span></div>
+        <div class="export-preview-row"><span class="export-preview-key">Priority color-coding</span><span class="export-preview-val">P1 Green · P2 Blue · P3 Amber</span></div>
+        <div class="export-preview-row"><span class="export-preview-key">Summary row</span><span class="export-preview-val">Totals 0026 averages at bottom</span></div>
+        <div class="export-preview-row"><span class="export-preview-key">Format</span><span class="export-preview-val">.xlsx (Excel)</span></div>
+      </div>
+      <div class="export-section-label">File name</div>
+      <div class="export-filename-wrap">
+        <input class="export-filename-input" type="text" id="export-filename" />
+      </div>
+    </div>
+    <div class="export-modal-footer">
+      <button class="btn-export-cancel" onclick="closeExportModal()">Cancel</button>
+      <button class="btn-export-go" id="btn-export-go" onclick="runExport()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download .xlsx
+      </button>
+    </div>
+  </div>
+</div>
+<div class="export-toast" id="export-toast">
+  <span>✓</span><span id="export-toast-msg">Export downloaded</span>
 </div>
 
 <!-- DETAIL PANEL -->
@@ -781,14 +927,212 @@ async function saveClient() {
   }
 }
 
+
+// ── EXPORT ────────────────────────────────────────────────────────────
+let exportScope = 'filtered';
+
+function openExportModal() {
+  document.getElementById('scope-filtered-count').textContent = filtered.length + ' rows';
+  document.getElementById('scope-all-count').textContent = allClients.length + ' rows';
+  const hasFilters = filtered.length !== allClients.length;
+  setExportScope(hasFilters ? 'filtered' : 'all');
+  const today = new Date().toISOString().slice(0,10);
+  const bookName = (bvpBook && bvpBook.file_name ? bvpBook.file_name : 'Book').replace(/[^a-zA-Z0-9_-]/g, '_');
+  document.getElementById('export-filename').value = 'BookValuePro_' + bookName + '_' + today;
+  document.getElementById('export-overlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeExportModal() {
+  document.getElementById('export-overlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function setExportScope(scope) {
+  exportScope = scope;
+  document.getElementById('scope-filtered').classList.toggle('selected', scope === 'filtered');
+  document.getElementById('scope-all').classList.toggle('selected', scope === 'all');
+  const count = scope === 'filtered' ? filtered.length : allClients.length;
+  document.getElementById('prev-rows').textContent = count + ' policies + 1 summary row';
+}
+
+function runExport() {
+  const btn = document.getElementById('btn-export-go');
+  btn.disabled = true;
+  btn.textContent = 'Generating…';
+
+  try {
+    const rows = exportScope === 'filtered' ? filtered : allClients;
+    const filename = (document.getElementById('export-filename').value.trim() || 'BookValuePro_Export') + '.xlsx';
+
+    const wb = XLSX.utils.book_new();
+    const ws_data = [];
+
+    const headers = [
+      'Policy #', 'First Name', 'Last Name', 'Date of Birth', 'Attained Age',
+      'Carrier', 'State', 'Priority', 'Priority Label',
+      'Eff. Month', 'Duration Year',
+      'Current Premium', 'Comm. Premium',
+      'Current NPV', 'Renewal NPV',
+      'Email', 'Phone'
+    ];
+    ws_data.push(headers);
+
+    const MONTHS_FULL = ['January','February','March','April','May','June',
+                         'July','August','September','October','November','December'];
+    const PRIORITY_LABELS = { 1: 'Save & Switch', 2: 'Steady Book', 3: 'Loyalty Watch' };
+
+    rows.forEach(function(c) {
+      ws_data.push([
+        String(c.policy_idx).padStart(4, '0'),
+        c.first_name || '',
+        c.last_name  || '',
+        c.dob        ? c.dob.substring(0, 10) : '',
+        c.attained_age || '',
+        c.company        || '',
+        c.issued_state   || '',
+        c.priority       || '',
+        PRIORITY_LABELS[c.priority] || '',
+        c.eff_month ? MONTHS_FULL[c.eff_month - 1] : '',
+        c.duration_yr || '',
+        c.curr_prem != null ? Number(c.curr_prem)  : '',
+        c.comm_prem != null ? Number(c.comm_prem)  : '',
+        c.curr_npv  != null ? Math.round(c.curr_npv) : '',
+        c.ren_npv   != null ? Math.round(c.ren_npv)  : '',
+        c.email || '',
+        c.phone || '',
+      ]);
+    });
+
+    var dataLen = rows.length;
+    var firstDataRow = 2;
+    var lastDataRow  = dataLen + 1;
+
+    ws_data.push([
+      'SUMMARY', '', '', '', '', '', '', '', '', '', '',
+      { f: 'SUM(L' + firstDataRow + ':L' + lastDataRow + ')' },
+      { f: 'SUM(M' + firstDataRow + ':M' + lastDataRow + ')' },
+      { f: 'SUM(N' + firstDataRow + ':N' + lastDataRow + ')' },
+      { f: 'SUM(O' + firstDataRow + ':O' + lastDataRow + ')' },
+      '', '',
+    ]);
+
+    var ws = XLSX.utils.aoa_to_sheet(ws_data);
+
+    ws['!cols'] = [
+      {wch:8},{wch:14},{wch:14},{wch:13},{wch:12},
+      {wch:16},{wch:7},{wch:8},{wch:16},
+      {wch:12},{wch:13},
+      {wch:16},{wch:16},
+      {wch:14},{wch:14},
+      {wch:26},{wch:16}
+    ];
+
+    ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft' };
+
+    var range = XLSX.utils.decode_range(ws['!ref']);
+
+    var FILL_P1  = { patternType: 'solid', fgColor: { rgb: 'E6F5EE' } };
+    var FILL_P2  = { patternType: 'solid', fgColor: { rgb: 'E8F1FB' } };
+    var FILL_P3  = { patternType: 'solid', fgColor: { rgb: 'FEF3E2' } };
+    var FILL_HDR = { patternType: 'solid', fgColor: { rgb: '0D2E1E' } };
+    var FILL_SUM = { patternType: 'solid', fgColor: { rgb: 'F0F7F3' } };
+
+    var FONT_HDR  = { name: 'Calibri', bold: true, color: { rgb: 'FFFFFF' }, sz: 11 };
+    var FONT_SUM  = { name: 'Calibri', bold: true, color: { rgb: '1A5C3A' }, sz: 11 };
+    var FONT_BASE = { name: 'Calibri', sz: 11 };
+    var FONT_P1   = { name: 'Calibri', sz: 11, color: { rgb: '1A5C3A' } };
+    var FONT_P2   = { name: 'Calibri', sz: 11, color: { rgb: '2563A8' } };
+    var FONT_P3   = { name: 'Calibri', sz: 11, color: { rgb: 'B45309' } };
+
+    var FMT_CURRENCY = '"$"#,##0.00';
+    var FMT_NPV      = '"$"#,##0';
+    var CURRENCY_COLS = [11, 12, 13, 14];
+
+    for (var c = range.s.c; c <= range.e.c; c++) {
+      var addr = XLSX.utils.encode_cell({ r: 0, c: c });
+      if (!ws[addr]) continue;
+      ws[addr].s = {
+        fill: FILL_HDR, font: FONT_HDR,
+        alignment: { horizontal: 'center', vertical: 'center' }
+      };
+    }
+
+    for (var r = 1; r <= dataLen; r++) {
+      var priority = ws_data[r][7];
+      var fill, font;
+      if (priority === 1)      { fill = FILL_P1; font = FONT_P1; }
+      else if (priority === 2) { fill = FILL_P2; font = FONT_P2; }
+      else if (priority === 3) { fill = FILL_P3; font = FONT_P3; }
+      else                     { fill = null;    font = FONT_BASE; }
+
+      for (var c2 = range.s.c; c2 <= range.e.c; c2++) {
+        var addr2 = XLSX.utils.encode_cell({ r: r, c: c2 });
+        if (!ws[addr2]) ws[addr2] = { t: 'z', v: '' };
+        ws[addr2].s = {
+          font: font || FONT_BASE,
+          fill: fill || undefined,
+          alignment: { vertical: 'center' }
+        };
+        if (CURRENCY_COLS.indexOf(c2) !== -1 && ws[addr2].v !== '') {
+          ws[addr2].z = c2 >= 13 ? FMT_NPV : FMT_CURRENCY;
+        }
+      }
+    }
+
+    var summaryRowIdx = dataLen + 1;
+    for (var c3 = range.s.c; c3 <= range.e.c; c3++) {
+      var addr3 = XLSX.utils.encode_cell({ r: summaryRowIdx, c: c3 });
+      if (!ws[addr3]) ws[addr3] = { t: 'z', v: '' };
+      ws[addr3].s = {
+        font: FONT_SUM, fill: FILL_SUM,
+        alignment: { vertical: 'center' }
+      };
+      if (CURRENCY_COLS.indexOf(c3) !== -1) {
+        ws[addr3].z = c3 >= 13 ? FMT_NPV : FMT_CURRENCY;
+      }
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Clients');
+    XLSX.writeFile(wb, filename, { cellStyles: true, bookSST: false });
+
+    closeExportModal();
+    showExportToast(filename + ' downloaded');
+
+  } catch(err) {
+    console.error('Export error:', err);
+    showExportToast('Export failed: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download .xlsx';
+  }
+}
+
+function showExportToast(msg) {
+  var toast = document.getElementById('export-toast');
+  document.getElementById('export-toast-msg').textContent = msg;
+  toast.classList.add('active');
+  setTimeout(function() { toast.classList.remove('active'); }, 3500);
+}
+
+document.getElementById('export-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeExportModal();
+});
+
 // ── EVENT LISTENERS ───────────────────────────────────────────────────
 document.getElementById('search-input').addEventListener('input', applyFilters);
 document.getElementById('filter-carrier').addEventListener('change', applyFilters);
 document.getElementById('filter-priority').addEventListener('change', applyFilters);
 document.getElementById('filter-state').addEventListener('change', applyFilters);
 
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closePanel();
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    if (document.getElementById('export-overlay').classList.contains('active')) {
+      closeExportModal();
+    } else {
+      closePanel();
+    }
+  }
 });
 </script>
 </body>
