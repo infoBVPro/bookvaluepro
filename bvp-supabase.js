@@ -259,12 +259,19 @@ async function bvpSaveAssumptions(bookId, discountRate, savingsPct) {
 // Current NPV: policy is at currentDurationYr, rates step through remaining schedule
 // Renewal NPV: restarts at duration 1, uses newPrem = currPrem * (1 - savingsPct/100)
 
-function bvpCalcCurrentNPV(commPrem, currentDurationYr, commRates, discountPct = 10) {
-  const r = discountPct / 100;
+function bvpCalcCurrentNPV(commPrem, currentDurationYr, effMonth, commRates, discountPct = 10) {
+  const VALUATION_MONTH = new Date().getMonth() + 1;
+  const alreadyRenewed  = effMonth !== null && effMonth <= VALUATION_MONTH;
+  const nextDur         = currentDurationYr + 1;
+  const r               = discountPct / 100;
   let npv = 0;
   for (let i = 0; i < 11; i++) {
-    const durIdx = Math.min(currentDurationYr - 1 + i, 10);
-    const rate = commRates[durIdx] || 0;
+    let rate = 0;
+    if (alreadyRenewed) {
+      rate = i === 0 ? 0 : (commRates[Math.min(nextDur - 1 + (i - 1), 10)] || 0);
+    } else {
+      rate = commRates[Math.min(nextDur - 1 + i, 10)] || 0;
+    }
     npv += (commPrem * rate) / Math.pow(1 + r, i + 1);
   }
   return npv * 12;
