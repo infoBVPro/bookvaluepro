@@ -1110,19 +1110,7 @@ function renderPanel() {
         </div>
         <div class="field-group">
           <div class="field-label">Current Premium</div>
-          ${editMode
-            ? `<div style="display:flex;gap:6px;align-items:center">
-                <input class="field-input" id="edit-curr_prem" type="number" step="0.01" min="0"
-                  value="${c.curr_prem || ''}" placeholder="0.00" style="flex:1"/>
-                <select class="prem-mode-select" id="edit-prem_mode" style="width:120px">
-                  <option value="annual"    ${(c.prem_mode||'annual')==='annual'   ?'selected':''}>Annual</option>
-                  <option value="quarterly" ${(c.prem_mode||'annual')==='quarterly'?'selected':''}>Quarterly</option>
-                  <option value="monthly"   ${(c.prem_mode||'annual')==='monthly'  ?'selected':''}>Monthly</option>
-                </select>
-              </div>`
-            : `<div class="field-value mono">${fmt$(c.curr_prem)}
-                <span class="badge-prem-mode">${c.prem_mode || 'annual'}</span>
-              </div>`}
+          <div class="field-value mono">${fmt$(c.curr_prem)}</div>
         </div>
         <div class="field-group">
           <div class="field-label">Comm. Premium</div>
@@ -1159,10 +1147,17 @@ function renderPanel() {
         <div class="field-group">
           <div class="field-label">Renewal Premium</div>
           ${editMode
-            ? `<input class="field-input" id="edit-ren_prem" type="number" step="0.01" min="0"
-                value="${c.ren_prem || ''}" placeholder="Annual premium"/>`
+            ? `<div style="display:flex;gap:6px;align-items:center">
+                <input class="field-input" id="edit-ren_prem" type="number" step="0.01" min="0"
+                  value="${c.ren_prem || ''}" placeholder="Enter amount" style="flex:1"/>
+                <select class="prem-mode-select" id="edit-prem_mode" style="width:120px">
+                  <option value="annual"    ${(c.prem_mode||'annual')==='annual'   ?'selected':''}>Annual</option>
+                  <option value="quarterly" ${(c.prem_mode||'annual')==='quarterly'?'selected':''}>Quarterly</option>
+                  <option value="monthly"   ${(c.prem_mode||'annual')==='monthly'  ?'selected':''}>Monthly</option>
+                </select>
+              </div>`
             : `<div class="field-value mono">${c.ren_prem
-                ? fmt$(c.ren_prem)
+                ? `${fmt$(c.ren_prem)} <span class="badge-prem-mode">${c.prem_mode || 'annual'}</span>`
                 : '<span style="color:var(--text-muted)">Using savings % estimate</span>'}</div>`}
         </div>
       </div>
@@ -1228,24 +1223,22 @@ async function saveClient() {
   const oldPriority = activeClient.priority;
   const priorityChanged = newPriority && newPriority !== oldPriority;
 
-  // Normalize curr_prem to annual based on prem_mode
-  const rawPrem   = parseFloat(document.getElementById('edit-curr_prem')?.value) || null;
-  const premMode  = document.getElementById('edit-prem_mode')?.value || 'annual';
-  const premMulti = premMode === 'monthly' ? 12 : premMode === 'quarterly' ? 4 : 1;
-  const annualPrem = rawPrem != null ? rawPrem * premMulti : null;
+  // Normalize agent-entered renewal premium to annual based on prem_mode
+  const premMode   = document.getElementById('edit-prem_mode')?.value || 'annual';
+  const premMulti  = premMode === 'monthly' ? 12 : premMode === 'quarterly' ? 4 : 1;
+  const renPremRaw = parseFloat(document.getElementById('edit-ren_prem')?.value) || null;
+  const annualRenPrem = renPremRaw != null ? renPremRaw * premMulti : null;
 
   const renCarrier = document.getElementById('edit-ren_carrier')?.value || null;
-  const renPremRaw = parseFloat(document.getElementById('edit-ren_prem')?.value) || null;
 
   const updates = {
-    first_name: document.getElementById('edit-first_name')?.value.trim() || null,
-    last_name:  document.getElementById('edit-last_name')?.value.trim()  || null,
-    email:      document.getElementById('edit-email')?.value.trim()      || null,
-    phone:      document.getElementById('edit-phone')?.value.trim()      || null,
-    prem_mode:  premMode,
-    curr_prem:  annualPrem,
+    first_name:  document.getElementById('edit-first_name')?.value.trim() || null,
+    last_name:   document.getElementById('edit-last_name')?.value.trim()  || null,
+    email:       document.getElementById('edit-email')?.value.trim()      || null,
+    phone:       document.getElementById('edit-phone')?.value.trim()      || null,
+    prem_mode:   premMode,
     ren_carrier: renCarrier || null,
-    ren_prem:    renPremRaw,
+    ren_prem:    annualRenPrem,
   };
 
   if (priorityChanged) {
