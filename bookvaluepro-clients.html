@@ -1145,19 +1145,22 @@ function renderPanel() {
                 : '<span style="color:var(--text-muted)">Using current carrier</span>'}</div>`}
         </div>
         <div class="field-group">
+          <div class="field-label">Premium Mode</div>
+          ${editMode
+            ? `<select class="prem-mode-select" id="edit-prem_mode">
+                <option value="annual"    ${(c.prem_mode||'annual')==='annual'   ?'selected':''}>Annual</option>
+                <option value="quarterly" ${(c.prem_mode||'annual')==='quarterly'?'selected':''}>Quarterly</option>
+                <option value="monthly"   ${(c.prem_mode||'annual')==='monthly'  ?'selected':''}>Monthly</option>
+              </select>`
+            : `<div class="field-value"><span class="badge-prem-mode">${c.prem_mode || 'annual'}</span></div>`}
+        </div>
+        <div class="field-group">
           <div class="field-label">Renewal Premium</div>
           ${editMode
-            ? `<div style="display:flex;gap:6px;align-items:center">
-                <input class="field-input" id="edit-ren_prem" type="number" step="0.01" min="0"
-                  value="${c.ren_prem || ''}" placeholder="Enter amount" style="flex:1"/>
-                <select class="prem-mode-select" id="edit-prem_mode" style="width:120px">
-                  <option value="annual"    ${(c.prem_mode||'annual')==='annual'   ?'selected':''}>Annual</option>
-                  <option value="quarterly" ${(c.prem_mode||'annual')==='quarterly'?'selected':''}>Quarterly</option>
-                  <option value="monthly"   ${(c.prem_mode||'annual')==='monthly'  ?'selected':''}>Monthly</option>
-                </select>
-              </div>`
+            ? `<input class="field-input" id="edit-ren_prem" type="number" step="0.01" min="0"
+                value="${c.ren_prem || ''}" placeholder="Enter amount"/>`
             : `<div class="field-value mono">${c.ren_prem
-                ? `${fmt$(c.ren_prem)} <span class="badge-prem-mode">${c.prem_mode || 'annual'}</span>`
+                ? fmt$(c.ren_prem)
                 : '<span style="color:var(--text-muted)">Using savings % estimate</span>'}</div>`}
         </div>
       </div>
