@@ -136,11 +136,38 @@ th {
   font-size: 11px; font-weight: 600; color: var(--slate);
   letter-spacing: 0.07em; text-transform: uppercase;
   white-space: nowrap; cursor: pointer; user-select: none;
-  transition: color 0.15s;
+  transition: color 0.15s, background 0.15s;
+  position: relative;
 }
-th:hover { color: var(--forest); }
-th.sort-asc::after { content: ' ↑'; color: var(--emerald); }
-th.sort-desc::after { content: ' ↓'; color: var(--emerald); }
+th .th-inner {
+  display: inline-flex; align-items: center; gap: 5px;
+}
+th .sort-icon {
+  display: inline-flex; align-items: center; flex-shrink: 0;
+  opacity: 0; transition: opacity 0.15s;
+  width: 12px; height: 14px;
+}
+th:hover .sort-icon        { opacity: 0.4; }
+th.sort-asc .sort-icon,
+th.sort-desc .sort-icon    { opacity: 1; }
+th.sort-asc  { color: var(--forest); background: rgba(61,162,114,0.06); }
+th.sort-desc { color: var(--forest); background: rgba(61,162,114,0.06); }
+th:not(.sort-asc):not(.sort-desc):hover { color: var(--forest); }
+
+/* bars icon = unsorted/hover state */
+th:not(.sort-asc):not(.sort-desc) .icon-bars { display: inline-flex; }
+th:not(.sort-asc):not(.sort-desc) .icon-asc  { display: none; }
+th:not(.sort-asc):not(.sort-desc) .icon-desc { display: none; }
+
+/* asc arrow */
+th.sort-asc .icon-bars { display: none; }
+th.sort-asc .icon-asc  { display: inline-flex; }
+th.sort-asc .icon-desc { display: none; }
+
+/* desc arrow */
+th.sort-desc .icon-bars { display: none; }
+th.sort-desc .icon-asc  { display: none; }
+th.sort-desc .icon-desc { display: inline-flex; }
 tbody tr {
   border-bottom: 1px solid var(--border);
   transition: background 0.15s; cursor: pointer;
@@ -492,17 +519,182 @@ td { padding: 12px 16px; vertical-align: middle; }
     <table id="clients-table" style="display:none;">
       <thead>
         <tr>
-          <th onclick="sortBy('policy_idx')" id="th-policy_idx">#</th>
-          <th onclick="sortBy('name')" id="th-name">Client</th>
-          <th onclick="sortBy('priority')" id="th-priority">Priority</th>
-          <th onclick="sortBy('company')" id="th-company">Carrier</th>
-          <th onclick="sortBy('issued_state')" id="th-issued_state">State</th>
-          <th onclick="sortBy('dob')" id="th-dob">DOB</th>
-          <th onclick="sortBy('eff_month')" id="th-eff_month">Eff. Date</th>
-          <th onclick="sortBy('duration_yr')" id="th-duration_yr">Duration</th>
-          <th onclick="sortBy('curr_prem')" id="th-curr_prem">Curr. Premium</th>
-          <th onclick="sortBy('comm_prem')" id="th-comm_prem">Comm. Premium</th>
-          <th onclick="sortBy('curr_npv')" id="th-curr_npv">NPV</th>
+          <th onclick="sortBy('policy_idx')" id="th-policy_idx"><span class="th-inner">#<span class="sort-icon">
+              <svg class="icon-bars" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="0" y="0"  width="10" height="2.2" rx="1" fill="currentColor" opacity="0.9"/>
+                <rect x="0" y="3.6" width="7.5" height="2.2" rx="1" fill="currentColor" opacity="0.7"/>
+                <rect x="0" y="7.2" width="5"   height="2.2" rx="1" fill="currentColor" opacity="0.5"/>
+                <rect x="0" y="10.8" width="2.5" height="2.2" rx="1" fill="currentColor" opacity="0.3"/>
+              </svg>
+              <svg class="icon-asc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 1L9 6H1L5 1Z" fill="currentColor"/>
+                <rect x="4" y="6" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+              <svg class="icon-desc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 12L1 7H9L5 12Z" fill="currentColor"/>
+                <rect x="4" y="1" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+            </span></span></th>
+          <th onclick="sortBy('name')" id="th-name"><span class="th-inner">Client<span class="sort-icon">
+              <svg class="icon-bars" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="0" y="0"  width="10" height="2.2" rx="1" fill="currentColor" opacity="0.9"/>
+                <rect x="0" y="3.6" width="7.5" height="2.2" rx="1" fill="currentColor" opacity="0.7"/>
+                <rect x="0" y="7.2" width="5"   height="2.2" rx="1" fill="currentColor" opacity="0.5"/>
+                <rect x="0" y="10.8" width="2.5" height="2.2" rx="1" fill="currentColor" opacity="0.3"/>
+              </svg>
+              <svg class="icon-asc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 1L9 6H1L5 1Z" fill="currentColor"/>
+                <rect x="4" y="6" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+              <svg class="icon-desc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 12L1 7H9L5 12Z" fill="currentColor"/>
+                <rect x="4" y="1" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+            </span></span></th>
+          <th onclick="sortBy('priority')" id="th-priority"><span class="th-inner">Priority<span class="sort-icon">
+              <svg class="icon-bars" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="0" y="0"  width="10" height="2.2" rx="1" fill="currentColor" opacity="0.9"/>
+                <rect x="0" y="3.6" width="7.5" height="2.2" rx="1" fill="currentColor" opacity="0.7"/>
+                <rect x="0" y="7.2" width="5"   height="2.2" rx="1" fill="currentColor" opacity="0.5"/>
+                <rect x="0" y="10.8" width="2.5" height="2.2" rx="1" fill="currentColor" opacity="0.3"/>
+              </svg>
+              <svg class="icon-asc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 1L9 6H1L5 1Z" fill="currentColor"/>
+                <rect x="4" y="6" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+              <svg class="icon-desc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 12L1 7H9L5 12Z" fill="currentColor"/>
+                <rect x="4" y="1" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+            </span></span></th>
+          <th onclick="sortBy('company')" id="th-company"><span class="th-inner">Carrier<span class="sort-icon">
+              <svg class="icon-bars" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="0" y="0"  width="10" height="2.2" rx="1" fill="currentColor" opacity="0.9"/>
+                <rect x="0" y="3.6" width="7.5" height="2.2" rx="1" fill="currentColor" opacity="0.7"/>
+                <rect x="0" y="7.2" width="5"   height="2.2" rx="1" fill="currentColor" opacity="0.5"/>
+                <rect x="0" y="10.8" width="2.5" height="2.2" rx="1" fill="currentColor" opacity="0.3"/>
+              </svg>
+              <svg class="icon-asc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 1L9 6H1L5 1Z" fill="currentColor"/>
+                <rect x="4" y="6" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+              <svg class="icon-desc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 12L1 7H9L5 12Z" fill="currentColor"/>
+                <rect x="4" y="1" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+            </span></span></th>
+          <th onclick="sortBy('issued_state')" id="th-issued_state"><span class="th-inner">State<span class="sort-icon">
+              <svg class="icon-bars" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="0" y="0"  width="10" height="2.2" rx="1" fill="currentColor" opacity="0.9"/>
+                <rect x="0" y="3.6" width="7.5" height="2.2" rx="1" fill="currentColor" opacity="0.7"/>
+                <rect x="0" y="7.2" width="5"   height="2.2" rx="1" fill="currentColor" opacity="0.5"/>
+                <rect x="0" y="10.8" width="2.5" height="2.2" rx="1" fill="currentColor" opacity="0.3"/>
+              </svg>
+              <svg class="icon-asc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 1L9 6H1L5 1Z" fill="currentColor"/>
+                <rect x="4" y="6" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+              <svg class="icon-desc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 12L1 7H9L5 12Z" fill="currentColor"/>
+                <rect x="4" y="1" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+            </span></span></th>
+          <th onclick="sortBy('dob')" id="th-dob"><span class="th-inner">DOB<span class="sort-icon">
+              <svg class="icon-bars" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="0" y="0"  width="10" height="2.2" rx="1" fill="currentColor" opacity="0.9"/>
+                <rect x="0" y="3.6" width="7.5" height="2.2" rx="1" fill="currentColor" opacity="0.7"/>
+                <rect x="0" y="7.2" width="5"   height="2.2" rx="1" fill="currentColor" opacity="0.5"/>
+                <rect x="0" y="10.8" width="2.5" height="2.2" rx="1" fill="currentColor" opacity="0.3"/>
+              </svg>
+              <svg class="icon-asc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 1L9 6H1L5 1Z" fill="currentColor"/>
+                <rect x="4" y="6" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+              <svg class="icon-desc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 12L1 7H9L5 12Z" fill="currentColor"/>
+                <rect x="4" y="1" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+            </span></span></th>
+          <th onclick="sortBy('eff_month')" id="th-eff_month"><span class="th-inner">Eff. Date<span class="sort-icon">
+              <svg class="icon-bars" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="0" y="0"  width="10" height="2.2" rx="1" fill="currentColor" opacity="0.9"/>
+                <rect x="0" y="3.6" width="7.5" height="2.2" rx="1" fill="currentColor" opacity="0.7"/>
+                <rect x="0" y="7.2" width="5"   height="2.2" rx="1" fill="currentColor" opacity="0.5"/>
+                <rect x="0" y="10.8" width="2.5" height="2.2" rx="1" fill="currentColor" opacity="0.3"/>
+              </svg>
+              <svg class="icon-asc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 1L9 6H1L5 1Z" fill="currentColor"/>
+                <rect x="4" y="6" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+              <svg class="icon-desc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 12L1 7H9L5 12Z" fill="currentColor"/>
+                <rect x="4" y="1" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+            </span></span></th>
+          <th onclick="sortBy('duration_yr')" id="th-duration_yr"><span class="th-inner">Duration<span class="sort-icon">
+              <svg class="icon-bars" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="0" y="0"  width="10" height="2.2" rx="1" fill="currentColor" opacity="0.9"/>
+                <rect x="0" y="3.6" width="7.5" height="2.2" rx="1" fill="currentColor" opacity="0.7"/>
+                <rect x="0" y="7.2" width="5"   height="2.2" rx="1" fill="currentColor" opacity="0.5"/>
+                <rect x="0" y="10.8" width="2.5" height="2.2" rx="1" fill="currentColor" opacity="0.3"/>
+              </svg>
+              <svg class="icon-asc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 1L9 6H1L5 1Z" fill="currentColor"/>
+                <rect x="4" y="6" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+              <svg class="icon-desc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 12L1 7H9L5 12Z" fill="currentColor"/>
+                <rect x="4" y="1" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+            </span></span></th>
+          <th onclick="sortBy('curr_prem')" id="th-curr_prem"><span class="th-inner">Curr. Premium<span class="sort-icon">
+              <svg class="icon-bars" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="0" y="0"  width="10" height="2.2" rx="1" fill="currentColor" opacity="0.9"/>
+                <rect x="0" y="3.6" width="7.5" height="2.2" rx="1" fill="currentColor" opacity="0.7"/>
+                <rect x="0" y="7.2" width="5"   height="2.2" rx="1" fill="currentColor" opacity="0.5"/>
+                <rect x="0" y="10.8" width="2.5" height="2.2" rx="1" fill="currentColor" opacity="0.3"/>
+              </svg>
+              <svg class="icon-asc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 1L9 6H1L5 1Z" fill="currentColor"/>
+                <rect x="4" y="6" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+              <svg class="icon-desc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 12L1 7H9L5 12Z" fill="currentColor"/>
+                <rect x="4" y="1" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+            </span></span></th>
+          <th onclick="sortBy('comm_prem')" id="th-comm_prem"><span class="th-inner">Comm. Premium<span class="sort-icon">
+              <svg class="icon-bars" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="0" y="0"  width="10" height="2.2" rx="1" fill="currentColor" opacity="0.9"/>
+                <rect x="0" y="3.6" width="7.5" height="2.2" rx="1" fill="currentColor" opacity="0.7"/>
+                <rect x="0" y="7.2" width="5"   height="2.2" rx="1" fill="currentColor" opacity="0.5"/>
+                <rect x="0" y="10.8" width="2.5" height="2.2" rx="1" fill="currentColor" opacity="0.3"/>
+              </svg>
+              <svg class="icon-asc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 1L9 6H1L5 1Z" fill="currentColor"/>
+                <rect x="4" y="6" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+              <svg class="icon-desc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 12L1 7H9L5 12Z" fill="currentColor"/>
+                <rect x="4" y="1" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+            </span></span></th>
+          <th onclick="sortBy('curr_npv')" id="th-curr_npv"><span class="th-inner">NPV<span class="sort-icon">
+              <svg class="icon-bars" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="0" y="0"  width="10" height="2.2" rx="1" fill="currentColor" opacity="0.9"/>
+                <rect x="0" y="3.6" width="7.5" height="2.2" rx="1" fill="currentColor" opacity="0.7"/>
+                <rect x="0" y="7.2" width="5"   height="2.2" rx="1" fill="currentColor" opacity="0.5"/>
+                <rect x="0" y="10.8" width="2.5" height="2.2" rx="1" fill="currentColor" opacity="0.3"/>
+              </svg>
+              <svg class="icon-asc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 1L9 6H1L5 1Z" fill="currentColor"/>
+                <rect x="4" y="6" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+              <svg class="icon-desc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 12L1 7H9L5 12Z" fill="currentColor"/>
+                <rect x="4" y="1" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+            </span></span></th>
           <th>Contact</th>
         </tr>
       </thead>
