@@ -387,6 +387,11 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
     const alreadyRenewed = effMonth !== null && effMonth <= (new Date().getMonth() + 1);
     const nextDur        = durYr + 1;
 
+    // renRatesForOffset: use agent-set renewal carrier rates if available, else current carrier
+    const renRatesForOffset = (p.ren_carrier && p.ren_prem != null)
+      ? getRates(p.ren_carrier, state, 'Open Enrollment')
+      : getRates(carrier, state, 'Open Enrollment');
+
     const offsetCurrRates = Array(11).fill(0).map((_, i) => {
       if (alreadyRenewed) {
         if (i === 0) return 0;
@@ -397,9 +402,9 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
 
     const offsetRenRates = Array(11).fill(0).map((_, i) => {
       if (alreadyRenewed) {
-        return i === 0 ? 0 : (renRates[Math.min(i - 1, 10)] || 0);
+        return i === 0 ? 0 : (renRatesForOffset[Math.min(i - 1, 10)] || 0);
       }
-      return renRates[Math.min(i, 10)] || 0;
+      return renRatesForOffset[Math.min(i, 10)] || 0;
     });
 
     // Expose annualized prems for dashboard/outreach calcs
