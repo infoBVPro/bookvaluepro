@@ -345,14 +345,46 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
     const commPrem = p.comm_prem    || 0;
     const currPrem = p.curr_prem    || 0;
 
-    const currRates = getRates(carrier, state, 'Open Enrollment');
-    const renRates  = getRates(carrier, state, 'Open Enrollment');
+    // Normalize premium to annual if prem_mode is set
+    // (curr_prem should already be annualized from clients page save,
+    //  but guard here in case legacy data or direct DB entries exist)
+    const premMulti = p.prem_mode === 'monthly' ? 12 : p.prem_mode === 'quarterly' ? 4 : 1;
+    const annualCurrPrem = currPrem * premMulti;
+    const annualCommPrem = commPrem * premMulti;
 
-    const curr_npv = bvpCalcCurrentNPV(commPrem, durYr, effMonth, currRates, discountPct);
-    const ren_npv  = bvpCalcRenewalNPV(currPrem, savingsPct, effMonth, renRates, discountPct);
+    const currRates = getRates(carrier, state, 'Open Enrollment');
+
+    const curr_npv = bvpCalcCurrentNPV(annualCommPrem, durYr, effMonth, currRates, discountPct);
+
+    // Renewal NPV: if agent has entered a renewal carrier + premium, use those
+    // Otherwise fall back to savings % estimate off current premium
+    let ren_npv;
+    if (p.ren_carrier && p.ren_prem != null) {
+      const renCarrier = p.ren_carrier;
+      const renRates   = getRates(renCarrier, state, 'Open Enrollment');
+      // Agent-entered ren_prem is stored as annual; use directly in renewal calc
+      // We call a simplified version: ren_prem × rate schedule × discount
+      const VALUATION_MONTH = new Date().getMonth() + 1;
+      const alreadyRenewed  = effMonth !== null && effMonth <= VALUATION_MONTH;
+      const r = discountPct / 100;
+      let npv = 0;
+      for (let i = 0; i < 11; i++) {
+        let rate = 0;
+        if (alreadyRenewed) {
+          rate = i === 0 ? 0 : (renRates[Math.min(i - 1, 10)] || 0);
+        } else {
+          rate = renRates[Math.min(i, 10)] || 0;
+        }
+        npv += (p.ren_prem * rate) / Math.pow(1 + r, i + 1);
+      }
+      ren_npv = npv * 12;
+    } else {
+      const renRates = getRates(carrier, state, 'Open Enrollment');
+      ren_npv = bvpCalcRenewalNPV(annualCurrPrem, savingsPct, effMonth, renRates, discountPct);
+    }
 
     // Build offset arrays for dashboard engine
-    const alreadyRenewed = effMonth !== null && effMonth <= VALUATION_MONTH;
+    const alreadyRenewed = effMonth !== null && effMonth <= (new Date().getMonth() + 1);
     const nextDur        = durYr + 1;
 
     const offsetCurrRates = Array(11).fill(0).map((_, i) => {
@@ -370,7 +402,12 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
       return renRates[Math.min(i, 10)] || 0;
     });
 
-    return { ...p, curr_npv, ren_npv, _currRates: offsetCurrRates, _renRates: offsetRenRates };
+    // Expose annualized prems for dashboard/outreach calcs
+    return { ...p, curr_npv, ren_npv,
+      _annualCurrPrem: annualCurrPrem,
+      _annualCommPrem: annualCommPrem,
+      _currRates: offsetCurrRates,
+      _renRates: offsetRenRates };
   });
 }
 

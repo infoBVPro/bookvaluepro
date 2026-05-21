@@ -405,14 +405,17 @@ async function initFromSupabase() {
           rank:     p.policy_idx,
           priority: p.priority,
           currPrem: p.curr_prem,
-          newPrem:  p.curr_prem * (1 - (SAVINGS_PCT / 100)),
-          moSav:    p.curr_prem * (SAVINGS_PCT / 100),
-          annSav:   p.curr_prem * (SAVINGS_PCT / 100) * 12,
+          newPrem:  p.ren_prem != null ? p.ren_prem : p.curr_prem * (1 - (SAVINGS_PCT / 100)),
+          moSav:    p.ren_prem != null ? (p.curr_prem - p.ren_prem) : p.curr_prem * (SAVINGS_PCT / 100),
+          annSav:   p.ren_prem != null ? (p.curr_prem - p.ren_prem) * 12 : p.curr_prem * (SAVINGS_PCT / 100) * 12,
           duration: p.duration_yr,
           currNPV:  p.curr_npv,
-          renNPV:   p.ren_npv,
-          email:    p.email,
-          phone:    p.phone,
+          renNPV:      p.ren_npv,
+          renCarrier:  p.ren_carrier || null,
+          renPrem:     p.ren_prem    || null,
+          premMode:    p.prem_mode   || 'annual',
+          email:       p.email,
+          phone:       p.phone,
         });
       });
 

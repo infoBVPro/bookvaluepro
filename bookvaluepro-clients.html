@@ -351,6 +351,40 @@ td { padding: 12px 16px; vertical-align: middle; }
   letter-spacing: 0.03em;
 }
 
+
+/* ── RENEWAL FIELDS ── */
+.ren-carrier-select {
+  font-size: 13px; font-family: var(--sans);
+  padding: 8px 10px; border-radius: 8px; outline: none; cursor: pointer;
+  border: 1.5px solid var(--border); background: white; width: 100%;
+  transition: border-color 0.2s, box-shadow 0.2s; color: var(--deep);
+}
+.ren-carrier-select:focus { border-color: var(--emerald); box-shadow: 0 0 0 3px rgba(61,162,114,0.12); }
+.prem-mode-select {
+  font-size: 13px; font-family: var(--sans);
+  padding: 8px 10px; border-radius: 8px; outline: none; cursor: pointer;
+  border: 1.5px solid var(--border); background: white; width: 100%;
+  transition: border-color 0.2s, box-shadow 0.2s; color: var(--deep);
+}
+.prem-mode-select:focus { border-color: var(--emerald); box-shadow: 0 0 0 3px rgba(61,162,114,0.12); }
+.badge-ren-carrier {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 600; padding: 2px 8px;
+  border-radius: 10px; background: #e8f1fb; color: #2563A8;
+  border: 1px solid #bfdbfe; margin-left: 4px; vertical-align: middle;
+}
+.badge-prem-mode {
+  display: inline-flex; align-items: center;
+  font-size: 10px; font-weight: 600; padding: 1px 6px;
+  border-radius: 10px; background: var(--light-bg); color: var(--slate);
+  border: 1px solid var(--border); margin-left: 4px; vertical-align: middle;
+  letter-spacing: 0.03em; text-transform: uppercase;
+}
+.ren-npv-agent {
+  font-size: 10px; color: var(--p2); font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase; margin-left: 4px;
+}
+
 /* ── EXPORT BUTTON ── */
 .btn-export {
   display: flex; align-items: center; gap: 6px;
@@ -1076,7 +1110,19 @@ function renderPanel() {
         </div>
         <div class="field-group">
           <div class="field-label">Current Premium</div>
-          <div class="field-value mono">${fmt$(c.curr_prem)}</div>
+          ${editMode
+            ? `<div style="display:flex;gap:6px;align-items:center">
+                <input class="field-input" id="edit-curr_prem" type="number" step="0.01" min="0"
+                  value="${c.curr_prem || ''}" placeholder="0.00" style="flex:1"/>
+                <select class="prem-mode-select" id="edit-prem_mode" style="width:120px">
+                  <option value="annual"    ${(c.prem_mode||'annual')==='annual'   ?'selected':''}>Annual</option>
+                  <option value="quarterly" ${(c.prem_mode||'annual')==='quarterly'?'selected':''}>Quarterly</option>
+                  <option value="monthly"   ${(c.prem_mode||'annual')==='monthly'  ?'selected':''}>Monthly</option>
+                </select>
+              </div>`
+            : `<div class="field-value mono">${fmt$(c.curr_prem)}
+                <span class="badge-prem-mode">${c.prem_mode || 'annual'}</span>
+              </div>`}
         </div>
         <div class="field-group">
           <div class="field-label">Comm. Premium</div>
@@ -1094,7 +1140,30 @@ function renderPanel() {
         </div>
         <div class="field-group">
           <div class="field-label">Renewal NPV</div>
-          <div class="field-value mono highlight">${fmtNPV(c.ren_npv)}</div>
+          <div class="field-value mono highlight">${fmtNPV(c.ren_npv)}
+            ${c.ren_carrier ? `<span class="ren-npv-agent">Agent</span>` : ''}
+          </div>
+        </div>
+        <div class="field-group">
+          <div class="field-label">Renewal Carrier</div>
+          ${editMode
+            ? `<select class="ren-carrier-select" id="edit-ren_carrier">
+                <option value="">— Same / not set —</option>
+                ${['AARP/UHC','AETNA','HealthSpring','Humana','Blue Cross Blue Shield','Mutual of Omaha','Elevance','Generic']
+                  .map(car => `<option value="${car}" ${c.ren_carrier===car?'selected':''}>${car}</option>`).join('')}
+              </select>`
+            : `<div class="field-value">${c.ren_carrier
+                ? `${c.ren_carrier}<span class="badge-ren-carrier">Agent</span>`
+                : '<span style="color:var(--text-muted)">Using current carrier</span>'}</div>`}
+        </div>
+        <div class="field-group">
+          <div class="field-label">Renewal Premium</div>
+          ${editMode
+            ? `<input class="field-input" id="edit-ren_prem" type="number" step="0.01" min="0"
+                value="${c.ren_prem || ''}" placeholder="Annual premium"/>`
+            : `<div class="field-value mono">${c.ren_prem
+                ? fmt$(c.ren_prem)
+                : '<span style="color:var(--text-muted)">Using savings % estimate</span>'}</div>`}
         </div>
       </div>
     </div>
@@ -1159,11 +1228,24 @@ async function saveClient() {
   const oldPriority = activeClient.priority;
   const priorityChanged = newPriority && newPriority !== oldPriority;
 
+  // Normalize curr_prem to annual based on prem_mode
+  const rawPrem   = parseFloat(document.getElementById('edit-curr_prem')?.value) || null;
+  const premMode  = document.getElementById('edit-prem_mode')?.value || 'annual';
+  const premMulti = premMode === 'monthly' ? 12 : premMode === 'quarterly' ? 4 : 1;
+  const annualPrem = rawPrem != null ? rawPrem * premMulti : null;
+
+  const renCarrier = document.getElementById('edit-ren_carrier')?.value || null;
+  const renPremRaw = parseFloat(document.getElementById('edit-ren_prem')?.value) || null;
+
   const updates = {
     first_name: document.getElementById('edit-first_name')?.value.trim() || null,
     last_name:  document.getElementById('edit-last_name')?.value.trim()  || null,
     email:      document.getElementById('edit-email')?.value.trim()      || null,
     phone:      document.getElementById('edit-phone')?.value.trim()      || null,
+    prem_mode:  premMode,
+    curr_prem:  annualPrem,
+    ren_carrier: renCarrier || null,
+    ren_prem:    renPremRaw,
   };
 
   if (priorityChanged) {
