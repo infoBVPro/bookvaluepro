@@ -140,13 +140,14 @@ header {
   align-items: center;
   gap: 10px;
   flex: 1;
-  min-width: 200px;
+  min-width: 260px;
 }
 
 .assumption-field label {
   font-size: 13px;
   color: var(--ink-2);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .assumption-field input[type=range] {
@@ -476,6 +477,9 @@ tfoot td.num { text-align: right; }
   header { padding: 14px 20px; }
   .npv-grid { grid-template-columns: 1fr 1fr; }
   .npv-card.total { grid-column: 1 / -1; }
+  .assumption-bar { gap: 16px; }
+  .assumption-field { min-width: 100%; }
+  .assumption-note { display: none; }
 }
 
 @media (max-width: 580px) {
@@ -506,14 +510,14 @@ tfoot td.num { text-align: right; }
         <span>Dashboard</span>
       </div>
       <div class="step-sep"></div>
-      <a href="bookvaluepro-clients.html" class="step" style="text-decoration:none;cursor:pointer;">
-        <div class="step-num">4</div>
-        <span>Clients</span>
-      </a>
-      <div class="step-sep"></div>
       <a href="bookvaluepro-outreach.html" class="step" style="text-decoration:none;cursor:pointer;">
         <div class="step-num">3</div>
         <span>Outreach</span>
+      </a>
+      <div class="step-sep"></div>
+      <a href="bookvaluepro-clients.html" class="step" style="text-decoration:none;cursor:pointer;">
+        <div class="step-num">4</div>
+        <span>Clients</span>
       </a>
     </div>
   </div>
@@ -567,7 +571,7 @@ tfoot td.num { text-align: right; }
   <!-- ── PART 3: CASH FLOW CHART ── -->
   <div class="section-header" style="margin-top:44px;">
     <span class="section-title">10-Year Cash Flow Outlook</span>
-    <span class="section-sub">Current commissions vs. opportunity commissions, with cumulative policyholder savings</span>
+    <span class="section-sub">Current commissions vs. Save &amp; Switch opportunity by year</span>
   </div>
 
   <div class="chart-card">
@@ -580,13 +584,16 @@ tfoot td.num { text-align: right; }
         <div class="legend-dot" style="background:#2a8558;"></div>
         Save &amp; Switch upside (if agent acts)
       </div>
-      <div class="legend-item">
-        <div class="legend-line" style="background:var(--gold);"></div>
-        Cumulative policyholder savings
-      </div>
     </div>
     <div class="chart-container">
       <canvas id="cf-chart"></canvas>
+    </div>
+
+    <!-- ── CASH FLOW SUMMARY TABLE ── -->
+    <div style="margin-top:24px;border-top:1px solid var(--cream-2);padding-top:20px;overflow-x:auto;">
+      <table id="cf-summary-table" style="width:100%;border-collapse:collapse;font-size:12px;">
+        <!-- populated by renderChart -->
+      </table>
     </div>
   </div>
 
@@ -608,9 +615,14 @@ function policyCurrentNPV(p) {
   return p.curr_npv || 0;
 }
 function policyOppNPV(p, savPct) {
-  // Use pre-calculated ren_npv from bvpEnrichPolicies
-  // ren_npv is calculated at the current savingsPct so use directly
-  return p.ren_npv || 0;
+  // Recalculate live from renewal rate schedule so slider changes are reflected instantly.
+  // Mirrors policyOppCF: CurrPrem × (1 - savPct%) × renewalRate × 12, discounted per year.
+  if (!p.rr || !p.rr.length) return 0;
+  let npv = 0;
+  for (let i = 0; i < p.rr.length; i++) {
+    npv += (p.rr[i] * p.cp * (1 - savPct / 100) * 12) / Math.pow(1 + DISCOUNT, i + 1);
+  }
+  return npv;
 }
 // Annual current CF for policy in year slot i: CommPrem × curr% × 12
 function policyCurrCF(p, i) { return (p.rc[i] || 0) * p.mp * 12; }
@@ -851,10 +863,6 @@ function renderCarrierTable() {
 // ── RENDER PART 3: STACKED BAR CHART ─────────────────────────────────
 function renderChart() {
   const { currTotal, ssUpside } = calcCFByYear(savingsPct);
-  const annualSav = getPolicyholderSavings(savingsPct);
-
-  let cumSav = 0;
-  const cumSavData = YEARS.map(() => { cumSav += annualSav; return Math.round(cumSav); });
 
   if (cfChart) cfChart.destroy();
   const ctx = document.getElementById('cf-chart').getContext('2d');
@@ -873,7 +881,6 @@ function renderChart() {
           borderRadius: { topLeft: 0, topRight: 0, bottomLeft: 4, bottomRight: 4 },
           borderSkipped: 'bottom',
           stack: 'cf',
-          order: 2,
         },
         {
           type: 'bar',
@@ -885,24 +892,6 @@ function renderChart() {
           borderRadius: { topLeft: 4, topRight: 4, bottomLeft: 0, bottomRight: 0 },
           borderSkipped: 'bottom',
           stack: 'cf',
-          order: 2,
-        },
-        {
-          type: 'line',
-          label: 'Cumulative policyholder savings',
-          data: cumSavData,
-          borderColor: '#c8943a',
-          backgroundColor: 'rgba(200,148,58,0.07)',
-          borderWidth: 2.5,
-          pointBackgroundColor: '#c8943a',
-          pointBorderColor: '#fff',
-          pointBorderWidth: 2,
-          pointRadius: 5,
-          tension: 0.35,
-          fill: false,
-          yAxisID: 'y2',
-          stack: undefined,
-          order: 1,
         },
       ],
     },
@@ -922,10 +911,8 @@ function renderChart() {
           callbacks: {
             title: items => 'Year ' + items[0].label,
             label: item => {
-              const v = item.raw;
-              if (item.datasetIndex === 2) return `  Cumulative client savings: $${Math.round(v).toLocaleString()}`;
-              if (item.datasetIndex === 1) return `  Save & Switch upside: +$${Math.round(v).toLocaleString()}`;
-              return `  Current commissions: $${Math.round(v).toLocaleString()}`;
+              if (item.datasetIndex === 1) return `  Save & Switch upside: +$${Math.round(item.raw).toLocaleString()}`;
+              return `  Current commissions: $${Math.round(item.raw).toLocaleString()}`;
             },
             footer: items => {
               const base   = items.find(i => i.datasetIndex === 0)?.raw || 0;
@@ -944,7 +931,6 @@ function renderChart() {
         },
         y: {
           stacked: true,
-          position: 'left',
           grid: { color: '#f0ece6' },
           ticks: {
             font: { family: "'DM Mono', monospace", size: 11 },
@@ -954,20 +940,61 @@ function renderChart() {
           border: { display: false },
           title: { display: true, text: 'Annual commissions ($)', font: { family: "'DM Sans', sans-serif", size: 11 }, color: '#7a8290' },
         },
-        y2: {
-          position: 'right',
-          grid: { display: false },
-          ticks: {
-            font: { family: "'DM Mono', monospace", size: 11 },
-            color: '#c8943a',
-            callback: v => '$' + (v >= 1000 ? (v/1000).toFixed(0)+'K' : v),
-          },
-          border: { display: false },
-          title: { display: true, text: 'Cumulative client savings ($)', font: { family: "'DM Sans', sans-serif", size: 11 }, color: '#c8943a' },
-        },
       },
     },
   });
+
+  renderCFSummaryTable(currTotal, ssUpside);
+}
+
+// ── RENDER CASH FLOW SUMMARY TABLE ───────────────────────────────────
+function renderCFSummaryTable(currTotal, ssUpside) {
+  const table = document.getElementById('cf-summary-table');
+  if (!table) return;
+
+  const totalCurr   = currTotal.reduce((s, v) => s + v, 0);
+  const totalUpside = ssUpside.reduce((s, v) => s + v, 0);
+  const totalComm   = totalCurr + totalUpside;
+
+  const fmtCell = v => '$' + Math.round(v).toLocaleString();
+
+  const yearHeaders = YEARS.map(y => `<th class="num" style="padding:8px 12px;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);text-align:right;border-bottom:1px solid var(--cream-2);white-space:nowrap;">${y}</th>`).join('');
+  const totalHeader = `<th class="num" style="padding:8px 12px;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);text-align:right;border-bottom:1px solid var(--cream-2);white-space:nowrap;border-left:2px solid var(--cream-2);">10-yr total</th>`;
+
+  const currCells   = currTotal.map(v => `<td style="padding:8px 12px;font-family:var(--mono);font-size:11px;color:var(--ink-2);text-align:right;border-bottom:1px solid var(--cream-2);white-space:nowrap;">${fmtCell(v)}</td>`).join('');
+  const upsideCells = ssUpside.map(v => `<td style="padding:8px 12px;font-family:var(--mono);font-size:11px;color:${v > 0 ? '#2a8558' : 'var(--ink-3)'};text-align:right;border-bottom:1px solid var(--cream-2);white-space:nowrap;">${v > 0 ? '+' + fmtCell(v) : '—'}</td>`).join('');
+  const totalCells  = currTotal.map((v, i) => `<td style="padding:8px 12px;font-family:var(--mono);font-size:11px;font-weight:500;color:var(--ink);text-align:right;white-space:nowrap;">${fmtCell(v + ssUpside[i])}</td>`).join('');
+
+  const rowLabel = (txt, color) => `<td style="padding:8px 14px;font-size:12px;color:${color};white-space:nowrap;font-weight:500;border-bottom:1px solid var(--cream-2);">${txt}</td>`;
+  const totalRowLabel = `<td style="padding:8px 14px;font-size:12px;color:var(--ink);white-space:nowrap;font-weight:500;">Total commissions</td>`;
+  const totalColStyle = 'border-left:2px solid var(--cream-2);';
+
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th style="padding:8px 14px;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);text-align:left;border-bottom:1px solid var(--cream-2);white-space:nowrap;"></th>
+        ${yearHeaders}
+        ${totalHeader}
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        ${rowLabel('Current commissions', '#3d5a80')}
+        ${currCells}
+        <td style="padding:8px 12px;font-family:var(--mono);font-size:11px;font-weight:500;color:#3d5a80;text-align:right;border-bottom:1px solid var(--cream-2);white-space:nowrap;${totalColStyle}">${fmtCell(totalCurr)}</td>
+      </tr>
+      <tr>
+        ${rowLabel('Save &amp; Switch upside', '#2a8558')}
+        ${upsideCells}
+        <td style="padding:8px 12px;font-family:var(--mono);font-size:11px;font-weight:500;color:#2a8558;text-align:right;border-bottom:1px solid var(--cream-2);white-space:nowrap;${totalColStyle}">+${fmtCell(totalUpside)}</td>
+      </tr>
+      <tr style="background:var(--cream);">
+        ${totalRowLabel}
+        ${totalCells}
+        <td style="padding:8px 12px;font-family:var(--mono);font-size:11px;font-weight:500;color:var(--ink);text-align:right;white-space:nowrap;${totalColStyle}">${fmtCell(totalComm)}</td>
+      </tr>
+    </tbody>
+  `;
 }
 
 // ── TAB SWITCH ────────────────────────────────────────────────────────
