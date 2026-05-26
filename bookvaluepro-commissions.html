@@ -300,7 +300,7 @@ header {
   <div class="page-header">
     <div>
       <div class="page-title">Commissions</div>
-      <div class="page-sub">View and adjust your commission rates by carrier and state — changes flow directly into your NPV calculations</div>
+      <div class="page-sub">View and adjust your commission rates by state and carrier — changes flow directly into your NPV calculations</div>
     </div>
     <button class="btn-add" onclick="openAddModal()">
       <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:white;fill:none;stroke-width:2.5;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -310,11 +310,11 @@ header {
 
   <!-- TOOLBAR -->
   <div class="toolbar">
-    <select class="filter-select" id="filter-carrier" onchange="applyFilters()">
-      <option value="">All carriers</option>
-    </select>
     <select class="filter-select" id="filter-state" onchange="applyFilters()">
       <option value="">All states</option>
+    </select>
+    <select class="filter-select" id="filter-carrier" onchange="applyFilters()">
+      <option value="">All carriers</option>
     </select>
     <select class="filter-select" id="filter-enroll" onchange="applyFilters()">
       <option value="">All enrollment types</option>
@@ -466,15 +466,17 @@ let editingCell  = null;  // currently active input
 
 // ── BUILD FILTER DROPDOWNS ────────────────────────────────────────────
 function buildFilterOptions() {
-  // Only show carriers and states from the agent's book
   const carriers = [...new Set(bookCarriers.map(bc => bc.carrier))].sort();
   const states   = [...new Set(bookCarriers.map(bc => bc.state))].sort();
 
   const cs = document.getElementById('filter-carrier');
+  // Clear existing options beyond the first
+  while (cs.options.length > 1) cs.remove(1);
   carriers.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; cs.appendChild(o); });
 
   const ss = document.getElementById('filter-state');
-  states.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; ss.appendChild(o); });
+  while (ss.options.length > 1) ss.remove(1);
+  states.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = `${s} — ${stateFullName(s)}`; ss.appendChild(o); });
 }
 
 function applyFilters() {
@@ -486,70 +488,64 @@ function applyFilters() {
 
 // ── GROUP DATA ────────────────────────────────────────────────────────
 function groupedRows() {
-  // For default rates (is_default=true), issued_state may be null —
-  // they apply to all states. We merge them with the agent's book states.
-  let rows = allComms.filter(r => {
+  // Only show states the agent has policies in
+  const bookStates = [...new Set(bookCarriers.map(bc => bc.state))].sort();
+
+  // Build a map of which carriers exist per state (from agent's book)
+  const stateCarriers = new Map();
+  bookCarriers.forEach(bc => {
+    if (!stateCarriers.has(bc.state)) stateCarriers.set(bc.state, new Set());
+    stateCarriers.get(bc.state).add(bc.carrier);
+  });
+
+  // Apply filters
+  const filteredRows = allComms.filter(r => {
     if (filterCarrier && r.carrier !== filterCarrier) return false;
-    // For state filter: default rows (null state) pass through always
-    // Agent-specific overrides must match the filter
-    if (filterState && r.issued_state !== null && r.issued_state !== filterState) return false;
     if (filterEnroll && r.enrollment_type !== filterEnroll) return false;
     return true;
   });
 
-  // Determine which states to show for each carrier
-  // Use agent's book states; fall back to a generic "All states" label
-  const carrierStates = new Map();
-  bookCarriers.forEach(bc => {
-    if (!carrierStates.has(bc.carrier)) carrierStates.set(bc.carrier, new Set());
-    carrierStates.get(bc.carrier).add(bc.state);
-  });
-
-  // Group by carrier → state → enrollment_type → array of duration rows
+  // Group by state → carrier → enrollment_type → duration rows
+  // Only include states from the agent's book
   const groups = new Map();
-  rows.forEach(r => {
-    const cKey = r.carrier;
-    if (!groups.has(cKey)) groups.set(cKey, { carrier: r.carrier, states: new Map() });
-    const sMap = groups.get(cKey).states;
 
-    // Determine which states this row should appear under
-    const rowState = r.issued_state;
-    const statesToUse = rowState
-      ? [rowState]
-      : (carrierStates.has(cKey) ? [...carrierStates.get(cKey)] : ['Default']);
+  bookStates.forEach(state => {
+    // Apply state filter
+    if (filterState && state !== filterState) return;
 
-    statesToUse.forEach(state => {
-      // Apply state filter
-      if (filterState && state !== filterState) return;
-      if (!sMap.has(state)) sMap.set(state, new Map());
-      const eMap = sMap.get(state);
+    const carriersInState = stateCarriers.get(state) || new Set();
+    const carrierMap = new Map();
+
+    filteredRows.forEach(r => {
+      // This row is relevant to this state if:
+      //   (a) it has issued_state === state, OR
+      //   (b) it is a default row (issued_state null) and the carrier is in this state
+      const rowMatchesState = r.issued_state === state ||
+        (r.issued_state === null && carriersInState.has(r.carrier));
+
+      if (!rowMatchesState) return;
+      if (!carriersInState.has(r.carrier)) return;
+
+      if (!carrierMap.has(r.carrier)) carrierMap.set(r.carrier, new Map());
+      const eMap = carrierMap.get(r.carrier);
       if (!eMap.has(r.enrollment_type)) eMap.set(r.enrollment_type, []);
-      // Avoid duplicate duration rows
       const existing = eMap.get(r.enrollment_type);
       if (!existing.find(e => e.duration_yr === r.duration_yr)) {
         existing.push(r);
       }
     });
-  });
 
-  // Sort durations within each enrollment type
-  groups.forEach(g => {
-    g.states.forEach(stateMap => {
-      stateMap.forEach(enrollRows => {
-        enrollRows.sort((a, b) => a.duration_yr - b.duration_yr);
-      });
+    // Sort durations within each enrollment type
+    carrierMap.forEach(eMap => {
+      eMap.forEach(rows => rows.sort((a, b) => a.duration_yr - b.duration_yr));
     });
+
+    if (carrierMap.size > 0) {
+      groups.set(state, { state, carriers: carrierMap });
+    }
   });
 
-  // Put book carriers first
-  const bookKeys = new Set(bookCarriers.map(bc => bc.carrier));
-  const sorted = [...groups.values()].sort((a,b) => {
-    const aBook = bookKeys.has(a.carrier) ? 0 : 1;
-    const bBook = bookKeys.has(b.carrier) ? 0 : 1;
-    return aBook - bBook || a.carrier.localeCompare(b.carrier);
-  });
-
-  return sorted;
+  return [...groups.values()];
 }
 
 // ── RENDER ────────────────────────────────────────────────────────────
@@ -564,39 +560,39 @@ function renderAll() {
 
   container.innerHTML = '';
   groups.forEach(group => {
-    const card = buildCarrierCard(group);
+    const card = buildStateCard(group);
     container.appendChild(card);
   });
 }
 
-function buildCarrierCard(group) {
+function buildStateCard(group) {
   const card = document.createElement('div');
   card.className = 'carrier-card';
-  card.id = `card-${slug(group.carrier)}`;
+  card.id = `card-state-${slug(group.state)}`;
 
-  // Check if this carrier is in the agent's book
-  const inBook = bookCarriers.some(bc => bc.carrier === group.carrier);
-  const hasOverrides = [...group.states.values()].some(sm =>
-    [...sm.values()].some(em => em.some(r => r.is_default === false))
+  const carriers = [...group.carriers.keys()].sort();
+  const hasOverrides = [...group.carriers.values()].some(eMap =>
+    [...eMap.values()].some(rows => rows.some(r => r.is_default === false))
   );
 
-  // Collect all states for this carrier
-  const states = [...group.states.keys()].sort();
+  // Count total enrollment types across all carriers
+  const enrollTypes = new Set();
+  group.carriers.forEach(eMap => eMap.forEach((_, et) => enrollTypes.add(et)));
 
   // Build header
   const header = document.createElement('div');
   header.className = 'carrier-header';
   header.innerHTML = `
     <div class="carrier-header-left">
-      <div class="carrier-icon">${group.carrier.substring(0,3).toUpperCase()}</div>
+      <div class="carrier-icon" style="font-size:13px;font-weight:700;">${group.state}</div>
       <div>
-        <div class="carrier-name">${group.carrier} ${inBook ? '<span style="font-size:11px;color:var(--emerald);font-weight:400;">● In your book</span>' : ''}</div>
-        <div class="carrier-meta">${states.length} state${states.length !== 1 ? 's' : ''} · ${countEnrollTypes(group)} enrollment types</div>
+        <div class="carrier-name">${stateFullName(group.state)}</div>
+        <div class="carrier-meta">${carriers.length} carrier${carriers.length !== 1 ? 's' : ''} · ${enrollTypes.size} enrollment type${enrollTypes.size !== 1 ? 's' : ''}</div>
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:10px;">
       <div class="carrier-badges">
-        ${states.map(s => `<span class="state-badge">${s}</span>`).join('')}
+        ${carriers.map(c => `<span class="state-badge">${c}</span>`).join('')}
         ${hasOverrides ? '<span class="override-badge">✏️ Custom rates</span>' : ''}
       </div>
       <svg class="chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
@@ -607,22 +603,25 @@ function buildCarrierCard(group) {
   // Build body
   const body = document.createElement('div');
   body.className = 'carrier-body';
-  body.id = `body-${slug(group.carrier)}`;
 
-  // For each state
-  group.states.forEach((enrollMap, state) => {
-    const stateDiv = document.createElement('div');
+  // For each carrier within this state
+  group.carriers.forEach((enrollMap, carrier) => {
+    const carrierDiv = document.createElement('div');
 
-    if (states.length > 1) {
-      stateDiv.innerHTML = `<div style="padding:8px 1.25rem;background:var(--light-bg);border-bottom:1px solid var(--border);font-size:11px;font-weight:600;color:var(--slate);letter-spacing:0.08em;text-transform:uppercase;">State: ${state}</div>`;
-    }
+    // Carrier sub-header
+    carrierDiv.innerHTML = `
+      <div style="padding:10px 1.25rem;background:var(--light-bg);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;">
+        <div style="width:28px;height:28px;border-radius:7px;background:var(--mist);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--forest);font-family:var(--mono);flex-shrink:0;">${carrier.substring(0,3).toUpperCase()}</div>
+        <span style="font-size:12px;font-weight:600;color:var(--deep);">${carrier}</span>
+      </div>
+    `;
 
     const contentDiv = document.createElement('div');
-    contentDiv.id = `content-${slug(group.carrier)}-${state}`;
-    contentDiv.appendChild(buildView(group.carrier, state, enrollMap));
+    contentDiv.id = `content-${slug(group.state)}-${slug(carrier)}`;
+    contentDiv.appendChild(buildView(carrier, group.state, enrollMap));
 
-    stateDiv.appendChild(contentDiv);
-    body.appendChild(stateDiv);
+    carrierDiv.appendChild(contentDiv);
+    body.appendChild(carrierDiv);
   });
 
   // Legend
@@ -641,8 +640,8 @@ function buildCarrierCard(group) {
   card.appendChild(header);
   card.appendChild(body);
 
-  // Auto-open if in book
-  if (inBook) card.classList.add('open');
+  // Auto-open first card
+  card.classList.add('open');
 
   return card;
 }
@@ -938,6 +937,21 @@ function rateClass(rate) {
   if (rate >= 0.15) return 'high';
   if (rate >= 0.05) return 'mid';
   return 'low';
+}
+
+function stateFullName(abbr) {
+  const names = {
+    AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',CO:'Colorado',
+    CT:'Connecticut',DE:'Delaware',FL:'Florida',GA:'Georgia',HI:'Hawaii',ID:'Idaho',
+    IL:'Illinois',IN:'Indiana',IA:'Iowa',KS:'Kansas',KY:'Kentucky',LA:'Louisiana',
+    ME:'Maine',MD:'Maryland',MA:'Massachusetts',MI:'Michigan',MN:'Minnesota',MS:'Mississippi',
+    MO:'Missouri',MT:'Montana',NE:'Nebraska',NV:'Nevada',NH:'New Hampshire',NJ:'New Jersey',
+    NM:'New Mexico',NY:'New York',NC:'North Carolina',ND:'North Dakota',OH:'Ohio',OK:'Oklahoma',
+    OR:'Oregon',PA:'Pennsylvania',RI:'Rhode Island',SC:'South Carolina',SD:'South Dakota',
+    TN:'Tennessee',TX:'Texas',UT:'Utah',VT:'Vermont',VA:'Virginia',WA:'Washington',
+    WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming',DC:'Washington D.C.'
+  };
+  return names[abbr] || abbr;
 }
 
 function countEnrollTypes(group) {
