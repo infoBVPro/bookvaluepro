@@ -31,54 +31,41 @@ header {
   padding: 0 2rem; border-bottom: 1px solid rgba(61,162,114,0.15);
   position: sticky; top: 0; z-index: 100;
 }
-.logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
-.logo-mark {
-  width: 34px; height: 34px; border-radius: 50%;
-  background: var(--forest); border: 1.5px solid var(--emerald);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 600; color: white;
+header {
+  background: var(--deep);
+  border-bottom: 1px solid rgba(61,162,114,0.15);
+  padding: 0 2rem;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 50;
 }
-.logo-word { font-family: var(--serif); font-size: 17px; color: white; }
-.logo-word span { color: var(--emerald); }
-.header-right { display: flex; align-items: center; gap: 16px; }
-.agent-email { font-size: 13px; color: var(--sage); }
-.btn-signout {
-  font-size: 12px; color: var(--sage); background: transparent;
-  border: 1px solid rgba(122,191,154,0.3); padding: 6px 14px;
-  border-radius: 6px; cursor: pointer; font-family: var(--sans);
-  transition: all 0.2s;
-}
-.btn-signout:hover { border-color: var(--emerald); color: white; }
-
-/* ── NAV STEPS ── */
-.steps-bar {
-  background: var(--deep); padding: 0 2rem 12px;
-  display: flex; align-items: center; gap: 0;
-  border-bottom: 1px solid rgba(61,162,114,0.1);
-}
-.book-chip {
-  font-size: 11px; color: var(--sage); background: rgba(26,92,58,0.4);
-  border: 1px solid rgba(61,162,114,0.2); padding: 4px 12px;
-  border-radius: 20px; font-family: var(--mono); margin-right: auto;
-}
+.header-right { display: flex; align-items: center; gap: 20px; }
 .steps { display: flex; align-items: center; gap: 0; }
 .step {
   display: flex; align-items: center; gap: 6px;
-  font-size: 12px; color: var(--sage); padding: 4px 10px;
-  border-radius: 6px; text-decoration: none; transition: all 0.2s;
+  font-size: 12px; color: #7abf9a; text-decoration: none;
 }
-.step:hover { color: white; }
 .step.active { color: white; font-weight: 500; }
-.step.done { color: var(--emerald); }
+.step.done   { color: #3da272; }
 .step-num {
   width: 20px; height: 20px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-family: var(--mono); font-size: 10px;
-  background: rgba(255,255,255,0.1); color: var(--sage);
+  background: rgba(255,255,255,0.1); color: #7abf9a;
+  flex-shrink: 0;
 }
-.step.active .step-num { background: var(--emerald); color: white; }
-.step.done .step-num { background: var(--forest); color: var(--emerald); }
-.step-sep { width: 20px; height: 1px; background: rgba(122,191,154,0.2); }
+.step.active .step-num { background: #3da272; color: #fff; }
+.step.done   .step-num { background: #1a5c3a; color: #3da272; }
+.step-sep { width: 24px; height: 1px; background: rgba(122,191,154,0.2); margin: 0 4px; }
+.step-link-plain {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: #7abf9a; text-decoration: none; transition: color 0.2s;
+}
+.step-link-plain:hover { color: white; }
 
 /* ── PAGE LAYOUT ── */
 .page { max-width: 1400px; margin: 0 auto; padding: 2rem; }
@@ -485,28 +472,38 @@ td { padding: 12px 16px; vertical-align: middle; }
 <body>
 
 <header>
-  <a class="logo" href="bookvaluepro-dashboard.html">
-    <div class="logo-mark">BV</div>
-    <div class="logo-word">Book<span>Value</span>Pro</div>
+  <a href="bookvaluepro-dashboard.html" style="text-decoration:none;display:flex;align-items:center;gap:10px;">
+    <div style="width:34px;height:34px;border-radius:50%;background:#1a5c3a;border:1.5px solid #3da272;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:white;font-family:var(--sans);">BV</div>
+    <span style="font-family:var(--serif);font-size:17px;color:white;">Book<span style="color:#3da272;">Value</span>Pro</span>
   </a>
   <div class="header-right">
-    <span class="agent-email" id="agent-name"></span>
-    <button class="btn-signout" onclick="bvpSignOut()">Sign out</button>
+    <span id="agent-name" style="font-family:var(--mono);font-size:12px;color:#7abf9a;"></span>
+    <button onclick="bvpSignOut()" style="font-size:12px;color:#7abf9a;background:transparent;border:1px solid rgba(122,191,154,0.3);cursor:pointer;padding:6px 14px;border-radius:6px;font-family:var(--sans);transition:all 0.2s;">Sign out</button>
+    <span id="book-name" style="font-size:11px;color:#7abf9a;background:rgba(26,92,58,0.4);border:1px solid rgba(61,162,114,0.2);padding:4px 12px;border-radius:20px;font-family:var(--mono);">No book uploaded</span>
+    <div class="steps">
+      <a href="bookvaluepro-upload.html" class="step done" style="text-decoration:none;cursor:pointer;">
+        <div class="step-num">✓</div><span>Upload</span>
+      </a>
+      <div class="step-sep"></div>
+      <a href="bookvaluepro-dashboard.html" class="step done" style="text-decoration:none;cursor:pointer;">
+        <div class="step-num">✓</div><span>Dashboard</span>
+      </a>
+      <div class="step-sep"></div>
+      <div class="step active">
+        <div class="step-num">3</div><span>Clients</span>
+      </div>
+      <div class="step-sep"></div>
+      <a href="bookvaluepro-outreach.html" class="step" style="text-decoration:none;cursor:pointer;">
+        <div class="step-num">4</div><span>Outreach</span>
+      </a>
+      <div class="step-sep"></div>
+      <a href="bookvaluepro-commissions.html" class="step-link-plain" style="margin-left:8px;padding-left:12px;border-left:1px solid rgba(122,191,154,0.2);">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        Commissions
+      </a>
+    </div>
   </div>
 </header>
-
-<div class="steps-bar">
-  <span class="bvp-book-chip" id="book-name">Loading...</span>
-  <div class="steps">
-    <a href="bookvaluepro-upload.html" class="step done"><div class="step-num">✓</div><span>Upload</span></a>
-    <div class="step-sep"></div>
-    <a href="bookvaluepro-dashboard.html" class="step done"><div class="step-num">✓</div><span>Dashboard</span></a>
-    <div class="step-sep"></div>
-    <a href="bookvaluepro-clients.html" class="step active"><div class="step-num">3</div><span>Clients</span></a>
-    <div class="step-sep"></div>
-    <a href="bookvaluepro-outreach.html" class="step"><div class="step-num">4</div><span>Outreach</span></a>
-  </div>
-</div>
 
 <div class="page">
   <div class="page-header">
