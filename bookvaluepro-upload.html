@@ -60,62 +60,10 @@ header {
   z-index: 50;
 }
 
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  text-decoration: none;
-}
-
-.logo-mark {
-  width: 34px; height: 34px;
-  border-radius: 50%;
-  background: var(--accent);
-  border: 1.5px solid #3da272;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 600; color: white;
-  font-family: var(--sans);
-  flex-shrink: 0;
-}
-
-.logo-word {
-  font-family: var(--serif);
-  font-size: 17px;
-  color: white;
-}
-
-.logo-word span { color: #3da272; }
-
 .header-right {
   display: flex;
   align-items: center;
-  gap: 16px;
-}
-
-.agent-email {
-  font-family: var(--mono);
-  font-size: 12px;
-  color: #7abf9a;
-}
-
-.btn-signout {
-  font-size: 12px; color: #7abf9a; background: transparent;
-  border: 1px solid rgba(122,191,154,0.3); padding: 6px 14px;
-  border-radius: 6px; cursor: pointer; font-family: var(--sans);
-  transition: all 0.2s;
-}
-
-.btn-signout:hover { border-color: #3da272; color: white; }
-
-/* ── STEPS BAR ── */
-.steps-bar {
-  background: #0d2e1e;
-  padding: 0 2rem;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid rgba(61,162,114,0.1);
-  position: relative;
+  gap: 20px;
 }
 
 .bvp-book-chip {
@@ -124,24 +72,19 @@ header {
   border: 1px solid rgba(61,162,114,0.2);
   padding: 4px 12px; border-radius: 20px;
   font-family: var(--mono);
-  display: none; /* hidden until a book is detected */
+  display: none;
 }
 
 .bvp-book-chip.visible { display: inline-block; }
 
-.steps {
-  display: flex; align-items: center; gap: 0;
-  position: absolute; left: 50%; transform: translateX(-50%);
-}
+.steps { display: flex; align-items: center; gap: 0; }
 
 .step {
   display: flex; align-items: center; gap: 6px;
   font-size: 12px; color: #7abf9a;
-  padding: 4px 10px; border-radius: 6px;
-  text-decoration: none; transition: all 0.2s;
+  text-decoration: none; cursor: pointer;
 }
 
-.step:hover { color: white; }
 .step.active { color: white; font-weight: 500; }
 .step.done   { color: #3da272; }
 
@@ -153,10 +96,10 @@ header {
   flex-shrink: 0;
 }
 
-.step.active .step-num { background: #3da272; color: white; }
-.step.done   .step-num { background: var(--accent); color: #3da272; }
+.step.active .step-num { background: #3da272; color: #fff; }
+.step.done   .step-num { background: #1a5c3a; color: #3da272; }
 
-.step-sep { width: 20px; height: 1px; background: rgba(122,191,154,0.2); }
+.step-sep { width: 24px; height: 1px; background: rgba(122,191,154,0.2); margin: 0 4px; }
 
 /* ── MAIN ── */
 main {
@@ -686,31 +629,42 @@ footer {
 
 <!-- HEADER -->
 <header>
-  <a class="logo" href="bookvaluepro-dashboard.html">
-    <div class="logo-mark">BV</div>
-    <div class="logo-word">Book<span>Value</span>Pro</div>
+  <a href="bookvaluepro-dashboard.html" style="text-decoration:none;display:flex;align-items:center;gap:10px;">
+    <div style="width:34px;height:34px;border-radius:50%;background:#1a5c3a;border:1.5px solid #3da272;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:white;font-family:var(--sans);">BV</div>
+    <span style="font-family:var(--serif);font-size:17px;color:white;">Book<span style="color:#3da272;">Value</span>Pro</span>
   </a>
   <div class="header-right">
-    <span class="agent-email" id="agent-name"></span>
-    <button class="btn-signout" id="btn-signout" style="display:none" onclick="bvpSignOut()">Sign out</button>
+    <span id="agent-name" style="font-family:var(--mono);font-size:12px;color:#7abf9a;"></span>
+    <button id="btn-signout" onclick="bvpSignOut()" style="display:none;font-size:12px;color:#7abf9a;background:transparent;border:1px solid rgba(122,191,154,0.3);cursor:pointer;padding:6px 14px;border-radius:6px;font-family:var(--sans);transition:all 0.2s;">Sign out</button>
+    <span class="bvp-book-chip" id="book-name"></span>
+    <div class="steps">
+      <div class="step active">
+        <div class="step-num">1</div>
+        <span>Upload</span>
+      </div>
+      <div class="step-sep"></div>
+      <a href="bookvaluepro-dashboard.html" class="step" id="step-dashboard" style="text-decoration:none;">
+        <div class="step-num">2</div>
+        <span>Dashboard</span>
+      </a>
+      <div class="step-sep"></div>
+      <a href="bookvaluepro-clients.html" class="step" id="step-clients" style="text-decoration:none;">
+        <div class="step-num">3</div>
+        <span>Clients</span>
+      </a>
+      <div class="step-sep"></div>
+      <a href="bookvaluepro-outreach.html" class="step" id="step-outreach" style="text-decoration:none;">
+        <div class="step-num">4</div>
+        <span>Outreach</span>
+      </a>
+      <div class="step-sep"></div>
+      <a href="bookvaluepro-commissions.html" class="step" id="step-commissions" style="text-decoration:none;">
+        <div class="step-num">5</div>
+        <span>Commissions</span>
+      </a>
+    </div>
   </div>
 </header>
-
-<!-- STEPS BAR (always present; links activate once a book exists) -->
-<div class="steps-bar" id="steps-bar">
-  <span class="bvp-book-chip" id="book-name"></span>
-  <div class="steps">
-    <div class="step active"><div class="step-num">1</div><span>Upload</span></div>
-    <div class="step-sep"></div>
-    <a href="bookvaluepro-dashboard.html" class="step" id="step-dashboard"><div class="step-num">2</div><span>Dashboard</span></a>
-    <div class="step-sep"></div>
-    <a href="bookvaluepro-clients.html" class="step" id="step-clients"><div class="step-num">3</div><span>Clients</span></a>
-    <div class="step-sep"></div>
-    <a href="bookvaluepro-outreach.html" class="step" id="step-outreach"><div class="step-num">4</div><span>Outreach</span></a>
-    <div class="step-sep"></div>
-    <a href="bookvaluepro-commissions.html" class="step" id="step-commissions"><div class="step-num">5</div><span>Commissions</span></a>
-  </div>
-</div>
 
 <!-- MAIN -->
 <main>
