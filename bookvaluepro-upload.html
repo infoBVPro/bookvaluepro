@@ -48,41 +48,110 @@ html, body {
 
 /* ── HEADER ── */
 header {
-  padding: 28px 48px;
+  background: #0d2e1e;
+  border-bottom: 1px solid rgba(61,162,114,0.15);
+  padding: 0 2rem;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--cream-2);
+  position: sticky;
+  top: 0;
+  z-index: 50;
 }
 
 .logo {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
 }
 
 .logo-mark {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 1.5px solid #3da272;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; color: white;
+  font-family: var(--sans);
+  flex-shrink: 0;
+}
+
+.logo-word {
   font-family: var(--serif);
-  font-size: 22px;
-  color: var(--accent);
-  letter-spacing: -.01em;
+  font-size: 17px;
+  color: white;
 }
 
-.logo-tag {
+.logo-word span { color: #3da272; }
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.agent-email {
   font-family: var(--mono);
-  font-size: 10px;
-  color: var(--ink-3);
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  border: 1px solid var(--cream-2);
-  padding: 2px 7px;
-  border-radius: 4px;
+  font-size: 12px;
+  color: #7abf9a;
 }
 
-.header-hint {
-  font-size: 13px;
-  color: var(--ink-3);
+.btn-signout {
+  font-size: 12px; color: #7abf9a; background: transparent;
+  border: 1px solid rgba(122,191,154,0.3); padding: 6px 14px;
+  border-radius: 6px; cursor: pointer; font-family: var(--sans);
+  transition: all 0.2s;
 }
+
+.btn-signout:hover { border-color: #3da272; color: white; }
+
+/* ── STEPS BAR ── */
+.steps-bar {
+  background: #0d2e1e;
+  padding: 0 2rem 12px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid rgba(61,162,114,0.1);
+}
+
+.bvp-book-chip {
+  font-size: 11px; color: #7abf9a;
+  background: rgba(26,92,58,0.4);
+  border: 1px solid rgba(61,162,114,0.2);
+  padding: 4px 12px; border-radius: 20px;
+  font-family: var(--mono); margin-right: auto;
+  display: none; /* hidden until a book is detected */
+}
+
+.bvp-book-chip.visible { display: inline-block; }
+
+.steps { display: flex; align-items: center; gap: 0; margin-left: auto; }
+
+.step {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: #7abf9a;
+  padding: 4px 10px; border-radius: 6px;
+  text-decoration: none; transition: all 0.2s;
+}
+
+.step:hover { color: white; }
+.step.active { color: white; font-weight: 500; }
+.step.done   { color: #3da272; }
+
+.step-num {
+  width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 10px;
+  background: rgba(255,255,255,0.1); color: #7abf9a;
+  flex-shrink: 0;
+}
+
+.step.active .step-num { background: #3da272; color: white; }
+.step.done   .step-num { background: var(--accent); color: #3da272; }
+
+.step-sep { width: 20px; height: 1px; background: rgba(122,191,154,0.2); }
 
 /* ── MAIN ── */
 main {
@@ -612,34 +681,35 @@ footer {
 
 <!-- HEADER -->
 <header>
-  <div class="logo">
-    <span class="logo-mark">BookValuePro</span>
-    
+  <a class="logo" href="bookvaluepro-dashboard.html">
+    <div class="logo-mark">BV</div>
+    <div class="logo-word">Book<span>Value</span>Pro</div>
+  </a>
+  <div class="header-right">
+    <span class="agent-email" id="agent-name"></span>
+    <button class="btn-signout" id="btn-signout" style="display:none" onclick="bvpSignOut()">Sign out</button>
   </div>
-  <span class="header-hint">Medicare Supplement book analysis</span>
 </header>
+
+<!-- STEPS BAR (always present; links activate once a book exists) -->
+<div class="steps-bar" id="steps-bar">
+  <span class="bvp-book-chip" id="book-name"></span>
+  <div class="steps">
+    <div class="step active"><div class="step-num">1</div><span>Upload</span></div>
+    <div class="step-sep"></div>
+    <a href="bookvaluepro-dashboard.html" class="step" id="step-dashboard"><div class="step-num">2</div><span>Dashboard</span></a>
+    <div class="step-sep"></div>
+    <a href="bookvaluepro-clients.html" class="step" id="step-clients"><div class="step-num">3</div><span>Clients</span></a>
+    <div class="step-sep"></div>
+    <a href="bookvaluepro-outreach.html" class="step" id="step-outreach"><div class="step-num">4</div><span>Outreach</span></a>
+    <div class="step-sep"></div>
+    <a href="bookvaluepro-commissions.html" class="step" id="step-commissions"><div class="step-num">5</div><span>Commissions</span></a>
+  </div>
+</div>
 
 <!-- MAIN -->
 <main>
   <div class="upload-card">
-
-    <!-- Steps -->
-    <div class="steps">
-      <div class="step active">
-        <div class="step-num">1</div>
-        <span>Upload book</span>
-      </div>
-      <div class="step-sep"></div>
-      <div class="step">
-        <div class="step-num">2</div>
-        <span>Dashboard</span>
-      </div>
-      <div class="step-sep"></div>
-      <div class="step">
-        <div class="step-num">3</div>
-        <span>Outreach schedule</span>
-      </div>
-    </div>
 
     <h1 class="upload-headline">Upload your<br><em>book of business.</em></h1>
     <p class="upload-subhead">We'll calculate NPV, identify renewal opportunities, and build your outreach schedule — in seconds.</p>
@@ -1109,12 +1179,29 @@ function resetUpload() {
 // ── ANALYZE ──────────────────────────────────────────────────────────
 // ── SUPABASE AUTH GUARD ──────────────────────────────────────
 let bvpSession = null;
-bvpRequireAuth().then(session => {
+bvpRequireAuth().then(async session => {
   bvpSession = session;
   if (session) {
-    // Show agent email in header if present
+    // Show agent email and sign-out button
     const nameEl = document.getElementById('agent-name');
     if (nameEl) nameEl.textContent = session.user.email;
+    const signOutBtn = document.getElementById('btn-signout');
+    if (signOutBtn) signOutBtn.style.display = '';
+
+    // If agent already has a book, activate the step links and show the book chip
+    const existingBook = await bvpGetActiveBook(session.user.id);
+    if (existingBook) {
+      const chip = document.getElementById('book-name');
+      if (chip) {
+        chip.textContent = existingBook.file_name || 'Active book';
+        chip.classList.add('visible');
+      }
+      // Mark downstream steps as done/navigable
+      ['step-dashboard','step-clients','step-outreach','step-commissions'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('done');
+      });
+    }
   }
 });
 
