@@ -64,6 +64,7 @@ header {
   display: flex;
   align-items: center;
   gap: 20px;
+  flex-shrink: 0;
 }
 
 .bvp-book-chip {
@@ -77,12 +78,19 @@ header {
 
 .bvp-book-chip.visible { display: inline-block; }
 
-.steps { display: flex; align-items: center; gap: 0; }
+.steps {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
 
 .step {
   display: flex; align-items: center; gap: 6px;
   font-size: 12px; color: #7abf9a;
-  text-decoration: none; cursor: pointer;
+  text-decoration: none;
 }
 
 .step.active { color: white; font-weight: 500; }
@@ -629,40 +637,40 @@ footer {
 
 <!-- HEADER -->
 <header>
-  <a href="bookvaluepro-dashboard.html" style="text-decoration:none;display:flex;align-items:center;gap:10px;">
+  <a href="bookvaluepro-dashboard.html" style="text-decoration:none;display:flex;align-items:center;gap:10px;flex-shrink:0;">
     <div style="width:34px;height:34px;border-radius:50%;background:#1a5c3a;border:1.5px solid #3da272;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:white;font-family:var(--sans);">BV</div>
     <span style="font-family:var(--serif);font-size:17px;color:white;">Book<span style="color:#3da272;">Value</span>Pro</span>
   </a>
+  <div class="steps">
+    <div class="step active">
+      <div class="step-num">1</div>
+      <span>Upload</span>
+    </div>
+    <div class="step-sep"></div>
+    <a href="bookvaluepro-dashboard.html" class="step" id="step-dashboard" style="text-decoration:none;">
+      <div class="step-num">2</div>
+      <span>Dashboard</span>
+    </a>
+    <div class="step-sep"></div>
+    <a href="bookvaluepro-clients.html" class="step" id="step-clients" style="text-decoration:none;">
+      <div class="step-num">3</div>
+      <span>Clients</span>
+    </a>
+    <div class="step-sep"></div>
+    <a href="bookvaluepro-outreach.html" class="step" id="step-outreach" style="text-decoration:none;">
+      <div class="step-num">4</div>
+      <span>Outreach</span>
+    </a>
+    <div class="step-sep"></div>
+    <a href="bookvaluepro-commissions.html" class="step" id="step-commissions" style="text-decoration:none;">
+      <div class="step-num">5</div>
+      <span>Commissions</span>
+    </a>
+  </div>
   <div class="header-right">
     <span id="agent-name" style="font-family:var(--mono);font-size:12px;color:#7abf9a;"></span>
     <button id="btn-signout" onclick="bvpSignOut()" style="display:none;font-size:12px;color:#7abf9a;background:transparent;border:1px solid rgba(122,191,154,0.3);cursor:pointer;padding:6px 14px;border-radius:6px;font-family:var(--sans);transition:all 0.2s;">Sign out</button>
     <span class="bvp-book-chip" id="book-name"></span>
-    <div class="steps">
-      <div class="step active">
-        <div class="step-num">1</div>
-        <span>Upload</span>
-      </div>
-      <div class="step-sep"></div>
-      <a href="bookvaluepro-dashboard.html" class="step" id="step-dashboard" style="text-decoration:none;">
-        <div class="step-num">2</div>
-        <span>Dashboard</span>
-      </a>
-      <div class="step-sep"></div>
-      <a href="bookvaluepro-clients.html" class="step" id="step-clients" style="text-decoration:none;">
-        <div class="step-num">3</div>
-        <span>Clients</span>
-      </a>
-      <div class="step-sep"></div>
-      <a href="bookvaluepro-outreach.html" class="step" id="step-outreach" style="text-decoration:none;">
-        <div class="step-num">4</div>
-        <span>Outreach</span>
-      </a>
-      <div class="step-sep"></div>
-      <a href="bookvaluepro-commissions.html" class="step" id="step-commissions" style="text-decoration:none;">
-        <div class="step-num">5</div>
-        <span>Commissions</span>
-      </a>
-    </div>
   </div>
 </header>
 
