@@ -300,7 +300,7 @@ header {
   <div class="page-header">
     <div>
       <div class="page-title">Commissions</div>
-      <div class="page-sub">View and adjust your commission rates by state and carrier — changes flow directly into your NPV calculations</div>
+      <div class="page-sub">View and adjust your commission rates by state and carrier — changes flow directly into your LTV calculations</div>
     </div>
     <button class="btn-add" onclick="openAddModal()">
       <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:white;fill:none;stroke-width:2.5;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -393,7 +393,7 @@ header {
   <div class="warn-modal">
     <div class="warn-icon">⚠️</div>
     <h2>Reset to default rates?</h2>
-    <p id="reset-modal-msg">This will remove your custom rates and restore the system defaults for this row. Your NPV calculations will update automatically on your next dashboard visit.</p>
+    <p id="reset-modal-msg">This will remove your custom rates and restore the system defaults for this row. Your LTV calculations will update automatically on your next dashboard visit.</p>
     <div class="warn-actions">
       <button class="btn-warn-confirm" onclick="confirmReset()">Yes, reset to default</button>
       <button class="btn-warn-cancel" onclick="closeResetModal()">Cancel</button>
@@ -855,7 +855,7 @@ let _pendingResetData = null;
 function promptReset(carrier, state, enrollType) {
   _pendingResetData = { carrier, state, enrollType };
   document.getElementById('reset-modal-msg').textContent =
-    `This will remove your custom rates for ${carrier} (${state} · ${enrollType}) and restore the system defaults. Your NPV calculations will update on your next dashboard visit.`;
+    `This will remove your custom rates for ${carrier} (${state} · ${enrollType}) and restore the system defaults. Your LTV calculations will update on your next dashboard visit.`;
   document.getElementById('reset-modal').classList.add('active');
 }
 function closeResetModal() {

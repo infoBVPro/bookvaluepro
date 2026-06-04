@@ -750,7 +750,7 @@ td { padding: 12px 16px; vertical-align: middle; }
                 <rect x="4" y="1" width="2" height="6" rx="1" fill="currentColor"/>
               </svg>
             </span></span></th>
-          <th onclick="sortBy('curr_npv')" id="th-curr_npv"><span class="th-inner">NPV<span class="sort-icon">
+          <th onclick="sortBy('curr_npv')" id="th-curr_npv"><span class="th-inner">LTV<span class="sort-icon">
               <svg class="icon-bars" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <rect x="0" y="0"  width="10" height="2.2" rx="1" fill="currentColor" opacity="0.9"/>
                 <rect x="0" y="3.6" width="7.5" height="2.2" rx="1" fill="currentColor" opacity="0.7"/>
@@ -1168,11 +1168,11 @@ function renderPanel() {
       <div class="panel-section-title">Financial</div>
       <div class="field-grid">
         <div class="field-group">
-          <div class="field-label">Current NPV</div>
+          <div class="field-label">Current LTV</div>
           <div class="field-value mono highlight">${fmtNPV(c.curr_npv)}</div>
         </div>
         <div class="field-group">
-          <div class="field-label">Renewal NPV</div>
+          <div class="field-label">Renewal LTV</div>
           <div class="field-value mono highlight">${fmtNPV(c.ren_npv)}
             ${c.ren_carrier ? `<span class="ren-npv-agent">Agent</span>` : ''}
           </div>
@@ -1373,7 +1373,7 @@ function runExport() {
       'Carrier', 'State', 'Priority', 'Priority Label',
       'Eff. Month', 'Duration Year',
       'Current Premium', 'Comm. Premium',
-      'Current NPV', 'Renewal NPV',
+      'Current LTV', 'Renewal LTV',
       'Email', 'Phone'
     ];
     ws_data.push(headers);

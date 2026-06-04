@@ -550,7 +550,7 @@ tfoot td.num { text-align: right; }
 
   <!-- ── PART 1: BOOK NPV ── -->
   <div class="section-header">
-    <span class="section-title">Book NPV</span>
+    <span class="section-title">Book LTV</span>
     <span class="section-sub">Net present value of your full commission stream</span>
   </div>
 
@@ -616,7 +616,7 @@ let DISCOUNT = 0.10;
 //         rc=curr_commission_%s (11 values), rr=renewal_commission_%s (11 values)
 const POLICIES = []; // Populated from Supabase
 // ── LIVE CALCULATION ENGINE ──────────────────────────────────────────
-// Current NPV: CommPrem × curr_commission% at each duration / (1+r)^i × 12
+// Current LTV: CommPrem × curr_commission% at each duration / (1+r)^i × 12
 function policyCurrentNPV(p) {
   // Use pre-calculated curr_npv from bvpEnrichPolicies
   return p.curr_npv || 0;
@@ -740,12 +740,12 @@ function renderNPV() {
   grid.innerHTML = `
     <div class="npv-card total">
       <div class="card-cohort">Total Book</div>
-      <div class="card-label">Current NPV</div>
+      <div class="card-label">Current LTV</div>
       <div class="card-value">${fmt$(totalCurr)}</div>
       <div class="card-meta">
         <div class="meta-item">
           <div class="meta-val">${fmt$(totalOpp)}</div>
-          <div class="meta-lbl">Opportunity NPV</div>
+          <div class="meta-lbl">Opportunity LTV</div>
         </div>
         <div class="meta-item">
           <div class="meta-val">+${fmt$(totalOpp - totalCurr)}</div>
@@ -763,7 +763,7 @@ function renderNPV() {
       return `
         <div class="npv-card ${c.cls}">
           <div class="card-cohort">${c.key}</div>
-          <div class="card-label">Current NPV</div>
+          <div class="card-label">Current LTV</div>
           <div class="card-value">${fmtK(d.current)}</div>
           <div class="delta-pill ${c.pillCls}">
             ↑ +${fmtK(delta)} opportunity
@@ -775,7 +775,7 @@ function renderNPV() {
             </div>
             <div class="meta-item">
               <div class="meta-val">${fmtK(d.opp)}</div>
-              <div class="meta-lbl">Opp. NPV</div>
+              <div class="meta-lbl">Opp. LTV</div>
             </div>
           </div>
         </div>
@@ -801,7 +801,7 @@ function renderCarrierTable() {
           <th>Carrier</th>
           <th class="num">Policies</th>
           <th class="num">Avg monthly premium</th>
-          <th class="num">Current commission NPV</th>
+          <th class="num">Current commission LTV</th>
         </tr>
       </thead>
       <tbody>
@@ -835,7 +835,7 @@ function renderCarrierTable() {
           <th>Carrier</th>
           <th class="num">Eligible policies</th>
           <th class="num">Avg current premium</th>
-          <th class="num">Commission NPV uplift</th>
+          <th class="num">Commission LTV uplift</th>
           <th class="num">Annual policyholder savings</th>
         </tr>
       </thead>
@@ -1145,7 +1145,7 @@ function showNoDataState() {
       <div style="font-size:48px;margin-bottom:20px;">📂</div>
       <div style="font-size:22px;font-family:var(--serif);color:var(--ink);margin-bottom:12px;">No book data yet</div>
       <div style="font-size:15px;color:var(--ink-3);margin-bottom:28px;max-width:400px;margin-left:auto;margin-right:auto;line-height:1.6;">
-        Upload your book of business to see your NPV, carrier summary, and 10-year cash flow outlook.
+        Upload your book of business to see your LTV, carrier summary, and 10-year cash flow outlook.
       </div>
       <a href="bookvaluepro-upload.html" style="display:inline-block;background:#1a5c3a;color:white;padding:12px 28px;border-radius:10px;text-decoration:none;font-size:15px;font-weight:500;">
         Upload your book →
