@@ -94,6 +94,171 @@ tbody td.name-cell{font-weight:500;color:var(--ink);min-width:140px}
 .no-policies-row td{padding:16px 24px;font-size:13px;color:var(--ink-3);font-style:italic;text-align:center}
 @media(max-width:768px){.page{padding:20px 16px 60px}header{padding:14px 20px}.summary-strip{grid-template-columns:repeat(2,1fr)}}
 
+/* ── BULK SELECT ── */
+.row-check { width:36px; padding-left:16px !important; }
+.row-check input[type=checkbox] {
+  width:15px; height:15px; cursor:pointer; accent-color:var(--accent-2);
+  border-radius:3px;
+}
+tbody tr.selected { background:var(--accent-l) !important; }
+
+/* ── FLOATING ACTION BAR ── */
+.bulk-bar {
+  position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(20px);
+  background:#0f1214; color:white; border-radius:14px;
+  padding:12px 20px; display:flex; align-items:center; gap:14px;
+  box-shadow:0 8px 32px rgba(0,0,0,.28); z-index:200;
+  font-family:var(--sans); font-size:13px; font-weight:500;
+  opacity:0; pointer-events:none;
+  transition:opacity .22s, transform .22s;
+  white-space:nowrap;
+}
+.bulk-bar.visible { opacity:1; pointer-events:auto; transform:translateX(-50%) translateY(0); }
+.bulk-bar-count { color:#7abf9a; font-family:var(--mono); font-size:12px; }
+.bulk-bar-sep { width:1px; height:20px; background:rgba(255,255,255,.12); }
+.bulk-btn {
+  display:flex; align-items:center; gap:6px; padding:7px 14px;
+  border-radius:8px; border:none; cursor:pointer; font-size:12px;
+  font-family:var(--sans); font-weight:500; transition:all .15s;
+}
+.bulk-btn-email { background:var(--accent); color:white; }
+.bulk-btn-email:hover { background:var(--accent-2); }
+.bulk-btn-clear { background:transparent; color:rgba(255,255,255,.5); border:1px solid rgba(255,255,255,.15); }
+.bulk-btn-clear:hover { color:white; border-color:rgba(255,255,255,.4); }
+
+/* ── AI MODAL SHARED ── */
+.ai-overlay {
+  position:fixed; inset:0; background:rgba(10,18,12,.55);
+  backdrop-filter:blur(3px); z-index:300;
+  display:flex; align-items:center; justify-content:center;
+  opacity:0; pointer-events:none; transition:opacity .2s;
+}
+.ai-overlay.open { opacity:1; pointer-events:auto; }
+.ai-modal {
+  background:white; border-radius:16px; width:680px; max-width:94vw;
+  max-height:88vh; display:flex; flex-direction:column;
+  box-shadow:0 24px 64px rgba(0,0,0,.22);
+  transform:translateY(16px) scale(.98); transition:transform .22s;
+}
+.ai-overlay.open .ai-modal { transform:translateY(0) scale(1); }
+.ai-modal-header {
+  padding:20px 24px 16px; border-bottom:1px solid var(--cream-2);
+  display:flex; align-items:flex-start; justify-content:space-between;
+  flex-shrink:0;
+}
+.ai-modal-title { font-family:var(--serif); font-size:22px; color:var(--ink); line-height:1.2; }
+.ai-modal-sub { font-size:12px; color:var(--ink-3); margin-top:3px; }
+.ai-modal-close {
+  width:30px; height:30px; border-radius:50%; border:none;
+  background:var(--cream); color:var(--ink-3); cursor:pointer;
+  font-size:16px; display:flex; align-items:center; justify-content:center;
+  transition:all .15s; flex-shrink:0; margin-left:12px;
+}
+.ai-modal-close:hover { background:var(--cream-2); color:var(--ink); }
+.ai-modal-body { padding:20px 24px; overflow-y:auto; flex:1; }
+.ai-modal-footer {
+  padding:14px 24px; border-top:1px solid var(--cream-2);
+  display:flex; align-items:center; justify-content:space-between;
+  gap:12px; flex-shrink:0; flex-wrap:wrap;
+}
+
+/* ── AI LOADING SHIMMER ── */
+.ai-generating {
+  display:flex; flex-direction:column; align-items:center;
+  justify-content:center; padding:48px 20px; gap:14px;
+}
+.ai-spinner {
+  width:36px; height:36px; border:3px solid var(--cream-2);
+  border-top-color:var(--accent-2); border-radius:50%;
+  animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ai-gen-label { font-size:13px; color:var(--ink-3); font-style:italic; }
+
+/* ── EMAIL MODAL ── */
+.email-tabs { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+.email-tab {
+  font-size:12px; font-family:var(--mono); padding:5px 14px;
+  border-radius:20px; border:1.5px solid var(--cream-2);
+  cursor:pointer; transition:all .15s; background:white; color:var(--ink-3);
+}
+.email-tab.active { background:var(--accent); color:white; border-color:var(--accent); }
+.email-panel { display:none; }
+.email-panel.active { display:block; }
+.email-subject-row {
+  display:flex; align-items:center; gap:10px;
+  background:var(--cream); border:1px solid var(--cream-2);
+  border-radius:8px; padding:10px 14px; margin-bottom:10px;
+}
+.email-subject-label { font-size:11px; font-family:var(--mono); color:var(--ink-3); text-transform:uppercase; letter-spacing:.08em; flex-shrink:0; }
+.email-subject-val { font-size:13px; color:var(--ink); font-weight:500; flex:1; }
+.email-body-area {
+  width:100%; border:1px solid var(--cream-2); border-radius:10px;
+  padding:14px; font-family:var(--sans); font-size:13px; color:var(--ink);
+  line-height:1.7; resize:vertical; min-height:220px;
+  background:var(--cream); outline:none;
+  transition:border-color .15s;
+}
+.email-body-area:focus { border-color:var(--accent-2); background:white; }
+
+/* ── CALL SCRIPT MODAL ── */
+.script-section { margin-bottom:20px; }
+.script-section-label {
+  font-size:10px; font-family:var(--mono); letter-spacing:.1em;
+  text-transform:uppercase; color:var(--ink-3); margin-bottom:8px;
+  display:flex; align-items:center; gap:8px;
+}
+.script-section-label::after { content:''; flex:1; height:1px; background:var(--cream-2); }
+.script-block {
+  background:var(--cream); border-radius:10px; padding:14px 16px;
+  font-size:13px; color:var(--ink-2); line-height:1.75;
+  border-left:3px solid var(--accent-l);
+}
+.script-block.opener { border-left-color:var(--accent-2); }
+.script-block.value { border-left-color:var(--blue); }
+.script-block.objection { border-left-color:var(--gold); }
+.script-block.close { border-left-color:var(--accent-2); }
+.script-tag {
+  display:inline-block; font-size:10px; font-family:var(--mono);
+  text-transform:uppercase; letter-spacing:.06em; padding:1px 7px;
+  border-radius:4px; margin-bottom:6px;
+}
+.script-tag.opener { background:var(--accent-l); color:var(--accent); }
+.script-tag.value { background:var(--blue-l); color:var(--blue-2); }
+.script-tag.objection { background:var(--gold-l); color:var(--gold-2); }
+.script-tag.close { background:var(--accent-l); color:var(--accent); }
+.client-info-strip {
+  display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px; padding-bottom:16px;
+  border-bottom:1px solid var(--cream-2);
+}
+.cis-chip {
+  font-size:11px; font-family:var(--mono); padding:3px 10px;
+  background:var(--cream); border:1px solid var(--cream-2);
+  border-radius:6px; color:var(--ink-2);
+}
+.cis-chip strong { color:var(--ink); }
+
+/* ── ROW ACTION BUTTONS ── */
+.row-actions { display:flex; align-items:center; gap:6px; }
+.btn-row-action {
+  font-size:11px; font-family:var(--sans); font-weight:500;
+  padding:4px 10px; border-radius:6px; border:none; cursor:pointer;
+  transition:all .15s; display:flex; align-items:center; gap:4px; white-space:nowrap;
+}
+.btn-email-row { background:var(--accent-l); color:var(--accent); }
+.btn-email-row:hover { background:var(--accent-2); color:white; }
+.btn-script-row { background:var(--blue-l); color:var(--blue-2); }
+.btn-script-row:hover { background:var(--blue); color:white; }
+
+/* ── COPY TOAST ── */
+.copy-toast {
+  position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
+  background:#0f1214; color:white; font-size:12px; font-family:var(--sans);
+  padding:8px 18px; border-radius:8px; z-index:400;
+  opacity:0; transition:opacity .2s; pointer-events:none;
+}
+.copy-toast.show { opacity:1; }
+
 /* ── STANDARD HEADER ── */
 .bvp-header {
   background: #0d2e1e;
@@ -225,6 +390,78 @@ tbody td.name-cell{font-weight:500;color:var(--ink);min-width:140px}
   <div class="summary-strip" id="summary-strip"></div>
   <div class="month-list" id="month-list"></div>
 </div>
+<!-- ── BULK ACTION BAR ── -->
+<div class="bulk-bar" id="bulk-bar">
+  <span class="bulk-bar-count" id="bulk-count">0 selected</span>
+  <div class="bulk-bar-sep"></div>
+  <button class="bulk-btn bulk-btn-email" onclick="openBulkEmail()">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/></svg>
+    Draft emails
+  </button>
+  <button class="bulk-btn bulk-btn-clear" onclick="clearSelection()">✕ Clear</button>
+</div>
+
+<!-- ── EMAIL DRAFT MODAL ── -->
+<div class="ai-overlay" id="email-overlay" onclick="closeEmailModal(event)">
+  <div class="ai-modal" id="email-modal">
+    <div class="ai-modal-header">
+      <div>
+        <div class="ai-modal-title" id="email-modal-title">Draft Outreach Email</div>
+        <div class="ai-modal-sub" id="email-modal-sub">AI-generated · edit before sending</div>
+      </div>
+      <button class="ai-modal-close" onclick="closeEmailModal()">✕</button>
+    </div>
+    <div class="ai-modal-body" id="email-modal-body">
+      <div class="ai-generating" id="email-generating">
+        <div class="ai-spinner"></div>
+        <div class="ai-gen-label">Drafting personalized email...</div>
+      </div>
+      <div id="email-tabs-row" class="email-tabs" style="display:none"></div>
+      <div id="email-panels"></div>
+    </div>
+    <div class="ai-modal-footer">
+      <div style="font-size:11px;color:var(--ink-3)">✦ AI-generated — review before sending</div>
+      <div style="display:flex;gap:8px">
+        <button class="bulk-btn bulk-btn-clear" style="color:var(--ink-2);border-color:var(--cream-2)" onclick="closeEmailModal()">Close</button>
+        <button class="bulk-btn bulk-btn-email" id="email-copy-btn" onclick="copyCurrentEmail()" style="display:none">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          Copy email
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── CALL SCRIPT MODAL ── -->
+<div class="ai-overlay" id="script-overlay" onclick="closeScriptModal(event)">
+  <div class="ai-modal" id="script-modal">
+    <div class="ai-modal-header">
+      <div>
+        <div class="ai-modal-title" id="script-modal-title">Call Script</div>
+        <div class="ai-modal-sub" id="script-modal-sub">AI-generated talking points</div>
+      </div>
+      <button class="ai-modal-close" onclick="closeScriptModal()">✕</button>
+    </div>
+    <div class="ai-modal-body" id="script-modal-body">
+      <div class="ai-generating" id="script-generating">
+        <div class="ai-spinner"></div>
+        <div class="ai-gen-label">Building your call script...</div>
+      </div>
+      <div id="script-content" style="display:none"></div>
+    </div>
+    <div class="ai-modal-footer">
+      <div style="font-size:11px;color:var(--ink-3)">✦ AI-generated — personalize as needed</div>
+      <button class="bulk-btn bulk-btn-email" id="script-copy-btn" onclick="copyScript()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        Copy script
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── COPY TOAST ── -->
+<div class="copy-toast" id="copy-toast">Copied to clipboard ✓</div>
+
 <script>
 const POLICIES = []; // Populated from Supabase
 // ── SYNC SAVINGS % FROM DASHBOARD ───────────────────────────────────
@@ -267,13 +504,13 @@ function filtered(m){return policiesForMonth(m,leadMonths).filter(p=>activeFilte
 
 function renderSummary(){
   const ssCount=POLICIES.filter(p=>p.priority===1).length;
-  const retCount=POLICIES.filter(p=>p.priority!==1).length;
-  const totalLift=POLICIES.filter(p=>p.priority===1).reduce((s,p)=>s+Math.max(0,p.renNPV-p.currNPV),0);
+  const sbCount=POLICIES.filter(p=>p.priority===2).length;
+  const lwCount=POLICIES.filter(p=>p.priority===3).length;
   document.getElementById('summary-strip').innerHTML=`
     <div class="summary-card"><div class="summary-val">${POLICIES.length}</div><div class="summary-lbl">Total policies in schedule</div></div>
-    <div class="summary-card" style="border-top:3px solid var(--accent-2)"><div class="summary-val" style="color:var(--accent)">${ssCount}</div><div class="summary-lbl">Save &amp; Switch contacts</div></div>
-    <div class="summary-card" style="border-top:3px solid var(--blue)"><div class="summary-val" style="color:var(--blue)">${retCount}</div><div class="summary-lbl">Retention contacts</div></div>
-    <div class="summary-card" style="border-top:3px solid var(--gold)"><div class="summary-val" style="color:var(--accent)">${fmtK(totalLift)}</div><div class="summary-lbl">Total NPV uplift opportunity</div></div>`;
+    <div class="summary-card" style="border-top:3px solid var(--accent-2)"><div class="summary-val" style="color:var(--accent)">${ssCount}</div><div class="summary-lbl">Save &amp; Switch</div></div>
+    <div class="summary-card" style="border-top:3px solid var(--blue)"><div class="summary-val" style="color:var(--blue)">${sbCount}</div><div class="summary-lbl">Steady Book</div></div>
+    <div class="summary-card" style="border-top:3px solid var(--gold)"><div class="summary-val" style="color:var(--gold-2)">${lwCount}</div><div class="summary-lbl">Loyalty Watch</div></div>`;
 }
 
 function renderCalendar(){
@@ -313,22 +550,24 @@ function renderCalendar(){
 
 function buildTable(m){
   const vis=filtered(m);
-  if(!vis.length) return`<table><tbody><tr class="no-policies-row"><td colspan="10">No policies match the current filter.</td></tr></tbody></table>`;
+  if(!vis.length) return`<table><tbody><tr class="no-policies-row"><td colspan="12">No policies match the current filter.</td></tr></tbody></table>`;
   const ss=vis.filter(p=>p.priority===1).sort((a,b)=>a.rank-b.rank);
   const sb=vis.filter(p=>p.priority===2).sort((a,b)=>a.rank-b.rank);
   const lw=vis.filter(p=>p.priority===3).sort((a,b)=>a.rank-b.rank);
   const thead=`<thead><tr>
+    <th class="row-check"><input type="checkbox" title="Select all in month" onchange="toggleMonthSelect(${m},this.checked)"></th>
     <th>Client</th><th>Carrier</th><th>State</th><th class="num">Age</th>
     <th class="num">Current premium</th><th class="num">Current NPV</th>
     <th class="num">Duration</th><th class="num">Est. mo. savings</th>
-    <th class="num">Opportunity NPV</th><th>Contact</th>
+    <th class="num">Opportunity NPV</th><th>Contact</th><th>Actions</th>
   </tr></thead>`;
   const rows=(policies,cls,label)=>{
     if(!policies.length)return'';
-    return`<tr><td colspan="10" style="padding:0">
+    return`<tr><td colspan="12" style="padding:0">
       <div class="cohort-section-header ${cls}">${label}<span class="cohort-count">${policies.length} client${policies.length>1?'s':''}</span></div>
-    </td></tr>`+policies.map(p=>`<tr>
-      <td class="name-cell">${p.name}</td>
+    </td></tr>`+policies.map(p=>`<tr data-idx="${p.idx}" class="${selectedIdxs.has(p.idx)?'selected':''}">
+      <td class="row-check"><input type="checkbox" data-idx="${p.idx}" ${selectedIdxs.has(p.idx)?'checked':''} onchange="toggleRowSelect(${p.idx},this.checked)"></td>
+      <td class="name-cell"><span class="client-name-link" onclick="openScriptModal(${p.idx})" style="cursor:pointer;border-bottom:1px dashed var(--accent-2);color:var(--ink)">${p.name}</span></td>
       <td><span class="carrier-badge">${p.company}</span></td>
       <td><span class="carrier-badge">${p.state || '—'}</span></td>
       <td class="num"><span class="dur-badge">${p.age ?? '—'}</span></td>
@@ -338,6 +577,10 @@ function buildTable(m){
       <td class="num"><span class="sav-val">${fmt$(liveMonSav(p))}/mo</span></td>
       <td class="num"><span class="opp-val">${fmt$(p.renNPV)}</span></td>
       <td>${p.phone?`<a class="contact-link" href="tel:${p.phone}">${p.phone}</a>`:''}${p.phone&&p.email?' · ':''}${p.email?`<a class="contact-link" href="mailto:${p.email}">${p.email}</a>`:''} ${!p.phone&&!p.email?'<span class="no-contact">—</span>':''}</td>
+      <td><div class="row-actions">
+        <button class="btn-row-action btn-email-row" onclick="openSingleEmail(${p.idx})">✉ Email</button>
+        <button class="btn-row-action btn-script-row" onclick="openScriptModal(${p.idx})">📞 Script</button>
+      </div></td>
     </tr>`).join('');
   };
   return`<table>${thead}<tbody>${rows(ss,'ss','Save &amp; Switch')}${rows(sb,'sb','Steady Book')}${rows(lw,'lw','Loyalty Watch')}</tbody></table>`;
@@ -364,12 +607,280 @@ document.addEventListener('DOMContentLoaded', function(){
       this.value = v;
       leadMonths = v;
       localStorage.setItem('bvp_lead_months', v);
-      // Recompute which month should be "open" — the one that corresponds to current contact month
       openMonths = new Set([CURRENT_MONTH]);
       renderAll();
     });
   }
 });
+
+// ── BULK SELECTION ─────────────────────────────────────────────────────
+const selectedIdxs = new Set();
+
+function toggleRowSelect(idx, checked) {
+  if (checked) selectedIdxs.add(idx); else selectedIdxs.delete(idx);
+  updateBulkBar();
+  const row = document.querySelector(`tr[data-idx="${idx}"]`);
+  if (row) row.classList.toggle('selected', checked);
+}
+
+function toggleMonthSelect(m, checked) {
+  const vis = filtered(m);
+  vis.forEach(p => {
+    if (checked) selectedIdxs.add(p.idx); else selectedIdxs.delete(p.idx);
+  });
+  // re-render that table so checkboxes reflect state
+  const wrap = document.getElementById(`ptable-${m}`);
+  if (wrap) wrap.innerHTML = buildTable(m);
+  updateBulkBar();
+}
+
+function clearSelection() {
+  selectedIdxs.clear();
+  document.querySelectorAll('tr[data-idx]').forEach(r => r.classList.remove('selected'));
+  document.querySelectorAll('input[data-idx]').forEach(c => c.checked = false);
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  const bar = document.getElementById('bulk-bar');
+  const cnt = document.getElementById('bulk-count');
+  const n = selectedIdxs.size;
+  cnt.textContent = n + ' selected';
+  bar.classList.toggle('visible', n > 0);
+}
+
+// ── AI HELPERS ──────────────────────────────────────────────────────────
+const COHORT_LABELS = { 1:'Save & Switch', 2:'Steady Book', 3:'Loyalty Watch' };
+
+function clientContext(p) {
+  const moSav = (p.currPrem * SAVINGS_PCT / 100).toFixed(2);
+  const annSav = (p.currPrem * SAVINGS_PCT / 100 * 12).toFixed(0);
+  const cohort = COHORT_LABELS[p.priority] || '';
+  return `Client: ${p.name}
+Carrier: ${p.company}, State: ${p.state || 'N/A'}, Age: ${p.age ?? 'N/A'}
+Cohort: ${cohort}
+Current monthly premium: $${p.currPrem?.toFixed(2) || 'N/A'}
+Estimated monthly savings if they switch: $${moSav}
+Estimated annual savings: $${annSav}
+Opportunity NPV: $${Math.round(p.renNPV || 0).toLocaleString()}
+Policy duration: Year ${p.duration || 'N/A'}`;
+}
+
+async function callClaude(systemPrompt, userPrompt) {
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }]
+    })
+  });
+  const data = await resp.json();
+  return data.content?.map(b => b.text || '').join('') || '';
+}
+
+function showToast(msg) {
+  const t = document.getElementById('copy-toast');
+  t.textContent = msg || 'Copied to clipboard ✓';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ── EMAIL MODAL ────────────────────────────────────────────────────────
+let emailDrafts = []; // [{name, subject, body, idx}]
+let activeEmailTab = 0;
+
+function openSingleEmail(idx) {
+  const p = POLICIES.find(x => x.idx === idx);
+  if (!p) return;
+  openEmailModal([p]);
+}
+
+function openBulkEmail() {
+  const policies = POLICIES.filter(p => selectedIdxs.has(p.idx));
+  if (!policies.length) return;
+  openEmailModal(policies);
+}
+
+async function openEmailModal(policies) {
+  const overlay = document.getElementById('email-overlay');
+  const titleEl = document.getElementById('email-modal-title');
+  const subEl = document.getElementById('email-modal-sub');
+  const genEl = document.getElementById('email-generating');
+  const tabsRow = document.getElementById('email-tabs-row');
+  const panelsEl = document.getElementById('email-panels');
+  const copyBtn = document.getElementById('email-copy-btn');
+
+  titleEl.textContent = policies.length === 1
+    ? `Email Draft — ${policies[0].name}`
+    : `Email Drafts — ${policies.length} clients`;
+  subEl.textContent = 'AI-generated · edit before sending';
+  genEl.style.display = 'flex';
+  tabsRow.style.display = 'none';
+  panelsEl.innerHTML = '';
+  copyBtn.style.display = 'none';
+  emailDrafts = [];
+  activeEmailTab = 0;
+
+  overlay.classList.add('open');
+
+  const SYSTEM = `You are a Medicare Supplement insurance agent assistant. Write concise, warm, professional renewal outreach emails. 
+Return ONLY a JSON object with keys "subject" and "body". No markdown, no explanation. 
+The body should be 3-4 paragraphs, conversational, reference specific numbers (savings, carrier), and end with a clear call to action. Sign off as "Your agent".`;
+
+  try {
+    for (let i = 0; i < policies.length; i++) {
+      const p = policies[i];
+      subEl.textContent = policies.length > 1
+        ? `Drafting ${i + 1} of ${policies.length}...`
+        : 'AI-generated · edit before sending';
+
+      const raw = await callClaude(SYSTEM, `Write a renewal outreach email for this client:\n${clientContext(p)}`);
+      let subject = '', body = '';
+      try {
+        const clean = raw.replace(/```json|```/g,'').trim();
+        const parsed = JSON.parse(clean);
+        subject = parsed.subject || '';
+        body = parsed.body || raw;
+      } catch { body = raw; subject = `Your Medicare Supplement renewal — ${p.company}`; }
+      emailDrafts.push({ name: p.name, subject, body, idx: p.idx });
+    }
+
+    genEl.style.display = 'none';
+    subEl.textContent = 'AI-generated · edit before sending';
+    copyBtn.style.display = 'flex';
+
+    if (emailDrafts.length > 1) {
+      tabsRow.style.display = 'flex';
+      tabsRow.innerHTML = emailDrafts.map((d, i) =>
+        `<button class="email-tab ${i === 0 ? 'active' : ''}" onclick="switchEmailTab(${i})">${d.name.split(' ')[0]}</button>`
+      ).join('');
+    }
+
+    panelsEl.innerHTML = emailDrafts.map((d, i) => `
+      <div class="email-panel ${i === 0 ? 'active' : ''}" id="email-panel-${i}">
+        <div class="email-subject-row">
+          <span class="email-subject-label">Subject</span>
+          <span class="email-subject-val" id="email-subj-${i}" contenteditable="true" style="outline:none">${d.subject}</span>
+        </div>
+        <textarea class="email-body-area" id="email-body-${i}">${d.body}</textarea>
+      </div>`).join('');
+
+  } catch(e) {
+    genEl.style.display = 'none';
+    panelsEl.innerHTML = `<div style="color:red;padding:20px">Error generating email. Please try again.</div>`;
+  }
+}
+
+function switchEmailTab(i) {
+  activeEmailTab = i;
+  document.querySelectorAll('.email-tab').forEach((t, j) => t.classList.toggle('active', i === j));
+  document.querySelectorAll('.email-panel').forEach((p, j) => p.classList.toggle('active', i === j));
+}
+
+function copyCurrentEmail() {
+  const subj = document.getElementById(`email-subj-${activeEmailTab}`)?.innerText || '';
+  const body = document.getElementById(`email-body-${activeEmailTab}`)?.value || '';
+  navigator.clipboard.writeText(`Subject: ${subj}\n\n${body}`).then(() => showToast('Email copied!'));
+}
+
+function closeEmailModal(e) {
+  if (e && e.target !== document.getElementById('email-overlay')) return;
+  document.getElementById('email-overlay').classList.remove('open');
+}
+
+// ── CALL SCRIPT MODAL ──────────────────────────────────────────────────
+let currentScriptText = '';
+
+async function openScriptModal(idx) {
+  const p = POLICIES.find(x => x.idx === idx);
+  if (!p) return;
+
+  const overlay = document.getElementById('script-overlay');
+  const titleEl = document.getElementById('script-modal-title');
+  const subEl = document.getElementById('script-modal-sub');
+  const genEl = document.getElementById('script-generating');
+  const contentEl = document.getElementById('script-content');
+
+  titleEl.textContent = `Call Script — ${p.name}`;
+  subEl.textContent = `${p.company} · ${COHORT_LABELS[p.priority] || ''} · Age ${p.age ?? 'N/A'}`;
+  genEl.style.display = 'flex';
+  contentEl.style.display = 'none';
+  contentEl.innerHTML = '';
+  currentScriptText = '';
+  overlay.classList.add('open');
+
+  const moSav = (p.currPrem * SAVINGS_PCT / 100).toFixed(2);
+  const annSav = Math.round(p.currPrem * SAVINGS_PCT / 100 * 12).toLocaleString();
+
+  const SYSTEM = `You are a Medicare Supplement insurance agent assistant. Generate a concise phone call script in JSON.
+Return ONLY a JSON object with these keys: "opener", "value_prop", "objection_handler", "close".
+Each key maps to a string of 2-4 sentences of natural speech. Use the client's first name and reference specific numbers. Keep it conversational and confident, not salesy.`;
+
+  try {
+    const firstName = p.name.split(' ')[0];
+    const raw = await callClaude(SYSTEM,
+      `Create a call script for:\n${clientContext(p)}\nThe agent is calling to discuss renewal options and potential savings of $${moSav}/month ($${annSav}/year).`);
+
+    let parsed = {};
+    try {
+      const clean = raw.replace(/```json|```/g,'').trim();
+      parsed = JSON.parse(clean);
+    } catch { parsed = { opener: raw, value_prop:'', objection_handler:'', close:'' }; }
+
+    currentScriptText = `CALL SCRIPT: ${p.name}\n\n` +
+      `OPENER:\n${parsed.opener || ''}\n\n` +
+      `VALUE PROPOSITION:\n${parsed.value_prop || ''}\n\n` +
+      `HANDLING OBJECTIONS:\n${parsed.objection_handler || ''}\n\n` +
+      `CLOSE:\n${parsed.close || ''}`;
+
+    // Client info strip
+    const strip = `<div class="client-info-strip">
+      <span class="cis-chip"><strong>${p.name}</strong></span>
+      <span class="cis-chip">🏢 ${p.company}</span>
+      <span class="cis-chip">📍 ${p.state || 'N/A'}</span>
+      <span class="cis-chip">🎂 Age ${p.age ?? 'N/A'}</span>
+      <span class="cis-chip">💵 $${p.currPrem?.toFixed(2)}/mo</span>
+      <span class="cis-chip" style="background:var(--accent-l);border-color:var(--accent-2);color:var(--accent)">💰 Save ~$${moSav}/mo</span>
+    </div>`;
+
+    const sections = [
+      { key:'opener', label:'Opener', cls:'opener', icon:'👋' },
+      { key:'value_prop', label:'Value Proposition', cls:'value', icon:'💡' },
+      { key:'objection_handler', label:'Handling Objections', cls:'objection', icon:'🛡' },
+      { key:'close', label:'The Close', cls:'close', icon:'✅' },
+    ];
+
+    contentEl.innerHTML = strip + sections.map(s => `
+      <div class="script-section">
+        <div class="script-section-label">${s.icon} ${s.label}</div>
+        <div class="script-block ${s.cls}">
+          <div class="script-tag ${s.cls}">${s.label}</div>
+          <div>${(parsed[s.key] || '').replace(/\n/g,'<br>')}</div>
+        </div>
+      </div>`).join('');
+
+    genEl.style.display = 'none';
+    contentEl.style.display = 'block';
+
+  } catch(e) {
+    genEl.style.display = 'none';
+    contentEl.style.display = 'block';
+    contentEl.innerHTML = `<div style="color:red;padding:20px">Error generating script. Please try again.</div>`;
+  }
+}
+
+function copyScript() {
+  navigator.clipboard.writeText(currentScriptText).then(() => showToast('Script copied!'));
+}
+
+function closeScriptModal(e) {
+  if (e && e.target !== document.getElementById('script-overlay')) return;
+  document.getElementById('script-overlay').classList.remove('open');
+}
+
 // ── SUPABASE INIT ─────────────────────────────────────────────
 let bvpSession = null;
 let bvpBook    = null;
