@@ -539,7 +539,7 @@ function renderCalendar(){
           </div>
         </div>
         <div class="month-header-right">
-          ${ssLift>0?`<span class="month-opp">+${fmtK(ssLift)} NPV opp.</span>`:''}
+          ${ssLift>0?`<span class="month-opp">+${fmtK(ssLift)} LTV opp.</span>`:''}
           <span class="chevron">▾</span>
         </div>
       </div>
@@ -557,9 +557,9 @@ function buildTable(m){
   const thead=`<thead><tr>
     <th class="row-check"><input type="checkbox" title="Select all in month" onchange="toggleMonthSelect(${m},this.checked)"></th>
     <th>Client</th><th>Carrier</th><th>State</th><th class="num">Age</th>
-    <th class="num">Current premium</th><th class="num">Current NPV</th>
+    <th class="num">Current premium</th><th class="num">Current LTV</th>
     <th class="num">Duration</th><th class="num">Est. mo. savings</th>
-    <th class="num">Opportunity NPV</th><th>Contact</th><th>Actions</th>
+    <th class="num">Opportunity LTV</th><th>Contact</th><th>Actions</th>
   </tr></thead>`;
   const rows=(policies,cls,label)=>{
     if(!policies.length)return'';
@@ -662,7 +662,7 @@ Cohort: ${cohort}
 Current monthly premium: $${p.currPrem?.toFixed(2) || 'N/A'}
 Estimated monthly savings if they switch: $${moSav}
 Estimated annual savings: $${annSav}
-Opportunity NPV: $${Math.round(p.renNPV || 0).toLocaleString()}
+Opportunity LTV: $${Math.round(p.renNPV || 0).toLocaleString()}
 Policy duration: Year ${p.duration || 'N/A'}`;
 }
 
