@@ -485,3 +485,61 @@ async function bvpReapplyPriorityOverrides(agentId, newBookId) {
   console.log(`bvpReapplyPriorityOverrides: reapplied ${count} overrides to new book`);
   return count;
 }
+
+// ── KNOWLEDGE BASE ────────────────────────────────────────────
+// Fetches relevant knowledge documents for the AI agent.
+// Optionally filter by state and/or carrier to narrow results.
+// Returns up to `limit` most recent documents.
+
+async function bvpGetKnowledge(options = {}) {
+  const { state = null, carrier = null, category = null, limit = 10 } = options;
+
+  let query = bvp
+    .from('knowledge_documents')
+    .select('id, title, category, state, carrier, effective_date, summary, file_name')
+    .order('effective_date', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (state)    query = query.or(`state.eq.${state},state.is.null`);
+  if (carrier)  query = query.eq('carrier', carrier);
+  if (category) query = query.eq('category', category);
+
+  const { data, error } = await query;
+  if (error) { console.error('bvpGetKnowledge:', error); return []; }
+  return data || [];
+}
+
+// Fetches all knowledge docs relevant to an agent's book —
+// matches states and carriers present in their policies.
+async function bvpGetKnowledgeForBook(agentId) {
+  const book = await bvpGetActiveBook(agentId);
+  if (!book) return [];
+
+  const policies = await bvpGetPolicies(book.id);
+
+  // Collect unique states and carriers from the book
+  const states   = [...new Set(policies.map(p => p.issued_state).filter(Boolean))];
+  const carriers = [...new Set(policies.map(p => p.company).filter(Boolean))];
+
+  // Fetch knowledge docs — national docs (state IS NULL) always included
+  let query = bvp
+    .from('knowledge_documents')
+    .select('id, title, category, state, carrier, effective_date, summary, file_name')
+    .order('effective_date', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  // Filter: state matches agent's states OR is null (national)
+  if (states.length > 0) {
+    query = query.or(`state.in.(${states.join(',')}),state.is.null`);
+  }
+
+  const { data, error } = await query;
+  if (error) { console.error('bvpGetKnowledgeForBook:', error); return []; }
+
+  // Further filter by carrier relevance in JS (Supabase OR across two columns is tricky)
+  return (data || []).filter(doc =>
+    !doc.carrier || carriers.includes(doc.carrier)
+  );
+}
