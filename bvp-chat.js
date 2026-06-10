@@ -1,173 +1,97 @@
 // bvp-chat.js — BookValuePro AI Chat Bar v2
-// Inserts a chat bar directly below the .bvp-header nav on every page.
-// Include AFTER bvp-supabase.js:
-//   <script src="bvp-chat.js"></script>
+// Include AFTER bvp-supabase.js: <script src="bvp-chat.js"></script>
 
 (function () {
 
-  // ── STYLES ───────────────────────────────────────────────────
+  const BVP_CHAT_PROXY = 'https://wspxgkbcdkvlripmvnjh.supabase.co/functions/v1/bvp-chat';
+
   const style = document.createElement('style');
   style.textContent = `
     #bvp-chat-bar {
-      background: #f0f7f3;
-      border-bottom: 1px solid #c8e6d4;
-      padding: 0 2rem;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      height: 52px;
-      position: sticky;
-      top: 64px;
-      z-index: 99;
+      background: #f0f7f3; border-bottom: 1px solid #c8e6d4;
+      padding: 0 2rem; display: flex; align-items: center; gap: 12px;
+      height: 52px; position: sticky; top: 64px; z-index: 99;
       font-family: 'DM Sans', sans-serif;
     }
     #bvp-chat-bar-icon {
-      width: 28px; height: 28px; border-radius: 50%;
-      background: #1a5c3e;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
+      width: 28px; height: 28px; border-radius: 50%; background: #1a5c3e;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     }
     #bvp-chat-bar-icon svg { width: 15px; height: 15px; fill: white; }
-    #bvp-chat-bar-label {
-      font-size: 12px; font-weight: 600; color: #1a5c3e;
-      white-space: nowrap; flex-shrink: 0;
-    }
+    #bvp-chat-bar-label { font-size: 12px; font-weight: 600; color: #1a5c3e; white-space: nowrap; flex-shrink: 0; }
     #bvp-chat-bar-input {
-      flex: 1;
-      border: 1.5px solid #c8e6d4;
-      border-radius: 8px;
-      padding: 7px 14px;
-      font-size: 13.5px;
-      font-family: 'DM Sans', sans-serif;
-      outline: none;
-      background: white;
-      color: #0f1214;
-      transition: border-color 0.15s, box-shadow 0.15s;
-      min-width: 0;
+      flex: 1; border: 1.5px solid #c8e6d4; border-radius: 8px; padding: 7px 14px;
+      font-size: 13.5px; font-family: 'DM Sans', sans-serif; outline: none;
+      background: white; color: #0f1214; transition: border-color 0.15s, box-shadow 0.15s; min-width: 0;
     }
-    #bvp-chat-bar-input:focus {
-      border-color: #1a5c3e;
-      box-shadow: 0 0 0 3px rgba(26,92,62,0.08);
-    }
+    #bvp-chat-bar-input:focus { border-color: #1a5c3e; box-shadow: 0 0 0 3px rgba(26,92,62,0.08); }
     #bvp-chat-bar-input::placeholder { color: #7a8290; }
     #bvp-chat-bar-send {
-      background: #1a5c3e; border: none; border-radius: 8px;
-      width: 34px; height: 34px; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
+      background: #1a5c3e; border: none; border-radius: 8px; width: 34px; height: 34px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
       flex-shrink: 0; transition: background 0.15s;
     }
     #bvp-chat-bar-send:hover { background: #2a8558; }
     #bvp-chat-bar-send:disabled { background: #b0c4b8; cursor: not-allowed; }
     #bvp-chat-bar-send svg { width: 15px; height: 15px; fill: white; }
-
     #bvp-chat-panel {
-      position: fixed;
-      top: 116px;
-      left: 0; right: 0;
-      z-index: 98;
-      display: flex;
-      justify-content: center;
-      pointer-events: none;
+      position: fixed; top: 116px; left: 0; right: 0; z-index: 98;
+      display: flex; justify-content: center; pointer-events: none;
     }
     #bvp-chat-panel-inner {
-      background: white;
-      border: 1px solid #c8e6d4;
-      border-top: none;
-      border-radius: 0 0 16px 16px;
-      box-shadow: 0 12px 40px rgba(0,0,0,0.12);
-      width: 100%;
-      max-width: 860px;
-      max-height: 480px;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      font-family: 'DM Sans', sans-serif;
-      pointer-events: all;
-      opacity: 0;
-      transform: translateY(-8px);
-      transition: opacity 0.2s, transform 0.2s;
+      background: white; border: 1px solid #c8e6d4; border-top: none;
+      border-radius: 0 0 16px 16px; box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+      width: 100%; max-width: 860px; max-height: 480px;
+      display: flex; flex-direction: column; overflow: hidden;
+      font-family: 'DM Sans', sans-serif; pointer-events: all;
+      opacity: 0; transform: translateY(-8px); transition: opacity 0.2s, transform 0.2s;
     }
-    #bvp-chat-panel-inner.open {
-      opacity: 1; transform: translateY(0);
-    }
+    #bvp-chat-panel-inner.open { opacity: 1; transform: translateY(0); }
     #bvp-chat-messages {
-      flex: 1; overflow-y: auto;
-      padding: 20px 24px;
-      display: flex; flex-direction: column; gap: 14px;
-      background: #f7f4ef;
+      flex: 1; overflow-y: auto; padding: 20px 24px;
+      display: flex; flex-direction: column; gap: 14px; background: #f7f4ef;
     }
     .bvp-msg { display: flex; flex-direction: column; max-width: 80%; }
     .bvp-msg.user    { align-self: flex-end;   align-items: flex-end; }
     .bvp-msg.assistant { align-self: flex-start; align-items: flex-start; }
-    .bvp-msg-bubble {
-      padding: 10px 16px; border-radius: 12px;
-      font-size: 13.5px; line-height: 1.6;
-    }
-    .bvp-msg.user .bvp-msg-bubble {
-      background: #1a5c3e; color: white; border-bottom-right-radius: 4px;
-    }
-    .bvp-msg.assistant .bvp-msg-bubble {
-      background: white; color: #0f1214;
-      border-bottom-left-radius: 4px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
-    }
-    .bvp-msg-sender {
-      font-size: 11px; color: #7a8290; margin-bottom: 4px;
-      font-family: 'DM Mono', monospace;
-    }
+    .bvp-msg-bubble { padding: 10px 16px; border-radius: 12px; font-size: 13.5px; line-height: 1.6; }
+    .bvp-msg.user .bvp-msg-bubble { background: #1a5c3e; color: white; border-bottom-right-radius: 4px; }
+    .bvp-msg.assistant .bvp-msg-bubble { background: white; color: #0f1214; border-bottom-left-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+    .bvp-msg-sender { font-size: 11px; color: #7a8290; margin-bottom: 4px; font-family: 'DM Mono', monospace; }
     .bvp-typing {
-      display: flex; align-items: center; gap: 4px;
-      padding: 10px 14px; background: white;
-      border-radius: 12px; border-bottom-left-radius: 4px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
-      align-self: flex-start;
+      display: flex; align-items: center; gap: 4px; padding: 10px 14px;
+      background: white; border-radius: 12px; border-bottom-left-radius: 4px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07); align-self: flex-start;
     }
-    .bvp-typing span {
-      width: 7px; height: 7px; background: #3da272;
-      border-radius: 50%; animation: bvp-bounce 1.2s infinite;
-    }
+    .bvp-typing span { width: 7px; height: 7px; background: #3da272; border-radius: 50%; animation: bvp-bounce 1.2s infinite; }
     .bvp-typing span:nth-child(2) { animation-delay: 0.2s; }
     .bvp-typing span:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes bvp-bounce {
-      0%,60%,100% { transform: translateY(0); }
-      30%         { transform: translateY(-5px); }
-    }
+    @keyframes bvp-bounce { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-5px); } }
     #bvp-chat-suggestions {
-      display: flex; flex-wrap: wrap; gap: 8px;
-      padding: 14px 24px;
-      background: #f7f4ef;
-      border-top: 1px solid #ede9e2;
+      display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 24px;
+      background: #f7f4ef; border-top: 1px solid #ede9e2;
     }
     .bvp-suggestion {
-      background: white; border: 1.5px solid #c8e6d4;
-      border-radius: 20px; padding: 5px 14px;
-      font-size: 12px; color: #1a5c3e; cursor: pointer;
-      font-family: 'DM Sans', sans-serif;
-      transition: border-color 0.15s, background 0.15s;
-      white-space: nowrap;
+      background: white; border: 1.5px solid #c8e6d4; border-radius: 20px;
+      padding: 5px 14px; font-size: 12px; color: #1a5c3e; cursor: pointer;
+      font-family: 'DM Sans', sans-serif; transition: border-color 0.15s, background 0.15s; white-space: nowrap;
     }
     .bvp-suggestion:hover { border-color: #1a5c3e; background: #e8f5ee; }
     #bvp-chat-panel-footer {
-      padding: 10px 24px; background: white;
-      border-top: 1px solid #ede9e2;
+      padding: 10px 24px; background: white; border-top: 1px solid #ede9e2;
       display: flex; align-items: center; justify-content: space-between;
     }
     #bvp-chat-clear, #bvp-chat-close-panel {
-      font-size: 12px; color: #7a8290; background: none;
-      border: none; cursor: pointer;
-      font-family: 'DM Sans', sans-serif; padding: 4px 0;
-      transition: color 0.15s;
+      font-size: 12px; color: #7a8290; background: none; border: none;
+      cursor: pointer; font-family: 'DM Sans', sans-serif; padding: 4px 0; transition: color 0.15s;
     }
     #bvp-chat-clear:hover { color: #c0392b; }
     #bvp-chat-close-panel:hover { color: #0f1214; }
-    #bvp-chat-overlay {
-      display: none; position: fixed; inset: 0; z-index: 97;
-    }
+    #bvp-chat-overlay { display: none; position: fixed; inset: 0; z-index: 97; }
     #bvp-chat-overlay.active { display: block; }
   `;
   document.head.appendChild(style);
 
-  // ── HTML ─────────────────────────────────────────────────────
   const bar = document.createElement('div');
   bar.id = 'bvp-chat-bar';
   bar.innerHTML = `
@@ -197,7 +121,6 @@
   const overlay = document.createElement('div');
   overlay.id = 'bvp-chat-overlay';
 
-  // ── MOUNT ────────────────────────────────────────────────────
   function mount() {
     const header = document.querySelector('.bvp-header') || document.querySelector('header');
     if (header && header.parentNode) {
@@ -216,7 +139,6 @@
     mount();
   }
 
-  // ── STATE ────────────────────────────────────────────────────
   let isOpen = false, isLoading = false;
   const history = [];
 
@@ -228,7 +150,6 @@
     'Any state regulation updates?',
   ];
 
-  // ── INIT ─────────────────────────────────────────────────────
   function init() {
     const sugEl = document.getElementById('bvp-chat-suggestions');
     SUGGESTIONS.forEach(s => {
@@ -238,7 +159,6 @@
       btn.onclick = () => { openPanel(); sendMessage(s); };
       sugEl.appendChild(btn);
     });
-
     const input = document.getElementById('bvp-chat-bar-input');
     input.addEventListener('focus', openPanel);
     input.addEventListener('keydown', e => {
@@ -251,7 +171,6 @@
     document.getElementById('bvp-chat-overlay').addEventListener('click', closePanel);
   }
 
-  // ── OPEN / CLOSE ─────────────────────────────────────────────
   function openPanel() {
     if (isOpen) return;
     isOpen = true;
@@ -275,7 +194,6 @@
     addMessage('assistant', 'Conversation cleared. What would you like to know?');
   }
 
-  // ── SEND ─────────────────────────────────────────────────────
   function triggerSend() {
     const input = document.getElementById('bvp-chat-bar-input');
     const text = input.value.trim();
@@ -299,6 +217,7 @@
       const { data: { session } } = await bvp.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       const agentId = session.user.id;
+      const accessToken = session.access_token;
 
       const [book, knowledgeDocs] = await Promise.all([
         bvpGetActiveBook(agentId),
@@ -340,12 +259,13 @@ Response guidelines:
 - If a question is within scope but not answered by the book or knowledge base, say so clearly
 - Format lists cleanly when comparing clients or policies`;
 
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      const response = await fetch(BVP_CHAT_PROXY, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
           system: systemPrompt,
           messages: history,
         }),
@@ -368,7 +288,6 @@ Response guidelines:
     document.getElementById('bvp-chat-bar-send').disabled = false;
   }
 
-  // ── UI HELPERS ───────────────────────────────────────────────
   function addMessage(role, content) {
     const el = document.getElementById('bvp-chat-messages');
     const msg = document.createElement('div');
@@ -402,7 +321,6 @@ Response guidelines:
       .replace(/\n/g, '<br>');
   }
 
-  // ── CONTEXT BUILDERS ─────────────────────────────────────────
   function buildBookContext(book, policies) {
     if (!policies || policies.length === 0) return 'Book loaded but no policies found.';
     const totalNPV     = policies.reduce((s, p) => s + (p.curr_npv || 0), 0);
