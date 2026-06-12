@@ -326,6 +326,83 @@ html, body {
 .delta-pill.gold { background: var(--gold-l);   color: var(--gold); }
 .delta-pill.blue { background: var(--blue-l);   color: var(--blue); }
 
+/* ── COHORT TOOLTIP ── */
+.cohort-label-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cohort-info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  font-size: 9px;
+  font-weight: 600;
+  font-family: var(--sans);
+  opacity: 0.45;
+  cursor: pointer;
+  transition: opacity .15s;
+  flex-shrink: 0;
+  line-height: 1;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  vertical-align: middle;
+}
+
+.cohort-info-btn:hover { opacity: 1; }
+
+.npv-card.total .cohort-info-btn { color: rgba(255,255,255,.7); border-color: rgba(255,255,255,.7); }
+
+/* Floating popover */
+#cohort-tooltip {
+  position: fixed;
+  z-index: 500;
+  background: var(--ink);
+  color: #fff;
+  border-radius: 10px;
+  padding: 14px 16px;
+  width: 240px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.18);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity .15s ease, transform .15s ease;
+  font-family: var(--sans);
+}
+
+#cohort-tooltip.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+#cohort-tooltip .tt-title {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  letter-spacing: .01em;
+}
+
+#cohort-tooltip .tt-body {
+  font-size: 12px;
+  color: rgba(255,255,255,.75);
+  line-height: 1.55;
+}
+
+#cohort-tooltip .tt-action {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,.12);
+  font-size: 11px;
+  color: rgba(255,255,255,.5);
+  font-style: italic;
+}
+
 /* ── PART 2: CARRIER TABLE ── */
 .carrier-tabs {
   display: flex;
@@ -732,9 +809,24 @@ function renderNPV() {
   const totalOpp  = getTotalOppNPV(savingsPct);
 
   const cohortConfig = [
-    { pr:1, key:'Save & Switch',  cls:'save-switch',   pillCls:'up'   },
-    { pr:2, key:'Steady Book',    cls:'steady-book',   pillCls:'blue' },
-    { pr:3, key:'Loyalty Watch',  cls:'loyalty-watch', pillCls:'gold' },
+    {
+      pr:1, key:'Save & Switch', cls:'save-switch', pillCls:'up',
+      ttTitle: 'Save & Switch',
+      ttBody:  'Clients likely overpaying on their current carrier. Switching them to a better-priced option retains the relationship and generates a new commission.',
+      ttAction: 'Action: Reach out before renewal with a competitive quote.',
+    },
+    {
+      pr:2, key:'Steady Book', cls:'steady-book', pillCls:'blue',
+      ttTitle: 'Steady Book',
+      ttBody:  'Renewals are stable and competitively priced. No urgent action needed — these clients are low churn risk and good candidates for cross-sell.',
+      ttAction: 'Action: Maintain relationships and look for bundling opportunities.',
+    },
+    {
+      pr:3, key:'Loyalty Watch', cls:'loyalty-watch', pillCls:'gold',
+      ttTitle: 'Loyalty Watch',
+      ttBody:  'Long-tenured clients on aging policies. Loyalty can erode at renewal if they start shopping. A proactive check-in reinforces your value.',
+      ttAction: 'Action: Schedule a policy review call before the renewal date.',
+    },
   ];
 
   grid.innerHTML = `
@@ -762,7 +854,16 @@ function renderNPV() {
       const delta = d.opp - d.current;
       return `
         <div class="npv-card ${c.cls}">
-          <div class="card-cohort">${c.key}</div>
+          <div class="card-cohort">
+            <span class="cohort-label-wrap">
+              ${c.key}
+              <button class="cohort-info-btn"
+                data-tt-title="${c.ttTitle}"
+                data-tt-body="${c.ttBody}"
+                data-tt-action="${c.ttAction}"
+                aria-label="Learn about ${c.key}">i</button>
+            </span>
+          </div>
           <div class="card-label">Current LTV</div>
           <div class="card-value">${fmtK(d.current)}</div>
           <div class="delta-pill ${c.pillCls}">
@@ -782,6 +883,9 @@ function renderNPV() {
       `;
     }).join('')}
   `;
+
+  // Re-bind tooltip listeners after each render
+  bindCohortTooltips();
 }
 
 // ── RENDER PART 2: CARRIER TABLE ──────────────────────────────────────
@@ -1035,6 +1139,44 @@ document.getElementById('discount-rate').addEventListener('input', function() {
   renderAll();
 });
 
+// ── COHORT TOOLTIP LOGIC ──────────────────────────────────────────────
+function bindCohortTooltips() {
+  const tt      = document.getElementById('cohort-tooltip');
+  const ttTitle = document.getElementById('tt-title');
+  const ttBody  = document.getElementById('tt-body');
+  const ttAction= document.getElementById('tt-action');
+
+  document.querySelectorAll('.cohort-info-btn').forEach(btn => {
+    btn.addEventListener('mouseenter', e => {
+      ttTitle.textContent  = btn.dataset.ttTitle;
+      ttBody.textContent   = btn.dataset.ttBody;
+      ttAction.textContent = btn.dataset.ttAction;
+      positionTooltip(e, tt);
+      tt.classList.add('visible');
+    });
+    btn.addEventListener('mousemove', e => positionTooltip(e, tt));
+    btn.addEventListener('mouseleave', () => tt.classList.remove('visible'));
+    btn.addEventListener('focus', e => {
+      ttTitle.textContent  = btn.dataset.ttTitle;
+      ttBody.textContent   = btn.dataset.ttBody;
+      ttAction.textContent = btn.dataset.ttAction;
+      const rect = btn.getBoundingClientRect();
+      tt.style.left = Math.min(rect.left, window.innerWidth - 260) + 'px';
+      tt.style.top  = (rect.bottom + 8) + 'px';
+      tt.classList.add('visible');
+    });
+    btn.addEventListener('blur', () => tt.classList.remove('visible'));
+  });
+}
+
+function positionTooltip(e, tt) {
+  const x = e.clientX + 14;
+  const y = e.clientY + 14;
+  // Keep popover within viewport
+  tt.style.left = Math.min(x, window.innerWidth  - 260) + 'px';
+  tt.style.top  = Math.min(y, window.innerHeight - 160) + 'px';
+}
+
 // ── RENDER ALL ────────────────────────────────────────────────────────
 function renderAll() {
   renderNPV();
@@ -1241,6 +1383,12 @@ function showRefreshBanner() {
   }, 4000);
 }
 </script>
+<div id="cohort-tooltip">
+  <div class="tt-title" id="tt-title"></div>
+  <div class="tt-body"  id="tt-body"></div>
+  <div class="tt-action" id="tt-action"></div>
+</div>
+
 <script src="bvp-chat.js"></script>
 </body>
 </html>
