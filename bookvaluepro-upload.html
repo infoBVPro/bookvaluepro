@@ -1305,11 +1305,11 @@ async function _doUpload(mode, versionName) {
       // Priority: exact carrier+state → carrier only → Generic carrier
       // Generic in Supabase is the true fallback — no hardcoded rates
       const attempts = [
-        r => r.carrier === carrier && r.issued_state === state  && r.enrollment_type === enrollmentType,
-        r => r.carrier === carrier && !r.issued_state           && r.enrollment_type === enrollmentType,
-        r => r.carrier === carrier &&                              r.enrollment_type === enrollmentType,
-        r => r.carrier === 'Generic' && !r.issued_state         && r.enrollment_type === enrollmentType,
-        r => r.carrier === 'Generic' &&                            r.enrollment_type === enrollmentType,
+        r => r.carrier === carrier && r.issued_state === state                              && r.enrollment_type === enrollmentType,
+        r => r.carrier === carrier && (r.issued_state === null || r.issued_state === 'ZZ') && r.enrollment_type === enrollmentType,
+        r => r.carrier === carrier &&                                                          r.enrollment_type === enrollmentType,
+        r => r.carrier === 'Generic' && (r.issued_state === null || r.issued_state === 'ZZ') && r.enrollment_type === enrollmentType,
+        r => r.carrier === 'Generic' &&                                                        r.enrollment_type === enrollmentType,
       ];
       for (const match of attempts) {
         const rows = allComms.filter(match);
@@ -1337,9 +1337,11 @@ async function _doUpload(mode, versionName) {
       // Priority calculated from business rules — not an input field
       const priority = calcPriority(dobStr, effDateStr, currDurYr);
 
-      // Always use Open Enrollment — agents don't know enrollment type
-      const curr_pcts = buildRateArray(carrier, stateCode, 'Open Enrollment');
-      const ren_pcts  = buildRateArray(carrier, stateCode, 'Open Enrollment');
+      // Determine enrollment type from plan type — Plan N / HD gets its own rate schedule
+      const planTypeVal  = row['Plan Type'] || row['plan_type'] || row['PlanType'] || null;
+      const enrollType   = bvpPlanTypeToEnrollment(planTypeVal);
+      const curr_pcts    = buildRateArray(carrier, stateCode, enrollType);
+      const ren_pcts     = buildRateArray(carrier, stateCode, enrollType);
 
       return {
         policy_idx:   i + 1,

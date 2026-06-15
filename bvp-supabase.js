@@ -11,11 +11,28 @@ const bvp = window.supabase.createClient(BVP_URL, BVP_ANON);
 const BVP_ENROLLMENT_TYPES = [
   'Open Enrollment','Underwritten',
   'Federal Guaranteed Issue','State Guaranteed Issue','Disabled',
+  'Plan N / HD',
 ];
 
 const BVP_GI_TYPES = [
   'Federal Guaranteed Issue','State Guaranteed Issue','Disabled',
 ];
+
+// Plan types that use the Plan N / HD commission schedule (26% yrs 1-6, 10% yrs 7-10, 2% yr 11+)
+// Everything else falls back to Open Enrollment (Plan G) rates.
+const BVP_PLAN_N_HD_TYPES = [
+  'plan n', 'plan n hd', 'plan n high deductible',
+  'high deductible', 'hd', 'hdf', 'plan hdf',
+  'high deductible plan f', 'high deductible plan g', 'plan g hd',
+];
+
+// Maps a policy's plan_type string to the correct enrollment_type key for commission lookup.
+// Returns 'Plan N / HD' for Plan N and High Deductible plans, 'Open Enrollment' otherwise.
+function bvpPlanTypeToEnrollment(planType) {
+  if (!planType) return 'Open Enrollment';
+  const normalized = planType.trim().toLowerCase();
+  return BVP_PLAN_N_HD_TYPES.includes(normalized) ? 'Plan N / HD' : 'Open Enrollment';
+}
 
 const BVP_CARRIERS = [
   'AARP/UHC','AETNA','HealthSpring','Humana',
@@ -312,13 +329,14 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
 
   // Rate lookup: carrier + state + enrollment type
   // Priority: exact carrier+state → carrier only → Generic
+  // issued_state of 'ZZ' is treated as a universal fallback (same as null)
   function getRates(carrier, state, enrollmentType) {
     const attempts = [
-      r => r.carrier === carrier && r.issued_state === state  && r.enrollment_type === enrollmentType,
-      r => r.carrier === carrier && !r.issued_state           && r.enrollment_type === enrollmentType,
-      r => r.carrier === carrier &&                              r.enrollment_type === enrollmentType,
-      r => r.carrier === 'Generic' && !r.issued_state         && r.enrollment_type === enrollmentType,
-      r => r.carrier === 'Generic' &&                            r.enrollment_type === enrollmentType,
+      r => r.carrier === carrier && r.issued_state === state        && r.enrollment_type === enrollmentType,
+      r => r.carrier === carrier && (r.issued_state === null || r.issued_state === 'ZZ') && r.enrollment_type === enrollmentType,
+      r => r.carrier === carrier &&                                     r.enrollment_type === enrollmentType,
+      r => r.carrier === 'Generic' && (r.issued_state === null || r.issued_state === 'ZZ') && r.enrollment_type === enrollmentType,
+      r => r.carrier === 'Generic' &&                                   r.enrollment_type === enrollmentType,
     ];
     for (const match of attempts) {
       const rows = comms.filter(match);
@@ -338,12 +356,13 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
   const VALUATION_MONTH = new Date().getMonth() + 1;
 
   return policies.map(p => {
-    const carrier  = p.company      || 'Generic';
-    const state    = p.issued_state || null;
-    const durYr    = p.duration_yr  || 1;
-    const effMonth = p.eff_month    || null;
-    const commPrem = p.comm_prem    || 0;
-    const currPrem = p.curr_prem    || 0;
+    const carrier      = p.company      || 'Generic';
+    const state        = p.issued_state || null;
+    const durYr        = p.duration_yr  || 1;
+    const effMonth     = p.eff_month    || null;
+    const commPrem     = p.comm_prem    || 0;
+    const currPrem     = p.curr_prem    || 0;
+    const enrollType   = bvpPlanTypeToEnrollment(p.plan_type);
 
     // Normalize premium to annual if prem_mode is set
     // (curr_prem should already be annualized from clients page save,
@@ -352,16 +371,17 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
     const annualCurrPrem = currPrem * premMulti;
     const annualCommPrem = commPrem * premMulti;
 
-    const currRates = getRates(carrier, state, 'Open Enrollment');
+    const currRates = getRates(carrier, state, enrollType);
 
     const curr_npv = bvpCalcCurrentNPV(annualCommPrem, durYr, effMonth, currRates, discountPct);
 
     // Renewal NPV: if agent has entered a renewal carrier + premium, use those
-    // Otherwise fall back to savings % estimate off current premium
+    // Otherwise fall back to savings % estimate off current premium.
+    // Renewal always uses the same enrollment type as the current policy.
     let ren_npv;
     if (p.ren_carrier && p.ren_prem != null) {
       const renCarrier = p.ren_carrier;
-      const renRates   = getRates(renCarrier, state, 'Open Enrollment');
+      const renRates   = getRates(renCarrier, state, enrollType);
       // Agent-entered ren_prem is stored as annual; use directly in renewal calc
       // We call a simplified version: ren_prem × rate schedule × discount
       const VALUATION_MONTH = new Date().getMonth() + 1;
@@ -379,7 +399,7 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
       }
       ren_npv = npv * 12;
     } else {
-      const renRates = getRates(carrier, state, 'Open Enrollment');
+      const renRates = getRates(carrier, state, enrollType);
       ren_npv = bvpCalcRenewalNPV(annualCurrPrem, savingsPct, effMonth, renRates, discountPct);
     }
 
@@ -389,8 +409,8 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
 
     // renRatesForOffset: use agent-set renewal carrier rates if available, else current carrier
     const renRatesForOffset = (p.ren_carrier && p.ren_prem != null)
-      ? getRates(p.ren_carrier, state, 'Open Enrollment')
-      : getRates(carrier, state, 'Open Enrollment');
+      ? getRates(p.ren_carrier, state, enrollType)
+      : getRates(carrier, state, enrollType);
 
     const offsetCurrRates = Array(11).fill(0).map((_, i) => {
       if (alreadyRenewed) {
