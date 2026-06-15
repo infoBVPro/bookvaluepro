@@ -657,6 +657,22 @@ td { padding: 12px 16px; vertical-align: middle; }
                 <rect x="4" y="1" width="2" height="6" rx="1" fill="currentColor"/>
               </svg>
             </span></span></th>
+          <th onclick="sortBy('plan_type')" id="th-plan_type"><span class="th-inner">Plan Type<span class="sort-icon">
+              <svg class="icon-bars" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="0" y="0"  width="10" height="2.2" rx="1" fill="currentColor" opacity="0.9"/>
+                <rect x="0" y="3.6" width="7.5" height="2.2" rx="1" fill="currentColor" opacity="0.7"/>
+                <rect x="0" y="7.2" width="5"   height="2.2" rx="1" fill="currentColor" opacity="0.5"/>
+                <rect x="0" y="10.8" width="2.5" height="2.2" rx="1" fill="currentColor" opacity="0.3"/>
+              </svg>
+              <svg class="icon-asc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 1L9 6H1L5 1Z" fill="currentColor"/>
+                <rect x="4" y="6" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+              <svg class="icon-desc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 12L1 7H9L5 12Z" fill="currentColor"/>
+                <rect x="4" y="1" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+            </span></span></th>
           <th onclick="sortBy('dob')" id="th-dob"><span class="th-inner">DOB<span class="sort-icon">
               <svg class="icon-bars" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <rect x="0" y="0"  width="10" height="2.2" rx="1" fill="currentColor" opacity="0.9"/>
@@ -754,22 +770,6 @@ td { padding: 12px 16px; vertical-align: middle; }
               </svg>
             </span></span></th>
           <th onclick="sortBy('curr_npv')" id="th-curr_npv"><span class="th-inner">LTV<span class="sort-icon">
-              <svg class="icon-bars" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="0" y="0"  width="10" height="2.2" rx="1" fill="currentColor" opacity="0.9"/>
-                <rect x="0" y="3.6" width="7.5" height="2.2" rx="1" fill="currentColor" opacity="0.7"/>
-                <rect x="0" y="7.2" width="5"   height="2.2" rx="1" fill="currentColor" opacity="0.5"/>
-                <rect x="0" y="10.8" width="2.5" height="2.2" rx="1" fill="currentColor" opacity="0.3"/>
-              </svg>
-              <svg class="icon-asc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M5 1L9 6H1L5 1Z" fill="currentColor"/>
-                <rect x="4" y="6" width="2" height="6" rx="1" fill="currentColor"/>
-              </svg>
-              <svg class="icon-desc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M5 12L1 7H9L5 12Z" fill="currentColor"/>
-                <rect x="4" y="1" width="2" height="6" rx="1" fill="currentColor"/>
-              </svg>
-            </span></span></th>
-          <th onclick="sortBy('plan_type')" id="th-plan_type"><span class="th-inner">Plan Type<span class="sort-icon">
               <svg class="icon-bars" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <rect x="0" y="0"  width="10" height="2.2" rx="1" fill="currentColor" opacity="0.9"/>
                 <rect x="0" y="3.6" width="7.5" height="2.2" rx="1" fill="currentColor" opacity="0.7"/>
@@ -1005,6 +1005,7 @@ function renderTable() {
       <td>${priorityBadge(c.priority, c.priority_override != null)}</td>
       <td><span class="carrier-tag">${c.company || '—'}</span></td>
       <td>${c.issued_state || '—'}</td>
+      <td>${c.plan_type ? `<span class="carrier-tag">${c.plan_type}</span>` : '—'}</td>
       <td>${c.dob ? formatDate(c.dob) : '—'}</td>
       <td>${c.eff_month ? monthName(outreachMonth(c.eff_month)) : '—'}</td>
       <td>${c.eff_month ? monthName(c.eff_month) : '—'}</td>
@@ -1012,7 +1013,6 @@ function renderTable() {
       <td class="premium-val">${c.curr_prem ? '$' + c.curr_prem.toFixed(2) : '—'}</td>
       <td class="premium-val">${c.comm_prem ? '$' + c.comm_prem.toFixed(2) : '—'}</td>
       <td class="npv-val">${c.curr_npv != null ? '$' + Math.round(c.curr_npv).toLocaleString() : '—'}</td>
-      <td>${c.plan_type ? `<span class="carrier-tag">${c.plan_type}</span>` : '—'}</td>
       <td class="contact-cell">${contactCell(c)}</td>
     </tr>
   `).join('');
