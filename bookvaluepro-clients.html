@@ -556,6 +556,9 @@ td { padding: 12px 16px; vertical-align: middle; }
     <select class="filter-select" id="filter-state">
       <option value="">All states</option>
     </select>
+    <select class="filter-select" id="filter-plan-type">
+      <option value="">All plan types</option>
+    </select>
     <div class="toolbar-right">
       <button class="btn-clear" onclick="clearFilters()">Clear filters</button>
       <button class="btn-export" onclick="openExportModal()">
@@ -766,6 +769,22 @@ td { padding: 12px 16px; vertical-align: middle; }
                 <rect x="4" y="1" width="2" height="6" rx="1" fill="currentColor"/>
               </svg>
             </span></span></th>
+          <th onclick="sortBy('plan_type')" id="th-plan_type"><span class="th-inner">Plan Type<span class="sort-icon">
+              <svg class="icon-bars" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="0" y="0"  width="10" height="2.2" rx="1" fill="currentColor" opacity="0.9"/>
+                <rect x="0" y="3.6" width="7.5" height="2.2" rx="1" fill="currentColor" opacity="0.7"/>
+                <rect x="0" y="7.2" width="5"   height="2.2" rx="1" fill="currentColor" opacity="0.5"/>
+                <rect x="0" y="10.8" width="2.5" height="2.2" rx="1" fill="currentColor" opacity="0.3"/>
+              </svg>
+              <svg class="icon-asc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 1L9 6H1L5 1Z" fill="currentColor"/>
+                <rect x="4" y="6" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+              <svg class="icon-desc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 12L1 7H9L5 12Z" fill="currentColor"/>
+                <rect x="4" y="1" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+            </span></span></th>
           <th>Contact</th>
         </tr>
       </thead>
@@ -890,14 +909,18 @@ let bvpBook = null;
 
 // ── FILTER OPTIONS ────────────────────────────────────────────────────
 function buildFilterOptions() {
-  const carriers = [...new Set(allClients.map(c => c.company).filter(Boolean))].sort();
-  const states   = [...new Set(allClients.map(c => c.issued_state).filter(Boolean))].sort();
+  const carriers  = [...new Set(allClients.map(c => c.company).filter(Boolean))].sort();
+  const states    = [...new Set(allClients.map(c => c.issued_state).filter(Boolean))].sort();
+  const planTypes = [...new Set(allClients.map(c => c.plan_type).filter(Boolean))].sort();
 
   const carrierSel = document.getElementById('filter-carrier');
   carriers.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; carrierSel.appendChild(o); });
 
   const stateSel = document.getElementById('filter-state');
   states.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; stateSel.appendChild(o); });
+
+  const planTypeSel = document.getElementById('filter-plan-type');
+  planTypes.forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; planTypeSel.appendChild(o); });
 }
 
 // ── FILTER + SORT ─────────────────────────────────────────────────────
@@ -906,11 +929,13 @@ function applyFilters() {
   const carrier  = document.getElementById('filter-carrier').value;
   const priority = document.getElementById('filter-priority').value;
   const state    = document.getElementById('filter-state').value;
+  const planType = document.getElementById('filter-plan-type').value;
 
   filtered = allClients.filter(c => {
     if (carrier  && c.company      !== carrier)           return false;
     if (priority && String(c.priority) !== priority)      return false;
     if (state    && c.issued_state  !== state)            return false;
+    if (planType && c.plan_type     !== planType)         return false;
     if (search) {
       const nameMatch   = c.name && c.name.toLowerCase().includes(search);
       const policyMatch = String(c.policy_idx).includes(search);
@@ -949,6 +974,7 @@ function clearFilters() {
   document.getElementById('filter-carrier').value = '';
   document.getElementById('filter-priority').value = '';
   document.getElementById('filter-state').value = '';
+  document.getElementById('filter-plan-type').value = '';
   applyFilters();
 }
 
@@ -986,6 +1012,7 @@ function renderTable() {
       <td class="premium-val">${c.curr_prem ? '$' + c.curr_prem.toFixed(2) : '—'}</td>
       <td class="premium-val">${c.comm_prem ? '$' + c.comm_prem.toFixed(2) : '—'}</td>
       <td class="npv-val">${c.curr_npv != null ? '$' + Math.round(c.curr_npv).toLocaleString() : '—'}</td>
+      <td>${c.plan_type ? `<span class="carrier-tag">${c.plan_type}</span>` : '—'}</td>
       <td class="contact-cell">${contactCell(c)}</td>
     </tr>
   `).join('');
@@ -1154,6 +1181,12 @@ function renderPanel() {
           <div class="field-value">Year ${c.duration_yr || '—'}</div>
         </div>
         <div class="field-group">
+          <div class="field-label">Plan Type</div>
+          ${editMode
+            ? `<input class="field-input" id="edit-plan_type" value="${c.plan_type || ''}" placeholder="e.g. Plan G"/>`
+            : `<div class="field-value">${c.plan_type ? `<span class="carrier-tag">${c.plan_type}</span>` : '—'}</div>`}
+        </div>
+        <div class="field-group">
           <div class="field-label">Current Premium</div>
           <div class="field-value mono">${fmt$(c.curr_prem)}</div>
         </div>
@@ -1284,6 +1317,7 @@ async function saveClient() {
     last_name:   document.getElementById('edit-last_name')?.value.trim()  || null,
     email:       document.getElementById('edit-email')?.value.trim()      || null,
     phone:       document.getElementById('edit-phone')?.value.trim()      || null,
+    plan_type:   document.getElementById('edit-plan_type')?.value.trim()  || null,
     prem_mode:   premMode,
     ren_carrier: renCarrier || null,
     ren_prem:    annualRenPrem,
@@ -1370,7 +1404,7 @@ function runExport() {
 
     const headers = [
       'Policy #', 'First Name', 'Last Name', 'Date of Birth', 'Attained Age',
-      'Carrier', 'State', 'Priority', 'Priority Label',
+      'Carrier', 'State', 'Plan Type', 'Priority', 'Priority Label',
       'Eff. Month', 'Duration Year',
       'Current Premium', 'Comm. Premium',
       'Current LTV', 'Renewal LTV',
@@ -1391,6 +1425,7 @@ function runExport() {
         c.attained_age || '',
         c.company        || '',
         c.issued_state   || '',
+        c.plan_type      || '',
         c.priority       || '',
         PRIORITY_LABELS[c.priority] || '',
         c.eff_month ? MONTHS_FULL[c.eff_month - 1] : '',
@@ -1409,11 +1444,11 @@ function runExport() {
     var lastDataRow  = dataLen + 1;
 
     ws_data.push([
-      'SUMMARY', '', '', '', '', '', '', '', '', '', '',
-      { f: 'SUM(L' + firstDataRow + ':L' + lastDataRow + ')' },
+      'SUMMARY', '', '', '', '', '', '', '', '', '', '', '',
       { f: 'SUM(M' + firstDataRow + ':M' + lastDataRow + ')' },
       { f: 'SUM(N' + firstDataRow + ':N' + lastDataRow + ')' },
       { f: 'SUM(O' + firstDataRow + ':O' + lastDataRow + ')' },
+      { f: 'SUM(P' + firstDataRow + ':P' + lastDataRow + ')' },
       '', '',
     ]);
 
@@ -1421,7 +1456,7 @@ function runExport() {
 
     ws['!cols'] = [
       {wch:8},{wch:14},{wch:14},{wch:13},{wch:12},
-      {wch:16},{wch:7},{wch:8},{wch:16},
+      {wch:16},{wch:7},{wch:10},{wch:8},{wch:16},
       {wch:12},{wch:13},
       {wch:16},{wch:16},
       {wch:14},{wch:14},

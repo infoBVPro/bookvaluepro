@@ -789,6 +789,7 @@ const OPTIONAL_FIELDS = [
   { key: 'LastName',  label: 'Last Name',   required: false },
   { key: 'Email',     label: 'Email',       required: false },
   { key: 'Phone',     label: 'Phone',       required: false },
+  { key: 'PlanType',  label: 'Plan Type',   required: false },
 ];
 
 const ALL_FIELDS = [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS];
@@ -805,6 +806,7 @@ const ALIASES = {
   LastName:     ['last name','lastname','last_name','lname'],
   Email:        ['email','email address','e-mail'],
   Phone:        ['phone','phone number','phonenumber','phone_number','telephone'],
+  PlanType:     ['plan type','plantype','plan_type','plan','med supp plan','medsupplan','policy plan','plan letter'],
 };
 
 // ── STATE ──────────────────────────────────────────────────────────────────
@@ -1347,6 +1349,7 @@ async function _doUpload(mode, versionName) {
         attained_age: attainedAge(dobStr),
         email:        row['Email'] || row['email'] || null,
         phone:        row['Phone'] || row['phone'] || null,
+        plan_type:    row['Plan Type'] || row['plan_type'] || row['PlanType'] || null,
         company:      carrier,
         issued_state: stateCode,
         eff_month:    effMonth(effDateStr),
@@ -1403,12 +1406,12 @@ loadSample.addEventListener('click', e => {
   e.preventDefault();
   // Build a sample CSV matching the template structure
   const csv = [
-    'DOB,Company,IssuedState,EffectiveDte,Commissionable Premium,Current Premium,First Name,Last Name,Email',
-    '1958-04-15,AARP/UHC,FL,2021-01-01,185.25,254.31,Jane,Smith,jane@example.com',
-    '1951-09-22,AETNA,NJ,2019-06-01,174.33,213.83,Robert,Davis,',
-    '1947-03-10,AETNA,NJ,2015-01-01,267.84,681.95,Margaret,Chen,',
-    '1960-11-05,AARP/UHC,CA,2022-03-01,228.50,290.25,Thomas,Wilson,tom@email.com',
-    '1955-07-18,AETNA,PA,2018-01-01,152.50,324.58,,,',
+    'DOB,Company,IssuedState,EffectiveDte,Commissionable Premium,Current Premium,First Name,Last Name,Email,Plan Type',
+    '1958-04-15,AARP/UHC,FL,2021-01-01,185.25,254.31,Jane,Smith,jane@example.com,Plan G',
+    '1951-09-22,AETNA,NJ,2019-06-01,174.33,213.83,Robert,Davis,,Plan N',
+    '1947-03-10,AETNA,NJ,2015-01-01,267.84,681.95,Margaret,Chen,,Plan F',
+    '1960-11-05,AARP/UHC,CA,2022-03-01,228.50,290.25,Thomas,Wilson,tom@email.com,Plan G',
+    '1955-07-18,AETNA,PA,2018-01-01,152.50,324.58,,,Plan G',
   ].join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
   const f = new File([blob], 'sample_book.csv', { type: 'text/csv' });
