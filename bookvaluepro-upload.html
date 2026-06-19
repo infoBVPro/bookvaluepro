@@ -1297,27 +1297,28 @@ async function _doUpload(mode, versionName) {
 
     // ── Load commission rates from Supabase once ──────────────────
     showParsing(true, 'Loading commission schedules…');
-    const allComms = await bvpGetCommissions(bvpSession.user.id);
+    const allComms = await bvpGetCommissionRates(bvpSession.user.id);
 
-    // ── Hardcoded fallback rates by carrier (Open Enrollment) ────
-    // Used when Supabase commission lookup returns zeros
-    function buildRateArray(carrier, state, enrollmentType) {
-      // Priority: exact carrier+state → carrier only → Generic carrier
-      // Generic in Supabase is the true fallback — no hardcoded rates
+    // ── Build 11-slot rate array from commission_rates data ───────
+    // Fallback chain: exact carrier+state+plan → carrier+plan → Generic+state+plan → Generic+plan
+    // NPV uses years 1-11 only; data has 20 years but we cap at index 10.
+    function buildRateArray(carrier, state, plan, enrollmentType) {
       const attempts = [
-        r => r.carrier === carrier && r.issued_state === state                              && r.enrollment_type === enrollmentType,
-        r => r.carrier === carrier && (r.issued_state === null || r.issued_state === 'ZZ') && r.enrollment_type === enrollmentType,
-        r => r.carrier === carrier &&                                                          r.enrollment_type === enrollmentType,
-        r => r.carrier === 'Generic' && (r.issued_state === null || r.issued_state === 'ZZ') && r.enrollment_type === enrollmentType,
-        r => r.carrier === 'Generic' &&                                                        r.enrollment_type === enrollmentType,
+        r => r.carrier === carrier  && r.issued_state === state && r.plan === plan && r.enrollment_type === enrollmentType,
+        r => r.carrier === carrier  && r.issued_state === state && r.plan === plan,
+        r => r.carrier === carrier  && r.plan === plan          && r.enrollment_type === enrollmentType,
+        r => r.carrier === carrier  && r.plan === plan,
+        r => r.carrier === 'Generic' && r.issued_state === state && r.plan === plan && r.enrollment_type === enrollmentType,
+        r => r.carrier === 'Generic' && r.plan === plan          && r.enrollment_type === enrollmentType,
+        r => r.carrier === 'Generic' && r.plan === plan,
       ];
       for (const match of attempts) {
         const rows = allComms.filter(match);
         if (rows.length > 0) {
           const rates = Array(11).fill(0);
           rows.forEach(r => {
-            const idx = Math.min(Math.max((r.duration_yr || 1) - 1, 0), 10);
-            rates[idx] = parseFloat(r.rate) || 0;
+            const idx = (r.duration_yr || 1) - 1;
+            if (idx >= 0 && idx < 11) rates[idx] = parseFloat(r.rate) || 0;
           });
           if (rates.some(r => r > 0)) return rates;
         }
@@ -1337,11 +1338,11 @@ async function _doUpload(mode, versionName) {
       // Priority calculated from business rules — not an input field
       const priority = calcPriority(dobStr, effDateStr, currDurYr);
 
-      // Determine enrollment type from plan type — Plan N / HD gets its own rate schedule
+      // Normalize plan type and look up the correct commission rate schedule
       const planTypeVal  = row['Plan Type'] || row['plan_type'] || row['PlanType'] || null;
-      const enrollType   = bvpPlanTypeToEnrollment(planTypeVal);
-      const curr_pcts    = buildRateArray(carrier, stateCode, enrollType);
-      const ren_pcts     = buildRateArray(carrier, stateCode, enrollType);
+      const plan         = bvpNormalizePlan(planTypeVal);
+      const curr_pcts    = buildRateArray(carrier, stateCode, plan, 'OpenEnrollment');
+      const ren_pcts     = buildRateArray(carrier, stateCode, plan, 'OpenEnrollment');
 
       return {
         policy_idx:   i + 1,
