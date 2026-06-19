@@ -9,29 +9,27 @@ const bvp = window.supabase.createClient(BVP_URL, BVP_ANON);
 
 // ── CONSTANTS ─────────────────────────────────────────────────
 const BVP_ENROLLMENT_TYPES = [
-  'Open Enrollment','Underwritten',
-  'Federal Guaranteed Issue','State Guaranteed Issue','Disabled',
-  'Plan N / HD',
+  'OpenEnrollment', 'Underwritten',
+  'FederalGuaranteedIssue', 'StateGuaranteedIssue', 'Disabled',
 ];
 
 const BVP_GI_TYPES = [
-  'Federal Guaranteed Issue','State Guaranteed Issue','Disabled',
+  'FederalGuaranteedIssue', 'StateGuaranteedIssue', 'Disabled',
 ];
 
-// Plan types that use the Plan N / HD commission schedule (26% yrs 1-6, 10% yrs 7-10, 2% yr 11+)
-// Everything else falls back to Open Enrollment (Plan G) rates.
-const BVP_PLAN_N_HD_TYPES = [
-  'plan n', 'plan n hd', 'plan n high deductible',
-  'high deductible', 'hd', 'hdf', 'plan hdf',
-  'high deductible plan f', 'high deductible plan g', 'plan g hd',
-];
-
-// Maps a policy's plan_type string to the correct enrollment_type key for commission lookup.
-// Returns 'Plan N / HD' for Plan N and High Deductible plans, 'Open Enrollment' otherwise.
-function bvpPlanTypeToEnrollment(planType) {
-  if (!planType) return 'Open Enrollment';
-  const normalized = planType.trim().toLowerCase();
-  return BVP_PLAN_N_HD_TYPES.includes(normalized) ? 'Plan N / HD' : 'Open Enrollment';
+// Maps a policy's plan_type string to the commission_rates plan key.
+// Keys match the plans table: 'A', 'F', 'G', 'HD F', 'HD G', 'N'
+// Falls back to 'G' (most common) when plan_type is missing or unrecognized.
+function bvpNormalizePlan(planType) {
+  if (!planType) return 'G';
+  const p = planType.trim().toUpperCase();
+  if (p === 'A'    || p === 'PLAN A')                                                  return 'A';
+  if (p === 'F'    || p === 'PLAN F')                                                  return 'F';
+  if (p === 'G'    || p === 'PLAN G')                                                  return 'G';
+  if (p === 'N'    || p === 'PLAN N')                                                  return 'N';
+  if (p === 'HD F' || p === 'PLAN HD F' || p === 'HDF' || p === 'HIGH DEDUCTIBLE F')  return 'HD F';
+  if (p === 'HD G' || p === 'PLAN HD G' || p === 'HDG' || p === 'HIGH DEDUCTIBLE G')  return 'HD G';
+  return 'G';
 }
 
 const BVP_CARRIERS = [
@@ -177,89 +175,71 @@ async function bvpGetPolicies(bookId) {
   return data;
 }
 
-// ── COMMISSIONS ───────────────────────────────────────────────
+// ── COMMISSION RATES ──────────────────────────────────────────
 
-// Returns all commission rates — agent overrides win over system defaults
-async function bvpGetCommissions(agentId, state = null, carrier = null) {
-  // Fetch ALL default rates using pagination to bypass the 1000-row limit
+// Returns commission rates from commission_rates table.
+// Fetches system defaults (agent_id IS NULL) + agent overrides for the given agentId.
+// Optionally scoped to specific states and/or carriers for performance.
+async function bvpGetCommissionRates(agentId, states = null, carriers = null) {
   async function fetchAll(baseQuery) {
     const PAGE = 1000;
-    let allRows = [];
-    let from = 0;
+    let allRows = [], from = 0;
     while (true) {
       const { data, error } = await baseQuery.range(from, from + PAGE - 1);
-      if (error) { console.error('bvpGetCommissions fetchAll:', error); break; }
+      if (error) { console.error('bvpGetCommissionRates fetchAll:', error); break; }
       if (!data || data.length === 0) break;
       allRows = allRows.concat(data);
-      if (data.length < PAGE) break; // last page
+      if (data.length < PAGE) break;
       from += PAGE;
     }
     return allRows;
   }
 
-  let defaultBase = bvp.from('commissions').select('*')
-    .eq('is_default', true)
-    .order('carrier').order('enrollment_type').order('duration_yr');
-  if (state)   defaultBase = defaultBase.eq('issued_state', state);
-  if (carrier) defaultBase = defaultBase.eq('carrier', carrier);
+  // System defaults: agent_id IS NULL
+  let defaultQ = bvp.from('commission_rates').select('*')
+    .is('agent_id', null)
+    .order('carrier').order('issued_state').order('plan').order('enrollment_type').order('duration_yr');
+  if (states   && states.length)   defaultQ = defaultQ.in('issued_state', [...states,   'Generic']);
+  if (carriers && carriers.length) defaultQ = defaultQ.in('carrier',      [...carriers, 'Generic']);
 
-  let overrideBase = bvp.from('commissions').select('*')
+  // Agent overrides: rows belonging to this agent
+  let overrideQ = bvp.from('commission_rates').select('*')
     .eq('agent_id', agentId)
-    .eq('is_default', false)
-    .order('carrier').order('enrollment_type').order('duration_yr');
-  if (state)   overrideBase = overrideBase.eq('issued_state', state);
-  if (carrier) overrideBase = overrideBase.eq('carrier', carrier);
+    .order('carrier').order('issued_state').order('plan').order('enrollment_type').order('duration_yr');
+  if (states   && states.length)   overrideQ = overrideQ.in('issued_state', [...states,   'Generic']);
+  if (carriers && carriers.length) overrideQ = overrideQ.in('carrier',      [...carriers, 'Generic']);
 
-  const [defaults, overrides] = await Promise.all([
-    fetchAll(defaultBase),
-    fetchAll(overrideBase),
-  ]);
-
+  const [defaults, overrides] = await Promise.all([fetchAll(defaultQ), fetchAll(overrideQ)]);
   const combined = [...defaults, ...overrides];
 
   if (combined.length === 0) {
-    console.warn('bvpGetCommissions: no data returned — check RLS on commissions table');
-    return [];
+    console.warn('bvpGetCommissionRates: no data returned — check RLS on commission_rates table');
   }
-
-
   return combined;
 }
 
-// Get a single rate via DB function (handles fallback to Generic)
-async function bvpGetRate(agentId, state, carrier, enrollmentType, durationYr) {
-  const { data, error } = await bvp.rpc('get_commission_rate', {
-    p_agent_id:    agentId,
-    p_state:       state,
-    p_carrier:     carrier,
-    p_enrollment:  enrollmentType,
-    p_duration_yr: durationYr,
-  });
-  if (error) { console.error('bvpGetRate:', error); return null; }
-  return data;
-}
-
-// Save an agent override rate
-async function bvpSetCommissionRate(agentId, state, carrier, enrollmentType, durationYr, rate) {
-  const { error } = await bvp.from('commissions').upsert({
+// Save an agent override rate into commission_rates
+async function bvpSetCommissionRate(agentId, carrier, state, plan, enrollmentType, durationYr, rate) {
+  const { error } = await bvp.from('commission_rates').upsert({
     agent_id:        agentId,
-    issued_state:    state,
     carrier:         carrier,
+    carrier_code:    0,
+    issued_state:    state,
+    gi_state:        false,
+    plan:            plan,
     enrollment_type: enrollmentType,
     duration_yr:     durationYr,
     rate:            rate,
-    is_default:      false,
-    updated_at:      new Date().toISOString(),
-  }, { onConflict: 'issued_state,carrier,enrollment_type,duration_yr' });
+  }, { onConflict: 'carrier,issued_state,plan,enrollment_type,duration_yr,agent_id' });
   if (error) { console.error('bvpSetCommissionRate:', error); return false; }
   return true;
 }
 
-// Reset an override back to system default
-async function bvpResetCommissionRate(agentId, state, carrier, enrollmentType, durationYr) {
-  const { error } = await bvp.from('commissions').delete()
-    .eq('agent_id', agentId).eq('issued_state', state).eq('carrier', carrier)
-    .eq('enrollment_type', enrollmentType).eq('duration_yr', durationYr).eq('is_default', false);
+// Delete an agent override — falls back to system default automatically
+async function bvpResetCommissionRate(agentId, carrier, state, plan, enrollmentType, durationYr) {
+  const { error } = await bvp.from('commission_rates').delete()
+    .eq('agent_id', agentId).eq('carrier', carrier).eq('issued_state', state)
+    .eq('plan', plan).eq('enrollment_type', enrollmentType).eq('duration_yr', durationYr);
   if (error) { console.error('bvpResetCommissionRate:', error); return false; }
   return true;
 }
@@ -324,32 +304,38 @@ function bvpCalcRenewalNPV(currPrem, savingsPct, effMonth, commRates, discountPc
 // savingsPct:  avg policyholder savings on switch % (default 10)
 
 async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct = 10) {
-  // Always load fresh commission rates from Supabase
-  const comms = await bvpGetCommissions(agentId);
+  // Collect unique states + carriers from the book for a scoped fetch
+  const states   = [...new Set(policies.map(p => p.issued_state).filter(Boolean))];
+  const carriers = [...new Set(policies.map(p => p.company).filter(Boolean))];
 
-  // Rate lookup: carrier + state + enrollment type
-  // Priority: exact carrier+state → carrier only → Generic
-  // issued_state of 'ZZ' is treated as a universal fallback (same as null)
-  function getRates(carrier, state, enrollmentType) {
+  const comms = await bvpGetCommissionRates(agentId, states, carriers);
+
+  // Rate lookup: carrier + state + plan + enrollment_type → 11-element rate array
+  // Fallback chain: exact carrier+state → carrier+any state → Generic+state → Generic+any
+  // NPV calculations use only years 1-11 (indices 0-10); data goes to 20 but we cap at 11.
+  function getRates(carrier, state, plan, enrollmentType) {
     const attempts = [
-      r => r.carrier === carrier && r.issued_state === state        && r.enrollment_type === enrollmentType,
-      r => r.carrier === carrier && (r.issued_state === null || r.issued_state === 'ZZ') && r.enrollment_type === enrollmentType,
-      r => r.carrier === carrier &&                                     r.enrollment_type === enrollmentType,
-      r => r.carrier === 'Generic' && (r.issued_state === null || r.issued_state === 'ZZ') && r.enrollment_type === enrollmentType,
-      r => r.carrier === 'Generic' &&                                   r.enrollment_type === enrollmentType,
+      r => r.carrier === carrier  && r.issued_state === state && r.plan === plan && r.enrollment_type === enrollmentType,
+      r => r.carrier === carrier  && r.issued_state === state && r.plan === plan,
+      r => r.carrier === carrier  && r.plan === plan          && r.enrollment_type === enrollmentType,
+      r => r.carrier === carrier  && r.plan === plan,
+      r => r.carrier === 'Generic' && r.issued_state === state && r.plan === plan && r.enrollment_type === enrollmentType,
+      r => r.carrier === 'Generic' && r.plan === plan          && r.enrollment_type === enrollmentType,
+      r => r.carrier === 'Generic' && r.plan === plan,
     ];
     for (const match of attempts) {
       const rows = comms.filter(match);
       if (rows.length > 0) {
+        // Build 11-slot array (NPV window). Data has 20 yrs; we only need 1-11.
         const rates = Array(11).fill(0);
         rows.forEach(r => {
-          const idx = Math.min(Math.max((r.duration_yr || 1) - 1, 0), 10);
-          rates[idx] = parseFloat(r.rate) || 0;
+          const idx = (r.duration_yr || 1) - 1;
+          if (idx >= 0 && idx < 11) rates[idx] = parseFloat(r.rate) || 0;
         });
         if (rates.some(r => r > 0)) return rates;
       }
     }
-    console.error('bvpEnrichPolicies: no rates found for', carrier, state, enrollmentType);
+    console.warn('bvpEnrichPolicies: no rates found for', carrier, state, plan, enrollmentType);
     return Array(11).fill(0);
   }
 
@@ -362,55 +348,45 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
     const effMonth     = p.eff_month    || null;
     const commPrem     = p.comm_prem    || 0;
     const currPrem     = p.curr_prem    || 0;
-    const enrollType   = bvpPlanTypeToEnrollment(p.plan_type);
+    const plan         = bvpNormalizePlan(p.plan_type);
+    const enrollType   = 'OpenEnrollment'; // enrollment type stored on policy; default to OE
 
-    // Normalize premium to annual if prem_mode is set
-    // (curr_prem should already be annualized from clients page save,
-    //  but guard here in case legacy data or direct DB entries exist)
-    const premMulti = p.prem_mode === 'monthly' ? 12 : p.prem_mode === 'quarterly' ? 4 : 1;
+    const premMulti      = p.prem_mode === 'monthly' ? 12 : p.prem_mode === 'quarterly' ? 4 : 1;
     const annualCurrPrem = currPrem * premMulti;
     const annualCommPrem = commPrem * premMulti;
 
-    const currRates = getRates(carrier, state, enrollType);
+    const currRates = getRates(carrier, state, plan, enrollType);
 
     const curr_npv = bvpCalcCurrentNPV(annualCommPrem, durYr, effMonth, currRates, discountPct);
 
-    // Renewal NPV: if agent has entered a renewal carrier + premium, use those
-    // Otherwise fall back to savings % estimate off current premium.
-    // Renewal always uses the same enrollment type as the current policy.
+    // Renewal NPV: agent-entered renewal carrier/prem takes priority over savings % estimate.
+    // Renewal restarts at duration 1 rates, same plan and enrollment type.
     let ren_npv;
     if (p.ren_carrier && p.ren_prem != null) {
-      const renCarrier = p.ren_carrier;
-      const renRates   = getRates(renCarrier, state, enrollType);
-      // Agent-entered ren_prem is stored as annual; use directly in renewal calc
-      // We call a simplified version: ren_prem × rate schedule × discount
-      const VALUATION_MONTH = new Date().getMonth() + 1;
-      const alreadyRenewed  = effMonth !== null && effMonth <= VALUATION_MONTH;
+      const renRates      = getRates(p.ren_carrier, state, plan, enrollType);
+      const alreadyRenewed = effMonth !== null && effMonth <= VALUATION_MONTH;
       const r = discountPct / 100;
       let npv = 0;
       for (let i = 0; i < 11; i++) {
-        let rate = 0;
-        if (alreadyRenewed) {
-          rate = i === 0 ? 0 : (renRates[Math.min(i - 1, 10)] || 0);
-        } else {
-          rate = renRates[Math.min(i, 10)] || 0;
-        }
+        const rate = alreadyRenewed
+          ? (i === 0 ? 0 : (renRates[Math.min(i - 1, 10)] || 0))
+          : (renRates[Math.min(i, 10)] || 0);
         npv += (p.ren_prem * rate) / Math.pow(1 + r, i + 1);
       }
       ren_npv = npv * 12;
     } else {
-      const renRates = getRates(carrier, state, enrollType);
+      const renRates = getRates(carrier, state, plan, enrollType);
       ren_npv = bvpCalcRenewalNPV(annualCurrPrem, savingsPct, effMonth, renRates, discountPct);
     }
 
     // Build offset arrays for dashboard engine
-    const alreadyRenewed = effMonth !== null && effMonth <= (new Date().getMonth() + 1);
+    const alreadyRenewed = effMonth !== null && effMonth <= VALUATION_MONTH;
     const nextDur        = durYr + 1;
 
-    // renRatesForOffset: use agent-set renewal carrier rates if available, else current carrier
+    // renRatesForOffset: use agent-set renewal carrier if available, else current carrier
     const renRatesForOffset = (p.ren_carrier && p.ren_prem != null)
-      ? getRates(p.ren_carrier, state, enrollType)
-      : getRates(carrier, state, enrollType);
+      ? getRates(p.ren_carrier, state, plan, enrollType)
+      : getRates(carrier, state, plan, enrollType);
 
     const offsetCurrRates = Array(11).fill(0).map((_, i) => {
       if (alreadyRenewed) {
