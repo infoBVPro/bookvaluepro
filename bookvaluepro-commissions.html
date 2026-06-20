@@ -345,6 +345,9 @@ header {
       <option value="HD G">Plan HD G</option>
       <option value="N">Plan N</option>
     </select>
+    <select class="filter-select" id="filter-enroll" onchange="applyFilters()">
+      <option value="">All enrollment types</option>
+    </select>
     <div class="toolbar-right">
       <div class="view-toggle">
         <button class="view-btn active" id="btn-table-view" onclick="setView('table')">
@@ -431,7 +434,7 @@ let bvpSession   = null;
 let allComms     = [];      // raw rows from commission_rates
 let bookCarriers = [];      // {carrier, state} from agent's book
 let currentView  = 'table';
-let filterCarrier = '', filterState = '', filterPlan = '';
+let filterCarrier = '', filterState = '', filterPlan = '', filterEnroll = '';
 let pendingReset  = null;
 let editingCell   = null;
 
@@ -484,22 +487,27 @@ let editingCell   = null;
 
 // ── BUILD FILTER DROPDOWNS ────────────────────────────────────────────
 function buildFilterOptions() {
-  const carriers = [...new Set(bookCarriers.map(bc => bc.carrier))].sort();
-  const states   = [...new Set(bookCarriers.map(bc => bc.state))].sort();
+  const carriers    = [...new Set(bookCarriers.map(bc => bc.carrier))].sort();
+  const states      = [...new Set(bookCarriers.map(bc => bc.state))].sort();
+  const enrollTypes = [...new Set(allComms.map(r => r.enrollment_type).filter(Boolean))].sort();
 
   const cs = document.getElementById('filter-carrier');
-  // Clear existing options beyond the first
   while (cs.options.length > 1) cs.remove(1);
   carriers.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; cs.appendChild(o); });
 
   const ss = document.getElementById('filter-state');
   while (ss.options.length > 1) ss.remove(1);
   states.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = `${s} — ${stateFullName(s)}`; ss.appendChild(o); });
+
+  const es = document.getElementById('filter-enroll');
+  while (es.options.length > 1) es.remove(1);
+  enrollTypes.forEach(e => { const o = document.createElement('option'); o.value = e; o.textContent = enrollTypeDesc(e); es.appendChild(o); });
 }
 
 function applyFilters() {
   filterCarrier = document.getElementById('filter-carrier').value;
   filterState   = document.getElementById('filter-state').value;
+  filterEnroll  = document.getElementById('filter-enroll').value;
   renderAll();
 }
 
@@ -510,6 +518,9 @@ function setPlanView(plan) {
 
 // ── GROUP DATA ────────────────────────────────────────────────────────
 // Groups: state → carrier → plan → enrollment_type → duration rows
+// NOTE: allComms rows are mostly Generic carrier rows (universal fallback).
+// The carrier filter operates on the book's carriers (display carriers),
+// not r.carrier which is usually 'Generic'.
 function groupedRows() {
   const bookStates = [...new Set(bookCarriers.map(bc => bc.state))].sort();
 
@@ -519,10 +530,11 @@ function groupedRows() {
     stateCarriers.get(bc.state).add(bc.carrier);
   });
 
-  // Apply all filters — plan is now a real data filter
+  // Pre-filter rows by plan and enrollment type (don't filter by carrier here —
+  // carrier filter is applied to display carriers below)
   const filteredRows = allComms.filter(r => {
-    if (filterCarrier && r.carrier !== filterCarrier) return false;
-    if (filterPlan    && r.plan    !== filterPlan)    return false;
+    if (filterPlan   && r.plan            !== filterPlan)   return false;
+    if (filterEnroll && r.enrollment_type !== filterEnroll) return false;
     return true;
   });
 
@@ -531,23 +543,24 @@ function groupedRows() {
   bookStates.forEach(state => {
     if (filterState && state !== filterState) return;
 
+    // If carrier filter is active, only show that carrier in this state
     const carriersInState = stateCarriers.get(state) || new Set();
+    const displayCarriers = filterCarrier
+      ? (carriersInState.has(filterCarrier) ? new Set([filterCarrier]) : new Set())
+      : carriersInState;
+
+    if (displayCarriers.size === 0) return;
+
     const carrierMap = new Map();
 
     filteredRows.forEach(r => {
-      // A row is relevant to this state if:
-      //   (a) it has an exact state match for a carrier in this state, OR
-      //   (b) it is a Generic row (the universal fallback) with a state match
-      // Generic rows provide fallback rates when no carrier-specific row exists.
-      const carrierInState = carriersInState.has(r.carrier);
-      const isGeneric      = r.carrier === 'Generic';
-      const stateMatch     = r.issued_state === state;
-
+      const isGeneric  = r.carrier === 'Generic';
+      const stateMatch = r.issued_state === state;
       if (!stateMatch) return;
-      if (!carrierInState && !isGeneric) return;
+      // Only process Generic rows (carrier-specific overrides would have r.carrier set)
+      if (!isGeneric && !carriersInState.has(r.carrier)) return;
 
-      // For Generic rows, only include if no carrier-specific row exists for this
-      // carrier+plan+enrollment_type+duration_yr combination in this state
+      // Generic rows: expand into each display carrier (respecting carrier filter)
       if (isGeneric) {
         const hasCarrierSpecific = filteredRows.some(cr =>
           carriersInState.has(cr.carrier) && cr.issued_state === state &&
@@ -555,8 +568,7 @@ function groupedRows() {
           cr.duration_yr === r.duration_yr
         );
         if (hasCarrierSpecific) return;
-        // Use each carrier in this state as the display carrier for Generic rows
-        carriersInState.forEach(c => {
+        displayCarriers.forEach(c => {
           if (!carrierMap.has(c)) carrierMap.set(c, new Map());
           const planMap = carrierMap.get(c);
           const planKey = r.plan || 'G';
@@ -569,6 +581,8 @@ function groupedRows() {
         return;
       }
 
+      // Carrier-specific row (agent override or carrier-specific system rate)
+      if (!displayCarriers.has(r.carrier)) return;
       if (!carrierMap.has(r.carrier)) carrierMap.set(r.carrier, new Map());
       const planMap = carrierMap.get(r.carrier);
 
