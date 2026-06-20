@@ -17,6 +17,32 @@ const BVP_GI_TYPES = [
   'FederalGuaranteedIssue', 'StateGuaranteedIssue', 'Disabled',
 ];
 
+// Enrollment type display name map — populated at runtime from enrollment_types table.
+// Keys are camelCase DB values; values are human-readable display names.
+// Falls back to the key itself if not yet loaded.
+const BVP_ENROLL_DISPLAY = {
+  'OpenEnrollment':          'Open Enrollment',
+  'Underwritten':            'Underwritten',
+  'FederalGuaranteedIssue':  'Federal Guaranteed Issue',
+  'StateGuaranteedIssue':    'State Guaranteed Issue',
+  'Disabled':                'Disabled',
+};
+
+// Fetches enrollment_types from Supabase and updates BVP_ENROLL_DISPLAY with DB display_names.
+// Call once at app init. Safe to call multiple times.
+async function bvpLoadEnrollmentTypes() {
+  const { data, error } = await bvp.from('enrollment_types').select('name, display_name');
+  if (error) { console.warn('bvpLoadEnrollmentTypes:', error); return; }
+  data.forEach(row => {
+    if (row.display_name) BVP_ENROLL_DISPLAY[row.name] = row.display_name;
+  });
+}
+
+// Returns the human-readable display name for an enrollment type key.
+function bvpEnrollDisplay(key) {
+  return BVP_ENROLL_DISPLAY[key] || key;
+}
+
 // Maps a policy's plan_type string to the commission_rates plan key.
 // Keys match the plans table: 'A', 'F', 'G', 'HD F', 'HD G', 'N'
 // Falls back to 'G' (most common) when plan_type is missing or unrecognized.
@@ -235,11 +261,14 @@ async function bvpSetCommissionRate(agentId, carrier, state, plan, enrollmentTyp
   return true;
 }
 
-// Delete an agent override — falls back to system default automatically
-async function bvpResetCommissionRate(agentId, carrier, state, plan, enrollmentType, durationYr) {
-  const { error } = await bvp.from('commission_rates').delete()
+// Delete agent overrides — falls back to system defaults automatically.
+// Pass durationYr=null to reset ALL durations for the carrier/state/plan/enrollmentType.
+async function bvpResetCommissionRate(agentId, carrier, state, plan, enrollmentType, durationYr = null) {
+  let q = bvp.from('commission_rates').delete()
     .eq('agent_id', agentId).eq('carrier', carrier).eq('issued_state', state)
-    .eq('plan', plan).eq('enrollment_type', enrollmentType).eq('duration_yr', durationYr);
+    .eq('plan', plan).eq('enrollment_type', enrollmentType);
+  if (durationYr !== null) q = q.eq('duration_yr', durationYr);
+  const { error } = await q;
   if (error) { console.error('bvpResetCommissionRate:', error); return false; }
   return true;
 }

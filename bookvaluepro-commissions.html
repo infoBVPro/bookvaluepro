@@ -152,7 +152,27 @@ header {
 .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); }
 .legend-swatch { width: 12px; height: 12px; border-radius: 3px; }
 
-/* ── ADD CARRIER MODAL ── */
+/* ── PLAN TOGGLE ── */
+.plan-toggle {
+  display: flex; background: var(--light-bg);
+  border: 1.5px solid var(--border); border-radius: 10px;
+  padding: 3px; gap: 2px;
+}
+.plan-btn {
+  padding: 7px 18px; border-radius: 7px; border: none; background: none;
+  font-size: 13px; font-family: var(--sans); font-weight: 500;
+  color: var(--text-muted); cursor: pointer; transition: all 0.18s;
+  white-space: nowrap;
+}
+.plan-btn.active {
+  background: white; color: var(--deep);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10);
+  font-weight: 600;
+}
+.plan-btn.active.plan-g  { color: var(--forest); }
+.plan-btn.active.plan-nh { color: #7c3aed; }
+
+/* ── PLAN TOGGLE ── */
 .modal-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(7,22,13,0.7); backdrop-filter: blur(6px); display: none; align-items: center; justify-content: center; padding: 1rem; }
 .modal-overlay.active { display: flex; }
 .modal { background: white; border-radius: 20px; width: 100%; max-width: 480px; padding: 2rem; box-shadow: 0 40px 80px rgba(0,0,0,0.3); animation: modalIn 0.25s ease; }
@@ -316,13 +336,14 @@ header {
     <select class="filter-select" id="filter-carrier" onchange="applyFilters()">
       <option value="">All carriers</option>
     </select>
-    <select class="filter-select" id="filter-enroll" onchange="applyFilters()">
-      <option value="">All enrollment types</option>
-      <option value="Open Enrollment">Open Enrollment</option>
-      <option value="Underwritten">Underwritten</option>
-      <option value="Federal Guaranteed Issue">Federal Guaranteed Issue</option>
-      <option value="State Guaranteed Issue">State Guaranteed Issue</option>
-      <option value="Disabled">Disabled</option>
+    <select class="filter-select" id="filter-plan" onchange="setPlanView(this.value)" style="font-weight:500;">
+      <option value="">All plans</option>
+      <option value="A">Plan A</option>
+      <option value="F">Plan F</option>
+      <option value="G">Plan G</option>
+      <option value="HD F">Plan HD F</option>
+      <option value="HD G">Plan HD G</option>
+      <option value="N">Plan N</option>
     </select>
     <div class="toolbar-right">
       <div class="view-toggle">
@@ -406,19 +427,22 @@ header {
 
 <script>
 // ── STATE ─────────────────────────────────────────────────────────────
-let bvpSession = null;
-let allComms   = [];      // raw rows from Supabase
-let bookCarriers = [];    // {carrier, state} from agent's book
+let bvpSession   = null;
+let allComms     = [];      // raw rows from commission_rates
+let bookCarriers = [];      // {carrier, state} from agent's book
 let currentView  = 'table';
-let filterCarrier = '', filterState = '', filterEnroll = '';
-let pendingReset = null;  // {carrier, state, enrollType} awaiting confirmation
-let editingCell  = null;  // currently active input
+let filterCarrier = '', filterState = '', filterPlan = '';
+let pendingReset  = null;
+let editingCell   = null;
 
 // ── INIT ──────────────────────────────────────────────────────────────
 (async () => {
   bvpSession = await bvpRequireAuth();
   if (!bvpSession) return;
   document.getElementById('agent-name').textContent = bvpSession.user.email;
+
+  // Load enrollment type display names from DB
+  await bvpLoadEnrollmentTypes();
 
   // Get agent's book to know which carriers/states they have
   const book = await bvpGetActiveBook(bvpSession.user.id);
@@ -441,22 +465,16 @@ let editingCell  = null;  // currently active input
     if (chip) chip.textContent = 'No book uploaded';
   }
 
-  // Load commission rates — filtered to only carriers in agent's book
+  // Load commission rates scoped to carriers/states in agent's book
   const bookCarrierNames = [...new Set(bookCarriers.map(bc => bc.carrier))];
-  console.log('Loading commissions for book carriers:', bookCarrierNames);
+  const bookStateNames   = [...new Set(bookCarriers.map(bc => bc.state))];
 
-  if (bookCarrierNames.length > 0) {
-    // Fetch commissions for each carrier in the book
-    const commsPerCarrier = await Promise.all(
-      bookCarrierNames.map(c => bvpGetCommissions(bvpSession.user.id, null, c))
-    );
-    allComms = commsPerCarrier.flat();
-  } else {
-    allComms = await bvpGetCommissions(bvpSession.user.id);
-  }
-  console.log('Commissions loaded:', allComms.length, 'rows');
-  console.log('Sample row:', allComms[0]);
-  console.log('Book carriers:', bookCarriers);
+  allComms = await bvpGetCommissionRates(
+    bvpSession.user.id,
+    bookStateNames.length   > 0 ? bookStateNames   : null,
+    bookCarrierNames.length > 0 ? bookCarrierNames : null
+  );
+  console.log('Commission rates loaded:', allComms.length, 'rows');
 
   buildFilterOptions();
   document.getElementById('loading-state').style.display = 'none';
@@ -482,52 +500,54 @@ function buildFilterOptions() {
 function applyFilters() {
   filterCarrier = document.getElementById('filter-carrier').value;
   filterState   = document.getElementById('filter-state').value;
-  filterEnroll  = document.getElementById('filter-enroll').value;
+  renderAll();
+}
+
+function setPlanView(plan) {
+  filterPlan = plan;
   renderAll();
 }
 
 // ── GROUP DATA ────────────────────────────────────────────────────────
+// Groups: state → carrier → plan → enrollment_type → duration rows
 function groupedRows() {
-  // Only show states the agent has policies in
   const bookStates = [...new Set(bookCarriers.map(bc => bc.state))].sort();
 
-  // Build a map of which carriers exist per state (from agent's book)
   const stateCarriers = new Map();
   bookCarriers.forEach(bc => {
     if (!stateCarriers.has(bc.state)) stateCarriers.set(bc.state, new Set());
     stateCarriers.get(bc.state).add(bc.carrier);
   });
 
-  // Apply filters
+  // Apply all filters — plan is now a real data filter
   const filteredRows = allComms.filter(r => {
     if (filterCarrier && r.carrier !== filterCarrier) return false;
-    if (filterEnroll && r.enrollment_type !== filterEnroll) return false;
+    if (filterPlan    && r.plan    !== filterPlan)    return false;
     return true;
   });
 
-  // Group by state → carrier → enrollment_type → duration rows
-  // Only include states from the agent's book
   const groups = new Map();
 
   bookStates.forEach(state => {
-    // Apply state filter
     if (filterState && state !== filterState) return;
 
     const carriersInState = stateCarriers.get(state) || new Set();
     const carrierMap = new Map();
 
     filteredRows.forEach(r => {
-      // This row is relevant to this state if:
-      //   (a) it has issued_state === state, OR
-      //   (b) it is a default row (issued_state null) and the carrier is in this state
       const rowMatchesState = r.issued_state === state ||
         (r.issued_state === null && carriersInState.has(r.carrier));
-
       if (!rowMatchesState) return;
+      if (!carriersInState.has(r.carrier) && r.carrier !== 'Generic') return;
       if (!carriersInState.has(r.carrier)) return;
 
       if (!carrierMap.has(r.carrier)) carrierMap.set(r.carrier, new Map());
-      const eMap = carrierMap.get(r.carrier);
+      const planMap = carrierMap.get(r.carrier);
+
+      const planKey = r.plan || 'G';
+      if (!planMap.has(planKey)) planMap.set(planKey, new Map());
+      const eMap = planMap.get(planKey);
+
       if (!eMap.has(r.enrollment_type)) eMap.set(r.enrollment_type, []);
       const existing = eMap.get(r.enrollment_type);
       if (!existing.find(e => e.duration_yr === r.duration_yr)) {
@@ -535,14 +555,14 @@ function groupedRows() {
       }
     });
 
-    // Sort durations within each enrollment type
-    carrierMap.forEach(eMap => {
-      eMap.forEach(rows => rows.sort((a, b) => a.duration_yr - b.duration_yr));
+    // Sort duration rows within each enrollment type
+    carrierMap.forEach(planMap => {
+      planMap.forEach(eMap => {
+        eMap.forEach(rows => rows.sort((a, b) => a.duration_yr - b.duration_yr));
+      });
     });
 
-    if (carrierMap.size > 0) {
-      groups.set(state, { state, carriers: carrierMap });
-    }
+    if (carrierMap.size > 0) groups.set(state, { state, carriers: carrierMap });
   });
 
   return [...groups.values()];
@@ -559,10 +579,7 @@ function renderAll() {
   }
 
   container.innerHTML = '';
-  groups.forEach(group => {
-    const card = buildStateCard(group);
-    container.appendChild(card);
-  });
+  groups.forEach(group => container.appendChild(buildStateCard(group)));
 }
 
 function buildStateCard(group) {
@@ -571,15 +588,15 @@ function buildStateCard(group) {
   card.id = `card-state-${slug(group.state)}`;
 
   const carriers = [...group.carriers.keys()].sort();
-  const hasOverrides = [...group.carriers.values()].some(eMap =>
-    [...eMap.values()].some(rows => rows.some(r => r.is_default === false))
+  const hasOverrides = [...group.carriers.values()].some(planMap =>
+    [...planMap.values()].some(eMap =>
+      [...eMap.values()].some(rows => rows.some(r => r.agent_id !== null))
+    )
   );
 
-  // Count total enrollment types across all carriers
-  const enrollTypes = new Set();
-  group.carriers.forEach(eMap => eMap.forEach((_, et) => enrollTypes.add(et)));
+  const planCount = new Set();
+  group.carriers.forEach(planMap => planMap.forEach((_, p) => planCount.add(p)));
 
-  // Build header
   const header = document.createElement('div');
   header.className = 'carrier-header';
   header.innerHTML = `
@@ -587,7 +604,7 @@ function buildStateCard(group) {
       <div class="carrier-icon" style="font-size:13px;font-weight:700;">${group.state}</div>
       <div>
         <div class="carrier-name">${stateFullName(group.state)}</div>
-        <div class="carrier-meta">${carriers.length} carrier${carriers.length !== 1 ? 's' : ''} · ${enrollTypes.size} enrollment type${enrollTypes.size !== 1 ? 's' : ''}</div>
+        <div class="carrier-meta">${carriers.length} carrier${carriers.length !== 1 ? 's' : ''} · ${planCount.size} plan${planCount.size !== 1 ? 's' : ''}</div>
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:10px;">
@@ -596,31 +613,47 @@ function buildStateCard(group) {
         ${hasOverrides ? '<span class="override-badge">✏️ Custom rates</span>' : ''}
       </div>
       <svg class="chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
-    </div>
-  `;
-  header.onclick = () => { card.classList.toggle('open'); };
+    </div>`;
+  header.onclick = () => card.classList.toggle('open');
 
-  // Build body
   const body = document.createElement('div');
   body.className = 'carrier-body';
 
-  // For each carrier within this state
-  group.carriers.forEach((enrollMap, carrier) => {
+  // State → Carrier → Plan → enrollment types
+  group.carriers.forEach((planMap, carrier) => {
     const carrierDiv = document.createElement('div');
-
-    // Carrier sub-header
     carrierDiv.innerHTML = `
       <div style="padding:10px 1.25rem;background:var(--light-bg);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;">
         <div style="width:28px;height:28px;border-radius:7px;background:var(--mist);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--forest);font-family:var(--mono);flex-shrink:0;">${carrier.substring(0,3).toUpperCase()}</div>
         <span style="font-size:12px;font-weight:600;color:var(--deep);">${carrier}</span>
-      </div>
-    `;
+      </div>`;
 
-    const contentDiv = document.createElement('div');
-    contentDiv.id = `content-${slug(group.state)}-${slug(carrier)}`;
-    contentDiv.appendChild(buildView(carrier, group.state, enrollMap));
+    // Plan sub-sections within carrier
+    const planOrder = ['A','F','G','HD F','HD G','N'];
+    const sortedPlans = [...planMap.keys()].sort((a,b) => {
+      const ai = planOrder.indexOf(a), bi = planOrder.indexOf(b);
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+    });
 
-    carrierDiv.appendChild(contentDiv);
+    sortedPlans.forEach(plan => {
+      const enrollMap = planMap.get(plan);
+      const planDiv = document.createElement('div');
+
+      // Plan sub-header
+      const planHeader = document.createElement('div');
+      planHeader.style.cssText = 'padding:7px 1.25rem;background:#f0f7f3;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;';
+      planHeader.innerHTML = `
+        <span style="font-family:var(--mono);font-size:11px;font-weight:700;background:var(--forest);color:white;padding:2px 9px;border-radius:5px;">Plan ${plan}</span>
+        <span style="font-size:11px;color:var(--text-muted);">${enrollMap.size} enrollment type${enrollMap.size !== 1 ? 's' : ''}</span>`;
+      planDiv.appendChild(planHeader);
+
+      const contentDiv = document.createElement('div');
+      contentDiv.id = `content-${slug(group.state)}-${slug(carrier)}-${slug(plan)}`;
+      contentDiv.appendChild(buildView(carrier, group.state, plan, enrollMap));
+      planDiv.appendChild(contentDiv);
+      carrierDiv.appendChild(planDiv);
+    });
+
     body.appendChild(carrierDiv);
   });
 
@@ -633,33 +666,28 @@ function buildStateCard(group) {
     <div class="legend-item"><div class="legend-swatch" style="background:var(--rate-low);border:1px solid #fca5a5;"></div> Low (1–4%)</div>
     <div class="legend-item"><div class="legend-swatch" style="background:var(--rate-zero);border:1px solid #ddd;"></div> Zero</div>
     <div class="legend-item" style="margin-left:auto;"><span style="border:1.5px solid #f59e0b;border-radius:4px;padding:1px 6px;font-size:10px;color:#92640a;">✏️</span> Custom override</div>
-    <span style="font-size:11px;color:var(--text-muted);">Click any rate to edit</span>
-  `;
+    <span style="font-size:11px;color:var(--text-muted);">Click any rate to edit</span>`;
   body.appendChild(legend);
 
   card.appendChild(header);
   card.appendChild(body);
-
-  // Auto-open first card
   card.classList.add('open');
-
   return card;
 }
 
-function buildView(carrier, state, enrollMap) {
-  if (currentView === 'table') return buildTableView(carrier, state, enrollMap);
-  return buildGridView(carrier, state, enrollMap);
+function buildView(carrier, state, plan, enrollMap) {
+  if (currentView === 'table') return buildTableView(carrier, state, plan, enrollMap);
+  return buildGridView(carrier, state, plan, enrollMap);
 }
 
 // ── TABLE VIEW ────────────────────────────────────────────────────────
-function buildTableView(carrier, state, enrollMap) {
+function buildTableView(carrier, state, plan, enrollMap) {
   const wrap = document.createElement('div');
   wrap.style.overflowX = 'auto';
 
   const table = document.createElement('table');
   table.className = 'rate-table';
 
-  // Header
   table.innerHTML = `<thead><tr>
     <th style="min-width:180px;">Enrollment type</th>
     ${Array.from({length:11},(_,i)=>`<th class="yr-col">Yr ${i+1}</th>`).join('')}
@@ -669,27 +697,27 @@ function buildTableView(carrier, state, enrollMap) {
   const tbody = document.createElement('tbody');
 
   enrollMap.forEach((rows, enrollType) => {
-    const rates = Array(11).fill(null);
-    const overrides = Array(11).fill(false);
+    const rates    = Array(11).fill(null);
+    const isOverride = Array(11).fill(false);
     rows.forEach(r => {
       const idx = (r.duration_yr || 1) - 1;
       if (idx >= 0 && idx < 11) {
-        rates[idx] = r.rate;
-        overrides[idx] = r.is_default === false;
+        rates[idx]     = parseFloat(r.rate);
+        isOverride[idx] = r.agent_id !== null;
       }
     });
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>
-        <div class="enroll-type">${enrollType}</div>
-        <div class="enroll-type-sub">${enrollTypeDesc(enrollType)}</div>
+        <div class="enroll-type">${enrollTypeDesc(enrollType) || enrollType}</div>
+        <div class="enroll-type-sub">${enrollType}</div>
       </td>
       ${rates.map((rate, i) => `
         <td class="rate-cell">
-          <div class="rate-val ${rateClass(rate)} ${overrides[i] ? 'override' : ''}"
-               data-carrier="${carrier}" data-state="${state}"
-               data-enroll="${enrollType}" data-yr="${i+1}" data-rate="${rate}"
+          <div class="rate-val ${rateClass(rate)} ${isOverride[i] ? 'override' : ''}"
+               data-carrier="${carrier}" data-state="${state}" data-plan="${plan}"
+               data-enroll="${enrollType}" data-yr="${i+1}" data-rate="${rate ?? 0}"
                onclick="startEdit(this)">
             ${rate !== null ? (rate * 100).toFixed(1) + '%' : '—'}
           </div>
@@ -697,10 +725,11 @@ function buildTableView(carrier, state, enrollMap) {
       `).join('')}
       <td>
         <div class="row-actions">
-          ${overrides.some(Boolean) ? `<button class="btn-reset-row" onclick="promptReset('${carrier}','${state}','${enrollType}')">↩ Reset to default</button>` : '<span style="font-size:11px;color:var(--text-muted);">Default</span>'}
+          ${isOverride.some(Boolean)
+            ? `<button class="btn-reset-row" onclick="promptReset('${carrier}','${state}','${plan}','${enrollType}')">↩ Reset to default</button>`
+            : '<span style="font-size:11px;color:var(--text-muted);">Default</span>'}
         </div>
-      </td>
-    `;
+      </td>`;
     tbody.appendChild(tr);
   });
 
@@ -710,14 +739,13 @@ function buildTableView(carrier, state, enrollMap) {
 }
 
 // ── GRID VIEW ─────────────────────────────────────────────────────────
-function buildGridView(carrier, state, enrollMap) {
+function buildGridView(carrier, state, plan, enrollMap) {
   const wrap = document.createElement('div');
   wrap.className = 'rate-grid-wrap';
 
   const grid = document.createElement('div');
   grid.className = 'rate-grid';
 
-  // Year headers
   const headerRow = document.createElement('div');
   headerRow.className = 'grid-header-row';
   for (let i = 1; i <= 11; i++) {
@@ -729,11 +757,14 @@ function buildGridView(carrier, state, enrollMap) {
   grid.appendChild(headerRow);
 
   enrollMap.forEach((rows, enrollType) => {
-    const rates = Array(11).fill(null);
-    const overrides = Array(11).fill(false);
+    const rates      = Array(11).fill(null);
+    const isOverride = Array(11).fill(false);
     rows.forEach(r => {
       const idx = (r.duration_yr || 1) - 1;
-      if (idx >= 0 && idx < 11) { rates[idx] = r.rate; overrides[idx] = r.is_default === false; }
+      if (idx >= 0 && idx < 11) {
+        rates[idx]      = parseFloat(r.rate);
+        isOverride[idx] = r.agent_id !== null;
+      }
     });
 
     const row = document.createElement('div');
@@ -741,17 +772,18 @@ function buildGridView(carrier, state, enrollMap) {
 
     const labelDiv = document.createElement('div');
     labelDiv.className = 'grid-row-label';
-    labelDiv.innerHTML = `<div class="grid-row-name">${enrollType}</div><div class="grid-row-sub">${enrollTypeDesc(enrollType)}</div>`;
+    labelDiv.innerHTML = `<div class="grid-row-name">${enrollTypeDesc(enrollType) || enrollType}</div><div class="grid-row-sub">${enrollType}</div>`;
     row.appendChild(labelDiv);
 
     rates.forEach((rate, i) => {
       const cell = document.createElement('div');
-      cell.className = `rate-val ${rateClass(rate)} ${overrides[i] ? 'override' : ''}`;
+      cell.className       = `rate-val ${rateClass(rate)} ${isOverride[i] ? 'override' : ''}`;
       cell.dataset.carrier = carrier;
       cell.dataset.state   = state;
+      cell.dataset.plan    = plan;
       cell.dataset.enroll  = enrollType;
       cell.dataset.yr      = i + 1;
-      cell.dataset.rate    = rate;
+      cell.dataset.rate    = rate ?? 0;
       cell.textContent     = rate !== null ? (rate * 100).toFixed(1) + '%' : '—';
       cell.onclick = () => startEdit(cell);
       row.appendChild(cell);
@@ -813,49 +845,47 @@ async function commitEdit(el, input) {
     return;
   }
 
-  const newRate = raw / 100;
+  const newRate    = raw / 100;
   const carrier    = el.dataset.carrier;
   const state      = el.dataset.state;
+  const plan       = el.dataset.plan;
   const enrollType = el.dataset.enroll;
   const durYr      = parseInt(el.dataset.yr);
 
   el.classList.remove('editing');
-  el.textContent = (newRate * 100).toFixed(1) + '%';
-  el.className = `rate-val ${rateClass(newRate)} override`;
+  el.textContent  = (newRate * 100).toFixed(1) + '%';
+  el.className    = `rate-val ${rateClass(newRate)} override`;
   el.dataset.rate = newRate;
 
-  // Save to Supabase
-  const { error } = await bvp.from('commissions').upsert({
-    agent_id:        bvpSession.user.id,
-    issued_state:    state,
-    carrier:         carrier,
-    enrollment_type: enrollType,
-    duration_yr:     durYr,
-    rate:            newRate,
-    is_default:      false,
-  }, { onConflict: 'agent_id,carrier,enrollment_type,duration_yr' });
+  const ok = await bvpSetCommissionRate(
+    bvpSession.user.id, carrier, state, plan, enrollType, durYr, newRate
+  );
 
-  if (error) {
-    showToast('❌ Failed to save — ' + error.message, true);
+  if (!ok) {
+    showToast('❌ Failed to save rate', true);
   } else {
-    showToast(`✓ Saved ${carrier} Yr ${durYr} → ${(newRate*100).toFixed(1)}%`);
-    // Update local allComms
+    showToast(`✓ Saved ${carrier} Plan ${plan} Yr ${durYr} → ${(newRate*100).toFixed(1)}%`);
+    // Update local state
     const idx = allComms.findIndex(r =>
-      r.carrier === carrier && r.issued_state === state &&
+      r.carrier === carrier && r.issued_state === state && r.plan === plan &&
       r.enrollment_type === enrollType && r.duration_yr === durYr &&
       r.agent_id === bvpSession.user.id
     );
-    if (idx >= 0) { allComms[idx].rate = newRate; allComms[idx].is_default = false; }
-    else { allComms.push({ agent_id: bvpSession.user.id, carrier, issued_state: state, enrollment_type: enrollType, duration_yr: durYr, rate: newRate, is_default: false }); }
+    if (idx >= 0) {
+      allComms[idx].rate = newRate;
+    } else {
+      allComms.push({ agent_id: bvpSession.user.id, carrier, issued_state: state,
+        plan, enrollment_type: enrollType, duration_yr: durYr, rate: newRate });
+    }
   }
 }
 
 // ── RESET TO DEFAULT ──────────────────────────────────────────────────
 let _pendingResetData = null;
-function promptReset(carrier, state, enrollType) {
-  _pendingResetData = { carrier, state, enrollType };
+function promptReset(carrier, state, plan, enrollType) {
+  _pendingResetData = { carrier, state, plan, enrollType };
   document.getElementById('reset-modal-msg').textContent =
-    `This will remove your custom rates for ${carrier} (${state} · ${enrollType}) and restore the system defaults. Your LTV calculations will update on your next dashboard visit.`;
+    `This will remove your custom rates for ${carrier} · Plan ${plan} (${state} · ${enrollType}) and restore the system defaults. Your LTV calculations will update on your next dashboard visit.`;
   document.getElementById('reset-modal').classList.add('active');
 }
 function closeResetModal() {
@@ -865,25 +895,21 @@ function closeResetModal() {
 
 async function confirmReset() {
   if (!_pendingResetData) return;
-  const { carrier, state, enrollType } = _pendingResetData;
+  const { carrier, state, plan, enrollType } = _pendingResetData;
   closeResetModal();
 
-  const { error } = await bvp.from('commissions').delete()
-    .eq('agent_id', bvpSession.user.id)
-    .eq('carrier', carrier)
-    .eq('issued_state', state)
-    .eq('enrollment_type', enrollType)
-    .eq('is_default', false);
+  const ok = await bvpResetCommissionRate(
+    bvpSession.user.id, carrier, state, plan, enrollType, null
+  );
 
-  if (error) {
-    showToast('❌ Reset failed — ' + error.message, true);
+  if (!ok) {
+    showToast('❌ Reset failed', true);
   } else {
-    // Remove overrides from local state
     allComms = allComms.filter(r =>
       !(r.agent_id === bvpSession.user.id && r.carrier === carrier &&
-        r.issued_state === state && r.enrollment_type === enrollType && r.is_default === false)
+        r.issued_state === state && r.plan === plan && r.enrollment_type === enrollType)
     );
-    showToast(`✓ Reset to default for ${carrier} · ${enrollType}`);
+    showToast(`✓ Reset to default for ${carrier} · Plan ${plan} · ${enrollType}`);
     renderAll();
   }
 }
@@ -897,24 +923,27 @@ async function addCarrierState() {
   const state   = document.getElementById('add-state').value;
   if (!carrier || !state) { showToast('⚠️ Please select both a carrier and state', true); return; }
 
-  // Check if already showing
   const exists = allComms.some(r => r.carrier === carrier && r.issued_state === state);
   if (exists) { showToast(`${carrier} · ${state} is already in your list`); closeAddModal(); return; }
 
-  // Load default rates for this carrier from system
-  const { data, error } = await bvp.from('commissions').select('*')
-    .eq('carrier', carrier).eq('is_default', true);
+  // Load system default rates for this carrier from commission_rates (agent_id IS NULL)
+  const { data, error } = await bvp.from('commission_rates').select('*')
+    .is('agent_id', null).eq('carrier', carrier);
 
   if (error || !data?.length) {
-    showToast('⚠️ No default rates found for ' + carrier, true);
-    return;
+    // Fall back to Generic defaults
+    const { data: generic, error: e2 } = await bvp.from('commission_rates').select('*')
+      .is('agent_id', null).eq('carrier', 'Generic');
+    if (e2 || !generic?.length) {
+      showToast('⚠️ No default rates found for ' + carrier, true);
+      return;
+    }
+    generic.forEach(r => allComms.push({ ...r, carrier, issued_state: state, id: null }));
+  } else {
+    data.forEach(r => allComms.push({ ...r, issued_state: state, id: null }));
   }
 
-  // Add to local state with the selected state
-  data.forEach(r => {
-    allComms.push({ ...r, issued_state: state, id: null });
-  });
-
+  bookCarriers.push({ carrier, state });
   closeAddModal();
   buildFilterOptions();
   renderAll();
@@ -954,21 +983,10 @@ function stateFullName(abbr) {
   return names[abbr] || abbr;
 }
 
-function countEnrollTypes(group) {
-  const types = new Set();
-  group.states.forEach(sm => sm.forEach((_, et) => types.add(et)));
-  return types.size;
-}
-
+// enrollTypeDesc — returns human-readable display name via the shared bvpEnrollDisplay map.
+// The map is seeded from enrollment_types.display_name at init time.
 function enrollTypeDesc(type) {
-  const desc = {
-    'Open Enrollment': 'Standard new policy',
-    'Underwritten': 'Health-reviewed application',
-    'Federal Guaranteed Issue': 'Federal GI rights',
-    'State Guaranteed Issue': 'State GI rights',
-    'Disabled': 'Under-65 disabled',
-  };
-  return desc[type] || '';
+  return bvpEnrollDisplay(type);
 }
 
 let _toastTimer = null;
