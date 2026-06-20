@@ -465,15 +465,10 @@ let editingCell   = null;
     if (chip) chip.textContent = 'No book uploaded';
   }
 
-  // Load commission rates scoped to carriers/states in agent's book
-  const bookCarrierNames = [...new Set(bookCarriers.map(bc => bc.carrier))];
-  const bookStateNames   = [...new Set(bookCarriers.map(bc => bc.state))];
-
-  allComms = await bvpGetCommissionRates(
-    bvpSession.user.id,
-    bookStateNames.length   > 0 ? bookStateNames   : null,
-    bookCarrierNames.length > 0 ? bookCarrierNames : null
-  );
+  // Load all system default commission rates + agent overrides.
+  // We don't scope by carrier here because carrier names in the book may differ
+  // slightly from workbook names — groupedRows handles the matching.
+  allComms = await bvpGetCommissionRates(bvpSession.user.id);
   console.log('Commission rates loaded:', allComms.length, 'rows');
 
   buildFilterOptions();
@@ -535,11 +530,39 @@ function groupedRows() {
     const carrierMap = new Map();
 
     filteredRows.forEach(r => {
-      const rowMatchesState = r.issued_state === state ||
-        (r.issued_state === null && carriersInState.has(r.carrier));
-      if (!rowMatchesState) return;
-      if (!carriersInState.has(r.carrier) && r.carrier !== 'Generic') return;
-      if (!carriersInState.has(r.carrier)) return;
+      // A row is relevant to this state if:
+      //   (a) it has an exact state match for a carrier in this state, OR
+      //   (b) it is a Generic row (the universal fallback) with a state match
+      // Generic rows provide fallback rates when no carrier-specific row exists.
+      const carrierInState = carriersInState.has(r.carrier);
+      const isGeneric      = r.carrier === 'Generic';
+      const stateMatch     = r.issued_state === state;
+
+      if (!stateMatch) return;
+      if (!carrierInState && !isGeneric) return;
+
+      // For Generic rows, only include if no carrier-specific row exists for this
+      // carrier+plan+enrollment_type+duration_yr combination in this state
+      if (isGeneric) {
+        const hasCarrierSpecific = filteredRows.some(cr =>
+          carriersInState.has(cr.carrier) && cr.issued_state === state &&
+          cr.plan === r.plan && cr.enrollment_type === r.enrollment_type &&
+          cr.duration_yr === r.duration_yr
+        );
+        if (hasCarrierSpecific) return;
+        // Use each carrier in this state as the display carrier for Generic rows
+        carriersInState.forEach(c => {
+          if (!carrierMap.has(c)) carrierMap.set(c, new Map());
+          const planMap = carrierMap.get(c);
+          const planKey = r.plan || 'G';
+          if (!planMap.has(planKey)) planMap.set(planKey, new Map());
+          const eMap = planMap.get(planKey);
+          if (!eMap.has(r.enrollment_type)) eMap.set(r.enrollment_type, []);
+          const existing = eMap.get(r.enrollment_type);
+          if (!existing.find(e => e.duration_yr === r.duration_yr)) existing.push(r);
+        });
+        return;
+      }
 
       if (!carrierMap.has(r.carrier)) carrierMap.set(r.carrier, new Map());
       const planMap = carrierMap.get(r.carrier);
