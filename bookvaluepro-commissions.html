@@ -434,7 +434,12 @@ let bvpSession   = null;
 let allComms     = [];      // raw rows from commission_rates
 let bookCarriers = [];      // {carrier, state} from agent's book
 let currentView  = 'table';
-let filterCarrier = '', filterState = '', filterPlan = '', filterEnroll = '';
+// Filter state — defaults to Plan G / Underwritten, persisted to localStorage
+const _stored = JSON.parse(localStorage.getItem('bvp_comm_filters') || '{}');
+let filterCarrier = _stored.carrier  || '';
+let filterState   = _stored.state    || '';
+let filterPlan    = _stored.plan     || 'G';
+let filterEnroll  = _stored.enroll   || 'Underwritten';
 let pendingReset  = null;
 let editingCell   = null;
 
@@ -502,17 +507,34 @@ function buildFilterOptions() {
   const es = document.getElementById('filter-enroll');
   while (es.options.length > 1) es.remove(1);
   enrollTypes.forEach(e => { const o = document.createElement('option'); o.value = e; o.textContent = enrollTypeDesc(e); es.appendChild(o); });
+
+  // Reflect current filter state in all dropdowns (handles defaults + persisted values)
+  document.getElementById('filter-carrier').value = filterCarrier;
+  document.getElementById('filter-state').value   = filterState;
+  document.getElementById('filter-plan').value    = filterPlan;
+  document.getElementById('filter-enroll').value  = filterEnroll;
+}
+
+function persistFilters() {
+  localStorage.setItem('bvp_comm_filters', JSON.stringify({
+    carrier: filterCarrier,
+    state:   filterState,
+    plan:    filterPlan,
+    enroll:  filterEnroll,
+  }));
 }
 
 function applyFilters() {
   filterCarrier = document.getElementById('filter-carrier').value;
   filterState   = document.getElementById('filter-state').value;
   filterEnroll  = document.getElementById('filter-enroll').value;
+  persistFilters();
   renderAll();
 }
 
 function setPlanView(plan) {
   filterPlan = plan;
+  persistFilters();
   renderAll();
 }
 
