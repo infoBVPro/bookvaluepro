@@ -465,10 +465,15 @@ let editingCell   = null;
     if (chip) chip.textContent = 'No book uploaded';
   }
 
-  // Load all system default commission rates + agent overrides.
-  // We don't scope by carrier here because carrier names in the book may differ
-  // slightly from workbook names — groupedRows handles the matching.
-  allComms = await bvpGetCommissionRates(bvpSession.user.id);
+  // Load commission rates scoped to states in the agent's book.
+  // We scope by state only (not carrier) so Generic fallback rows are included
+  // regardless of whether carrier names match exactly between the book and workbook.
+  const bookStateNames = [...new Set(bookCarriers.map(bc => bc.state))];
+  allComms = await bvpGetCommissionRates(
+    bvpSession.user.id,
+    bookStateNames.length > 0 ? bookStateNames : null,
+    null  // no carrier filter — let groupedRows handle matching
+  );
   console.log('Commission rates loaded:', allComms.length, 'rows');
 
   buildFilterOptions();

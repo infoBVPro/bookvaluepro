@@ -222,18 +222,30 @@ async function bvpGetCommissionRates(agentId, states = null, carriers = null) {
   }
 
   // System defaults: agent_id IS NULL
+  // When scoping by state, we use an OR filter so that Generic carrier rows
+  // (which provide universal fallback rates) are always included alongside
+  // state-specific rows, regardless of which states are requested.
   let defaultQ = bvp.from('commission_rates').select('*')
     .is('agent_id', null)
     .order('carrier').order('issued_state').order('plan').order('enrollment_type').order('duration_yr');
-  if (states   && states.length)   defaultQ = defaultQ.in('issued_state', [...states,   'Generic']);
-  if (carriers && carriers.length) defaultQ = defaultQ.in('carrier',      [...carriers, 'Generic']);
+  if (states && states.length) {
+    // Fetch rows where issued_state is in the book's states OR carrier is Generic
+    defaultQ = defaultQ.or(`issued_state.in.(${states.join(',')}),carrier.eq.Generic`);
+  }
+  if (carriers && carriers.length) {
+    defaultQ = defaultQ.in('carrier', [...carriers, 'Generic']);
+  }
 
   // Agent overrides: rows belonging to this agent
   let overrideQ = bvp.from('commission_rates').select('*')
     .eq('agent_id', agentId)
     .order('carrier').order('issued_state').order('plan').order('enrollment_type').order('duration_yr');
-  if (states   && states.length)   overrideQ = overrideQ.in('issued_state', [...states,   'Generic']);
-  if (carriers && carriers.length) overrideQ = overrideQ.in('carrier',      [...carriers, 'Generic']);
+  if (states && states.length) {
+    overrideQ = overrideQ.or(`issued_state.in.(${states.join(',')}),carrier.eq.Generic`);
+  }
+  if (carriers && carriers.length) {
+    overrideQ = overrideQ.in('carrier', [...carriers, 'Generic']);
+  }
 
   const [defaults, overrides] = await Promise.all([fetchAll(defaultQ), fetchAll(overrideQ)]);
   const combined = [...defaults, ...overrides];
