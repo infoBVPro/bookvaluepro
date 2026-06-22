@@ -180,12 +180,13 @@ async function bvpUploadBook(agentId, fileName, policies, mode = 'version', vers
       is_active:    true,
       policy_count: policies.length,
     }).select().single();
-    if (error) { console.error('bvpUploadBook insert book error:', error); return null; }
+    if (error) { console.error('bvpUploadBook insert book error:', error); throw new Error('Book insert failed: ' + (error.message || JSON.stringify(error))); }
     bookId = book.id;
   }
 
-  // Bulk insert in chunks of 100
+  // Clear any existing policies for this book, then insert fresh
   const CHUNK = 100;
+  await bvp.from('policies').delete().eq('book_id', bookId);
   for (let i = 0; i < policies.length; i += CHUNK) {
     const chunk = policies.slice(i, i + CHUNK).map(p => ({ ...p, book_id: bookId, agent_id: agentId }));
     const { error } = await bvp.from('policies').insert(chunk);
