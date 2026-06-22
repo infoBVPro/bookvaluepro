@@ -1328,32 +1328,39 @@ async function _doUpload(mode, versionName) {
 
     // ── Build policy records ──────────────────────────────────────
     showParsing(true, 'Building policy records…');
+
+    // Helper: read a value from a row using the user's column mapping
+    const mapped = (row, fieldKey) => {
+      const col = state.mappings[fieldKey];
+      return col ? row[col] : undefined;
+    };
+
     const policies = (state.rows || []).map((row, i) => {
-      const carrier    = row['Company'] || row['company'] || 'Generic';
-      const stateCode  = row['IssuedState'] || row['issued_state'] || row['State'] || null;
-      const dobStr     = parseDate(row['DOB'] || row['dob'] || null);
-      const effDateStr = parseDate(row['EffectiveDte'] || row['effective_date'] || row['EffDate'] || null);
+      const carrier    = mapped(row, 'Company') || 'Generic';
+      const stateCode  = mapped(row, 'IssuedState') || null;
+      const dobStr     = parseDate(mapped(row, 'DOB') || null);
+      const effDateStr = parseDate(mapped(row, 'EffectiveDte') || null);
       const currDurYr  = durationYr(effDateStr);
 
       // Priority calculated from business rules — not an input field
       const priority = calcPriority(dobStr, effDateStr, currDurYr);
 
       // Normalize plan type and look up the correct commission rate schedule
-      const planTypeVal    = row['Plan Type'] || row['plan_type'] || row['PlanType'] || null;
+      const planTypeVal    = mapped(row, 'PlanType') || null;
       const plan           = bvpNormalizePlan(planTypeVal);
-      const enrollmentType = row['Enrollment Type'] || row['enrollment_type'] || 'OpenEnrollment';
+      const enrollmentType = mapped(row, 'EnrollmentType') || 'OpenEnrollment';
       const curr_pcts    = buildRateArray(carrier, stateCode, plan, enrollmentType);
       const ren_pcts     = buildRateArray(carrier, stateCode, plan, enrollmentType);
 
       return {
         policy_idx:      i + 1,
-        first_name:      row['First Name']  || row['first_name']  || null,
-        last_name:       row['Last Name']   || row['last_name']   || null,
+        first_name:      mapped(row, 'FirstName')   || null,
+        last_name:       mapped(row, 'LastName')    || null,
         dob:             dobStr,
         attained_age:    attainedAge(dobStr),
-        email:           row['Email'] || row['email'] || null,
-        phone:           row['Phone'] || row['phone'] || null,
-        plan_type:       row['Plan Type'] || row['plan_type'] || row['PlanType'] || null,
+        email:           mapped(row, 'Email')       || null,
+        phone:           mapped(row, 'Phone')       || null,
+        plan_type:       planTypeVal,
         company:         carrier,
         issued_state:    stateCode,
         eff_month:       effMonth(effDateStr),
@@ -1361,8 +1368,8 @@ async function _doUpload(mode, versionName) {
         enrollment_type: enrollmentType,
         priority,
         calc_priority:   priority,
-        comm_prem:       parseFloat(row['Commissionable Premium'] || row['comm_prem'] || 0),
-        curr_prem:       parseFloat(row['Current Premium'] || row['curr_prem'] || 0),
+        comm_prem:       parseFloat(mapped(row, 'CommPremium') || 0),
+        curr_prem:       parseFloat(mapped(row, 'CurrPremium') || 0),
         curr_pcts,
         ren_pcts,
         curr_npv:        null,
