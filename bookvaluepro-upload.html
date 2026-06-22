@@ -1372,7 +1372,10 @@ async function _doUpload(mode, versionName) {
     const book = await bvpUploadBook(
       bvpSession.user.id,
       state.fileName || 'book.csv',
-      policies
+      policies,
+      mode,
+      versionName,
+      bvpSession.user.email || null
     );
 
     showParsing(false);

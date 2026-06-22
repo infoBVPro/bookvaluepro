@@ -501,14 +501,10 @@ let adminSession = null;
 })();
 
 // ── LOAD ALL USERS ────────────────────────────────────────────
-// Pulls all books rows and groups by agent_id to build user list.
-// We can't access auth.users directly via anon key, so we derive
-// user emails from the books table's agent_id and match session metadata.
 async function loadUsers() {
-  // Fetch all books
   const { data: books, error } = await bvp
     .from('books')
-    .select('agent_id, file_name, version_name, policy_count, uploaded_at, is_active')
+    .select('agent_id, agent_email, file_name, version_name, policy_count, uploaded_at, is_active')
     .order('uploaded_at', { ascending: false });
 
   if (error) {
@@ -516,34 +512,24 @@ async function loadUsers() {
     return;
   }
 
-  // Group by agent_id
+  // Group by agent_id, picking up agent_email wherever it exists
   const byAgent = {};
   (books || []).forEach(b => {
     if (!byAgent[b.agent_id]) {
-      byAgent[b.agent_id] = { agent_id: b.agent_id, books: [], email: null };
+      byAgent[b.agent_id] = { agent_id: b.agent_id, books: [], email: b.agent_email || null };
     }
     byAgent[b.agent_id].books.push(b);
+    // If any book for this agent has an email, use it
+    if (b.agent_email && !byAgent[b.agent_id].email) {
+      byAgent[b.agent_id].email = b.agent_email;
+    }
   });
 
-  // Try to get emails from policies table (agent_id stored there too)
-  // We use a second query to fetch distinct agent emails via the chat log
-  // Since anon key can't access auth.users, we store emails in books via
-  // the session — check if we have an email column, otherwise show UUID
-  // Fetch policies to cross-reference (just need agent_id + any email field)
-  const { data: policyEmails } = await bvp
-    .from('policies')
-    .select('agent_id, email')
-    .not('email', 'is', null)
-    .limit(500);
-
-  // Build agent_id → client email map from policy data (this is client email, not agent)
-  // We'll show agent_id but also try to surface their signup email another way
-  // For now build the user objects
   allUsers = Object.values(byAgent).map(u => {
     const activeBook = u.books.find(b => b.is_active) || u.books[0];
     return {
       agent_id:     u.agent_id,
-      email:        u.email || u.agent_id, // fallback to ID if no email
+      email:        u.email || u.agent_id,
       books:        u.books,
       active_book:  activeBook,
       policy_count: activeBook ? activeBook.policy_count : 0,
@@ -552,15 +538,13 @@ async function loadUsers() {
     };
   });
 
-  // Also try fetching the current admin's own record to confirm emails work
-  // We inject the session email for any matching agent_id
+  // Always show the admin's own email correctly
   allUsers.forEach(u => {
     if (u.agent_id === adminSession.user.id) {
       u.email = adminSession.user.email;
     }
   });
 
-  // Sort by last upload descending
   allUsers.sort((a, b) => new Date(b.last_upload || 0) - new Date(a.last_upload || 0));
   filteredUsers = [...allUsers];
   renderUserList();

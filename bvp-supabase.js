@@ -158,7 +158,7 @@ async function bvpSetActiveBook(agentId, bookId) {
   return true;
 }
 
-async function bvpUploadBook(agentId, fileName, policies, mode = 'version', versionName = null) {
+async function bvpUploadBook(agentId, fileName, policies, mode = 'version', versionName = null, agentEmail = null) {
   let bookId;
 
   if (mode === 'append') {
@@ -168,11 +168,13 @@ async function bvpUploadBook(agentId, fileName, policies, mode = 'version', vers
     await bvp.from('books').update({
       policy_count: (active.policy_count || 0) + policies.length,
       uploaded_at:  new Date().toISOString(),
+      ...(agentEmail ? { agent_email: agentEmail } : {}),
     }).eq('id', bookId);
   } else {
     await bvp.from('books').update({ is_active: false }).eq('agent_id', agentId);
     const { data: book, error } = await bvp.from('books').insert({
       agent_id:     agentId,
+      agent_email:  agentEmail || null,
       file_name:    fileName,
       version_name: versionName || fileName,
       is_active:    true,
