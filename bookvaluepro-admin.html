@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BookValuePro — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="bvp-supabase.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --deep:    #0d2e1e;
+  --deep-2:  #1a5c3a;
+  --accent:  #3da272;
+  --accent-2:#7abf9a;
+  --ink:     #0f1214;
+  --ink-2:   #3a3f45;
+  --ink-3:   #7a8290;
+  --cream:   #f7f4ef;
+  --cream-2: #ede9e2;
+  --danger:  #c0392b;
+  --danger-bg: #fdf2f0;
+  --gold:    #c8943a;
+  --gold-bg: #fdf8f0;
+  --mono:  'DM Mono', monospace;
+  --serif: 'DM Serif Display', serif;
+  --sans:  'DM Sans', sans-serif;
+}
+
+html, body { height: 100%; background: #f0ede8; color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+
+/* ── HEADER ── */
+header {
+  background: var(--deep);
+  border-bottom: 1px solid rgba(61,162,114,0.15);
+  padding: 0 2rem;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+.logo-circle { width: 32px; height: 32px; border-radius: 50%; background: var(--deep-2); border: 1.5px solid var(--accent); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: white; font-family: var(--sans); }
+.logo-word { font-family: var(--serif); font-size: 16px; color: white; }
+.logo-word span { color: var(--accent); }
+
+.header-right { display: flex; align-items: center; gap: 16px; }
+.admin-badge { font-family: var(--mono); font-size: 10px; color: var(--accent); background: rgba(61,162,114,0.12); border: 1px solid rgba(61,162,114,0.25); padding: 3px 10px; border-radius: 20px; letter-spacing: .06em; text-transform: uppercase; }
+.agent-email { font-family: var(--mono); font-size: 12px; color: var(--accent-2); }
+.btn-signout { font-size: 12px; color: var(--accent-2); background: transparent; border: 1px solid rgba(122,191,154,0.3); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-family: var(--sans); transition: all 0.2s; }
+.btn-signout:hover { border-color: var(--accent); color: white; }
+
+/* ── LAYOUT ── */
+.shell { display: grid; grid-template-columns: 320px 1fr; height: calc(100vh - 60px); }
+
+/* ── LEFT PANEL — USER LIST ── */
+.user-panel {
+  background: var(--deep);
+  border-right: 1px solid rgba(61,162,114,0.12);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-header {
+  padding: 20px 20px 14px;
+  border-bottom: 1px solid rgba(61,162,114,0.1);
+  flex-shrink: 0;
+}
+
+.panel-title {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--accent-2);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.search-wrap { position: relative; }
+.search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--accent-2); font-size: 13px; pointer-events: none; }
+#user-search {
+  width: 100%;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(61,162,114,0.2);
+  border-radius: 8px;
+  padding: 8px 10px 8px 30px;
+  font-size: 13px;
+  color: white;
+  font-family: var(--sans);
+  outline: none;
+  transition: border-color .2s;
+}
+#user-search::placeholder { color: rgba(122,191,154,0.5); }
+#user-search:focus { border-color: var(--accent); }
+
+.user-count {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: rgba(122,191,154,0.5);
+  margin-top: 8px;
+}
+
+.user-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.user-list::-webkit-scrollbar { width: 4px; }
+.user-list::-webkit-scrollbar-track { background: transparent; }
+.user-list::-webkit-scrollbar-thumb { background: rgba(61,162,114,0.2); border-radius: 2px; }
+
+.user-row {
+  padding: 12px 20px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: all .15s;
+}
+.user-row:hover { background: rgba(61,162,114,0.07); border-left-color: rgba(61,162,114,0.3); }
+.user-row.active { background: rgba(61,162,114,0.12); border-left-color: var(--accent); }
+
+.user-email { font-size: 13px; color: white; font-weight: 500; word-break: break-all; }
+.user-meta { display: flex; gap: 10px; margin-top: 4px; align-items: center; flex-wrap: wrap; }
+.user-tag { font-family: var(--mono); font-size: 10px; color: var(--accent-2); }
+.user-tag.no-book { color: rgba(122,191,154,0.4); }
+
+.list-loading { padding: 30px 20px; text-align: center; color: rgba(122,191,154,0.5); font-size: 13px; }
+
+/* ── RIGHT PANEL — DETAIL ── */
+.detail-panel {
+  overflow-y: auto;
+  background: #f0ede8;
+}
+
+.detail-panel::-webkit-scrollbar { width: 6px; }
+.detail-panel::-webkit-scrollbar-track { background: transparent; }
+.detail-panel::-webkit-scrollbar-thumb { background: var(--cream-2); border-radius: 3px; }
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--ink-3);
+  gap: 12px;
+}
+.empty-icon { font-size: 40px; opacity: .4; }
+.empty-text { font-size: 14px; }
+
+/* ── DETAIL CONTENT ── */
+.detail-content { padding: 32px 36px 60px; max-width: 900px; }
+
+.detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 28px;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.detail-email {
+  font-family: var(--serif);
+  font-size: 22px;
+  color: var(--ink);
+  word-break: break-all;
+}
+
+.detail-uid {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.copy-btn {
+  background: none;
+  border: 1px solid var(--cream-2);
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: all .15s;
+}
+.copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+.copy-btn.copied { border-color: var(--accent); color: var(--accent); }
+
+.action-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.btn-danger {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid #f0c4be;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: var(--sans);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .15s;
+}
+.btn-danger:hover { background: #fae5e2; border-color: var(--danger); }
+.btn-danger:disabled { opacity: .4; cursor: not-allowed; }
+
+.btn-warning {
+  background: var(--gold-bg);
+  color: var(--gold);
+  border: 1px solid #f0ddb4;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: var(--sans);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .15s;
+}
+.btn-warning:hover { background: #fdf3e0; border-color: var(--gold); }
+
+/* ── STATS GRID ── */
+.section-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  margin-top: 28px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.stat-card {
+  background: white;
+  border: 1px solid var(--cream-2);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.stat-val {
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--ink);
+  line-height: 1.1;
+}
+
+.stat-val.green { color: var(--accent); }
+.stat-val.gold  { color: var(--gold); }
+.stat-val.danger { color: var(--danger); }
+
+.stat-label {
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: 4px;
+}
+
+/* ── BREAKDOWN TABLES ── */
+.breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.breakdown-card {
+  background: white;
+  border: 1px solid var(--cream-2);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.breakdown-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 0;
+  border-bottom: 1px solid #f5f3f0;
+  font-size: 13px;
+}
+.breakdown-row:last-child { border-bottom: none; }
+
+.breakdown-key { color: var(--ink-2); }
+.breakdown-val { font-family: var(--mono); font-size: 12px; color: var(--ink); }
+
+.breakdown-bar-wrap { width: 100%; height: 4px; background: var(--cream-2); border-radius: 2px; margin-top: 4px; }
+.breakdown-bar { height: 4px; background: var(--accent); border-radius: 2px; }
+
+/* ── BOOKS HISTORY ── */
+.books-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border: 1px solid var(--cream-2);
+  border-radius: 10px;
+  overflow: hidden;
+  font-size: 13px;
+}
+.books-table th {
+  text-align: left;
+  padding: 10px 14px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--ink-3);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  background: #faf9f7;
+  border-bottom: 1px solid var(--cream-2);
+}
+.books-table td { padding: 10px 14px; border-bottom: 1px solid #f5f3f0; color: var(--ink-2); }
+.books-table tr:last-child td { border-bottom: none; }
+.active-chip { background: #e8f5ee; color: var(--accent); font-family: var(--mono); font-size: 10px; padding: 2px 8px; border-radius: 10px; border: 1px solid #b8e0cc; }
+
+/* ── DATA QUALITY ── */
+.quality-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: white;
+  border: 1px solid var(--cream-2);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.quality-label { color: var(--ink-2); }
+.quality-val { font-family: var(--mono); font-size: 13px; }
+.quality-val.ok { color: var(--accent); }
+.quality-val.warn { color: var(--gold); }
+.quality-val.bad { color: var(--danger); }
+
+/* ── CONFIRM MODAL ── */
+.modal-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.visible { display: flex; }
+.modal-box {
+  background: white;
+  border-radius: 14px;
+  padding: 32px;
+  max-width: 420px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+}
+.modal-icon { font-size: 32px; margin-bottom: 12px; }
+.modal-title { font-family: var(--serif); font-size: 20px; color: var(--ink); margin-bottom: 8px; }
+.modal-body { font-size: 13px; color: var(--ink-3); line-height: 1.6; margin-bottom: 24px; }
+.modal-body strong { color: var(--ink); }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.btn-cancel-modal { background: white; border: 1px solid var(--cream-2); color: var(--ink-2); padding: 9px 18px; border-radius: 8px; font-size: 13px; cursor: pointer; font-family: var(--sans); }
+.btn-cancel-modal:hover { border-color: var(--ink-3); }
+.btn-confirm-delete { background: var(--danger); color: white; border: none; padding: 9px 18px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: var(--sans); }
+.btn-confirm-delete:hover { background: #a93226; }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed; bottom: 28px; right: 28px;
+  background: var(--deep);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-family: var(--sans);
+  border: 1px solid rgba(61,162,114,0.2);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: all .25s;
+  z-index: 300;
+  pointer-events: none;
+}
+.toast.visible { opacity: 1; transform: translateY(0); }
+.toast.success { border-color: rgba(61,162,114,0.4); }
+.toast.error { border-color: rgba(192,57,43,0.4); background: #2e0f0a; }
+
+/* ── LOADING SHIMMER ── */
+.shimmer {
+  background: linear-gradient(90deg, #f0ede8 25%, #e8e4de 50%, #f0ede8 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 6px;
+  height: 14px;
+}
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <a class="logo" href="bookvaluepro-dashboard.html">
+    <div class="logo-circle">BV</div>
+    <span class="logo-word">Book<span>Value</span>Pro</span>
+  </a>
+  <div class="header-right">
+    <span class="admin-badge">Admin</span>
+    <span class="agent-email" id="agent-email"></span>
+    <button class="btn-signout" onclick="bvpSignOut()">Sign out</button>
+  </div>
+</header>
+
+<!-- MAIN SHELL -->
+<div class="shell">
+
+  <!-- LEFT: USER LIST -->
+  <div class="user-panel">
+    <div class="panel-header">
+      <div class="panel-title">All Users</div>
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input type="text" id="user-search" placeholder="Filter by email…" oninput="filterUsers()">
+      </div>
+      <div class="user-count" id="user-count">Loading…</div>
+    </div>
+    <div class="user-list" id="user-list">
+      <div class="list-loading">Loading users…</div>
+    </div>
+  </div>
+
+  <!-- RIGHT: DETAIL -->
+  <div class="detail-panel" id="detail-panel">
+    <div class="empty-state" id="empty-state">
+      <div class="empty-icon">👤</div>
+      <div class="empty-text">Select a user to view their profile</div>
+    </div>
+    <div class="detail-content" id="detail-content" style="display:none;"></div>
+  </div>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal-box">
+    <div class="modal-icon">⚠️</div>
+    <div class="modal-title" id="modal-title">Delete all data?</div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel-modal" onclick="closeModal()">Cancel</button>
+      <button class="btn-confirm-delete" id="modal-confirm-btn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── ADMIN WHITELIST ────────────────────────────────────────────
+const ADMIN_EMAILS = ['info@bookvaluepro.com'];
+
+// ── STATE ─────────────────────────────────────────────────────
+let allUsers = [];
+let filteredUsers = [];
+let selectedUser = null;
+let adminSession = null;
+
+// ── INIT ──────────────────────────────────────────────────────
+(async () => {
+  adminSession = await bvpRequireAuth();
+  if (!adminSession) return;
+
+  const email = adminSession.user.email;
+
+  if (!ADMIN_EMAILS.includes(email)) {
+    // Not an admin — bounce silently to dashboard
+    window.location.href = 'bookvaluepro-dashboard.html';
+    return;
+  }
+
+  document.getElementById('agent-email').textContent = email;
+  await loadUsers();
+})();
+
+// ── LOAD ALL USERS ────────────────────────────────────────────
+// Pulls all books rows and groups by agent_id to build user list.
+// We can't access auth.users directly via anon key, so we derive
+// user emails from the books table's agent_id and match session metadata.
+async function loadUsers() {
+  // Fetch all books
+  const { data: books, error } = await bvp
+    .from('books')
+    .select('agent_id, file_name, version_name, policy_count, uploaded_at, is_active')
+    .order('uploaded_at', { ascending: false });
+
+  if (error) {
+    showToast('Failed to load users: ' + error.message, 'error');
+    return;
+  }
+
+  // Group by agent_id
+  const byAgent = {};
+  (books || []).forEach(b => {
+    if (!byAgent[b.agent_id]) {
+      byAgent[b.agent_id] = { agent_id: b.agent_id, books: [], email: null };
+    }
+    byAgent[b.agent_id].books.push(b);
+  });
+
+  // Try to get emails from policies table (agent_id stored there too)
+  // We use a second query to fetch distinct agent emails via the chat log
+  // Since anon key can't access auth.users, we store emails in books via
+  // the session — check if we have an email column, otherwise show UUID
+  // Fetch policies to cross-reference (just need agent_id + any email field)
+  const { data: policyEmails } = await bvp
+    .from('policies')
+    .select('agent_id, email')
+    .not('email', 'is', null)
+    .limit(500);
+
+  // Build agent_id → client email map from policy data (this is client email, not agent)
+  // We'll show agent_id but also try to surface their signup email another way
+  // For now build the user objects
+  allUsers = Object.values(byAgent).map(u => {
+    const activeBook = u.books.find(b => b.is_active) || u.books[0];
+    return {
+      agent_id:     u.agent_id,
+      email:        u.email || u.agent_id, // fallback to ID if no email
+      books:        u.books,
+      active_book:  activeBook,
+      policy_count: activeBook ? activeBook.policy_count : 0,
+      last_upload:  activeBook ? activeBook.uploaded_at : null,
+      book_count:   u.books.length,
+    };
+  });
+
+  // Also try fetching the current admin's own record to confirm emails work
+  // We inject the session email for any matching agent_id
+  allUsers.forEach(u => {
+    if (u.agent_id === adminSession.user.id) {
+      u.email = adminSession.user.email;
+    }
+  });
+
+  // Sort by last upload descending
+  allUsers.sort((a, b) => new Date(b.last_upload || 0) - new Date(a.last_upload || 0));
+  filteredUsers = [...allUsers];
+  renderUserList();
+}
+
+// ── RENDER USER LIST ──────────────────────────────────────────
+function renderUserList() {
+  const list = document.getElementById('user-list');
+  const count = document.getElementById('user-count');
+
+  count.textContent = `${filteredUsers.length} of ${allUsers.length} user${allUsers.length !== 1 ? 's' : ''}`;
+
+  if (filteredUsers.length === 0) {
+    list.innerHTML = '<div class="list-loading">No users match that search</div>';
+    return;
+  }
+
+  list.innerHTML = filteredUsers.map(u => {
+    const isActive = selectedUser && selectedUser.agent_id === u.agent_id;
+    const uploadDate = u.last_upload ? new Date(u.last_upload).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+    const shortId = u.agent_id.slice(0, 8) + '…';
+    const displayEmail = u.email !== u.agent_id ? u.email : shortId;
+
+    return `
+      <div class="user-row${isActive ? ' active' : ''}" onclick="selectUser('${u.agent_id}')">
+        <div class="user-email">${displayEmail}</div>
+        <div class="user-meta">
+          ${u.active_book
+            ? `<span class="user-tag">${u.policy_count} policies</span>
+               <span class="user-tag">${u.book_count} book${u.book_count !== 1 ? 's' : ''}</span>
+               ${uploadDate ? `<span class="user-tag">${uploadDate}</span>` : ''}`
+            : `<span class="user-tag no-book">No book</span>`
+          }
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── FILTER ────────────────────────────────────────────────────
+function filterUsers() {
+  const q = document.getElementById('user-search').value.trim().toLowerCase();
+  filteredUsers = q
+    ? allUsers.filter(u => u.email.toLowerCase().includes(q) || u.agent_id.toLowerCase().includes(q))
+    : [...allUsers];
+  renderUserList();
+}
+
+// ── SELECT USER ───────────────────────────────────────────────
+async function selectUser(agentId) {
+  selectedUser = allUsers.find(u => u.agent_id === agentId);
+  if (!selectedUser) return;
+
+  // Re-render list to show active state
+  renderUserList();
+
+  // Show loading state in detail panel
+  document.getElementById('empty-state').style.display = 'none';
+  const content = document.getElementById('detail-content');
+  content.style.display = 'block';
+  content.innerHTML = `
+    <div style="padding-top:20px;">
+      <div class="shimmer" style="width:60%;height:28px;margin-bottom:12px;"></div>
+      <div class="shimmer" style="width:40%;height:14px;margin-bottom:32px;"></div>
+      <div class="shimmer" style="width:100%;height:120px;margin-bottom:14px;"></div>
+      <div class="shimmer" style="width:100%;height:120px;"></div>
+    </div>`;
+
+  // Load full policy data for this user
+  const activeBook = selectedUser.active_book;
+  let policies = [];
+  if (activeBook) {
+    const { data, error } = await bvp
+      .from('policies')
+      .select('*')
+      .eq('book_id', activeBook.id);
+    if (!error) policies = data || [];
+  }
+
+  renderDetail(selectedUser, policies);
+}
+
+// ── RENDER DETAIL ─────────────────────────────────────────────
+function renderDetail(user, policies) {
+  const content = document.getElementById('detail-content');
+  const shortId = user.agent_id.slice(0, 8) + '…';
+  const displayEmail = user.email !== user.agent_id ? user.email : `User ${shortId}`;
+  const hasBook = !!user.active_book;
+
+  // ── Compute stats from policies ──────────────────────────────
+  const totalPolicies = policies.length;
+
+  // Priority breakdown
+  const p1 = policies.filter(p => p.priority === 1).length;
+  const p2 = policies.filter(p => p.priority === 2).length;
+  const p3 = policies.filter(p => p.priority === 3).length;
+  const overrides = policies.filter(p => p.priority_override !== null).length;
+
+  // Financial
+  const totalCommPrem = policies.reduce((s, p) => s + (parseFloat(p.comm_prem) || 0), 0);
+  const totalCurrPrem = policies.reduce((s, p) => s + (parseFloat(p.curr_prem) || 0), 0);
+  const avgPrem = totalPolicies > 0 ? totalCurrPrem / totalPolicies : 0;
+  const totalCurrNPV = policies.reduce((s, p) => s + (parseFloat(p.curr_npv) || 0), 0);
+  const totalRenNPV  = policies.reduce((s, p) => s + (parseFloat(p.ren_npv) || 0), 0);
+  const npvLift = totalRenNPV - totalCurrNPV;
+
+  // Carrier breakdown
+  const byCarrier = {};
+  policies.forEach(p => { const k = p.company || 'Unknown'; byCarrier[k] = (byCarrier[k] || 0) + 1; });
+  const carrierRows = Object.entries(byCarrier).sort((a,b) => b[1]-a[1]);
+
+  // Plan breakdown
+  const byPlan = {};
+  policies.forEach(p => { const k = p.plan_type || 'Unknown'; byPlan[k] = (byPlan[k] || 0) + 1; });
+  const planRows = Object.entries(byPlan).sort((a,b) => b[1]-a[1]);
+
+  // State breakdown
+  const byState = {};
+  policies.forEach(p => { const k = p.issued_state || 'Unknown'; byState[k] = (byState[k] || 0) + 1; });
+  const stateRows = Object.entries(byState).sort((a,b) => b[1]-a[1]);
+
+  // Enrollment type
+  const byEnroll = {};
+  policies.forEach(p => { const k = p.enrollment_type || 'Unknown'; byEnroll[k] = (byEnroll[k] || 0) + 1; });
+  const enrollRows = Object.entries(byEnroll).sort((a,b) => b[1]-a[1]);
+
+  // Data quality
+  const missingDOB  = policies.filter(p => !p.dob).length;
+  const missingEff  = policies.filter(p => !p.eff_month).length;
+  const missingPrem = policies.filter(p => !p.comm_prem && !p.curr_prem).length;
+  const missingPlan = policies.filter(p => !p.plan_type).length;
+  const missingName = policies.filter(p => !p.first_name && !p.last_name).length;
+
+  // Age distribution
+  const ages = policies.map(p => p.attained_age).filter(a => a != null && a > 0);
+  const avgAge = ages.length > 0 ? Math.round(ages.reduce((s,a) => s+a, 0) / ages.length) : null;
+  const under65 = ages.filter(a => a < 65).length;
+  const over80  = ages.filter(a => a > 80).length;
+
+  // Duration distribution
+  const durations = policies.map(p => p.duration_yr).filter(d => d != null);
+  const avgDur = durations.length > 0 ? (durations.reduce((s,d) => s+d, 0) / durations.length).toFixed(1) : null;
+
+  // Book history
+  const booksHtml = user.books.map(b => {
+    const date = b.uploaded_at ? new Date(b.uploaded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+    return `
+      <tr>
+        <td>${b.version_name || b.file_name || '—'}</td>
+        <td>${b.file_name || '—'}</td>
+        <td style="font-family:var(--mono)">${(b.policy_count || 0).toLocaleString()}</td>
+        <td>${date}</td>
+        <td>${b.is_active ? '<span class="active-chip">Active</span>' : '<span style="color:var(--ink-3);font-size:12px;">Archived</span>'}</td>
+      </tr>`;
+  }).join('');
+
+  const fmt = n => n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  const fmtDollar = n => '$' + fmt(n);
+  const qualClass = n => n === 0 ? 'ok' : n < 5 ? 'warn' : 'bad';
+  const maxCarrier = carrierRows[0] ? carrierRows[0][1] : 1;
+  const maxPlan    = planRows[0]    ? planRows[0][1]    : 1;
+
+  content.innerHTML = `
+    <!-- Header -->
+    <div class="detail-header">
+      <div>
+        <div class="detail-email">${displayEmail}</div>
+        <div class="detail-uid">
+          <span>${user.agent_id}</span>
+          <button class="copy-btn" id="copy-uid-btn" onclick="copyUID('${user.agent_id}')">Copy ID</button>
+        </div>
+      </div>
+      <div class="action-row">
+        <button class="btn-warning" onclick="confirmAction('reset', '${user.agent_id}', '${displayEmail.replace(/'/g,"\\'")}')">🔄 Reset to Upload</button>
+        <button class="btn-danger" onclick="confirmAction('delete', '${user.agent_id}', '${displayEmail.replace(/'/g,"\\'")}')">🗑 Delete All Data</button>
+      </div>
+    </div>
+
+    ${!hasBook ? `<div style="background:#fff;border:1px solid var(--cream-2);border-radius:10px;padding:20px;color:var(--ink-3);font-size:13px;">This user has no uploaded book yet.</div>` : ''}
+
+    ${hasBook ? `
+    <!-- Book summary stats -->
+    <div class="section-label">Book Overview</div>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-val">${fmt(totalPolicies)}</div>
+        <div class="stat-label">Total policies</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val">${user.books.length}</div>
+        <div class="stat-label">Book version${user.books.length !== 1 ? 's' : ''}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val">${avgAge !== null ? avgAge : '—'}</div>
+        <div class="stat-label">Avg attained age</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val">${avgDur !== null ? avgDur : '—'}</div>
+        <div class="stat-label">Avg policy duration (yrs)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val ${under65 > 0 ? 'gold' : ''}">${under65}</div>
+        <div class="stat-label">Policies — under 65</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val">${over80}</div>
+        <div class="stat-label">Policies — over 80</div>
+      </div>
+    </div>
+
+    <!-- Priority breakdown -->
+    <div class="section-label">Priority Breakdown</div>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-val green">${fmt(p1)}</div>
+        <div class="stat-label">Priority 1 — High opportunity</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val">${fmt(p2)}</div>
+        <div class="stat-label">Priority 2 — Monitor</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" style="color:var(--ink-3)">${fmt(p3)}</div>
+        <div class="stat-label">Priority 3 — Low opportunity</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val gold">${overrides}</div>
+        <div class="stat-label">Manual priority overrides</div>
+      </div>
+    </div>
+
+    <!-- Financial snapshot -->
+    <div class="section-label">Financial Snapshot</div>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-val">${fmtDollar(totalCurrPrem)}</div>
+        <div class="stat-label">Total annual current premium</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val">${fmtDollar(totalCommPrem)}</div>
+        <div class="stat-label">Total commissionable premium</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val">${fmtDollar(avgPrem)}</div>
+        <div class="stat-label">Avg premium per policy</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val green">${npvLift >= 0 ? '+' : ''}${fmtDollar(npvLift)}</div>
+        <div class="stat-label">Total NPV lift if all renewed</div>
+      </div>
+    </div>
+
+    <!-- Breakdowns -->
+    <div class="section-label">Book Composition</div>
+    <div class="breakdown-grid">
+      <!-- Carriers -->
+      <div class="breakdown-card">
+        <div class="breakdown-title">By Carrier</div>
+        ${carrierRows.slice(0,8).map(([k,v]) => `
+          <div class="breakdown-row">
+            <span class="breakdown-key">${k}</span>
+            <span class="breakdown-val">${fmt(v)}</span>
+          </div>
+          <div class="breakdown-bar-wrap"><div class="breakdown-bar" style="width:${Math.round(v/maxCarrier*100)}%"></div></div>
+        `).join('')}
+      </div>
+
+      <!-- Plans -->
+      <div class="breakdown-card">
+        <div class="breakdown-title">By Plan</div>
+        ${planRows.slice(0,8).map(([k,v]) => `
+          <div class="breakdown-row">
+            <span class="breakdown-key">${k || 'Unknown'}</span>
+            <span class="breakdown-val">${fmt(v)}</span>
+          </div>
+          <div class="breakdown-bar-wrap"><div class="breakdown-bar" style="width:${Math.round(v/maxPlan*100)}%"></div></div>
+        `).join('')}
+      </div>
+
+      <!-- States -->
+      <div class="breakdown-card">
+        <div class="breakdown-title">By State</div>
+        ${stateRows.slice(0,10).map(([k,v]) => `
+          <div class="breakdown-row">
+            <span class="breakdown-key">${k}</span>
+            <span class="breakdown-val">${fmt(v)}</span>
+          </div>
+        `).join('')}
+      </div>
+
+      <!-- Enrollment types -->
+      ${enrollRows.length > 0 ? `
+      <div class="breakdown-card">
+        <div class="breakdown-title">By Enrollment Type</div>
+        ${enrollRows.map(([k,v]) => `
+          <div class="breakdown-row">
+            <span class="breakdown-key">${k.replace(/([A-Z])/g,' $1').trim()}</span>
+            <span class="breakdown-val">${fmt(v)}</span>
+          </div>
+        `).join('')}
+      </div>` : ''}
+    </div>
+
+    <!-- Data quality -->
+    <div class="section-label">Data Quality</div>
+    <div class="quality-row"><span class="quality-label">Missing date of birth</span><span class="quality-val ${qualClass(missingDOB)}">${missingDOB === 0 ? '✓ None' : missingDOB + ' policies'}</span></div>
+    <div class="quality-row"><span class="quality-label">Missing effective date</span><span class="quality-val ${qualClass(missingEff)}">${missingEff === 0 ? '✓ None' : missingEff + ' policies'}</span></div>
+    <div class="quality-row"><span class="quality-label">Missing plan type</span><span class="quality-val ${qualClass(missingPlan)}">${missingPlan === 0 ? '✓ None' : missingPlan + ' policies'}</span></div>
+    <div class="quality-row"><span class="quality-label">Missing premium data</span><span class="quality-val ${qualClass(missingPrem)}">${missingPrem === 0 ? '✓ None' : missingPrem + ' policies'}</span></div>
+    <div class="quality-row"><span class="quality-label">Missing client name</span><span class="quality-val ${qualClass(missingName)}">${missingName === 0 ? '✓ None' : missingName + ' policies'}</span></div>
+
+    <!-- Book history -->
+    <div class="section-label">Upload History</div>
+    <table class="books-table">
+      <thead><tr><th>Version name</th><th>File</th><th>Policies</th><th>Uploaded</th><th>Status</th></tr></thead>
+      <tbody>${booksHtml}</tbody>
+    </table>
+
+    ` : ''}
+  `;
+}
+
+// ── COPY UID ─────────────────────────────────────────────────
+function copyUID(uid) {
+  navigator.clipboard.writeText(uid).then(() => {
+    const btn = document.getElementById('copy-uid-btn');
+    if (btn) { btn.textContent = 'Copied!'; btn.classList.add('copied'); setTimeout(() => { btn.textContent = 'Copy ID'; btn.classList.remove('copied'); }, 2000); }
+  });
+}
+
+// ── CONFIRM MODAL ─────────────────────────────────────────────
+let pendingAction = null;
+
+function confirmAction(type, agentId, email) {
+  pendingAction = { type, agentId };
+  const modal = document.getElementById('confirm-modal');
+  const title = document.getElementById('modal-title');
+  const body  = document.getElementById('modal-body');
+  const btn   = document.getElementById('modal-confirm-btn');
+
+  if (type === 'delete') {
+    title.textContent = 'Delete all data?';
+    body.innerHTML = `This will permanently delete <strong>all books and policies</strong> for <strong>${email}</strong>. This cannot be undone.`;
+    btn.textContent = 'Yes, delete everything';
+    btn.style.background = 'var(--danger)';
+  } else {
+    title.textContent = 'Reset to upload?';
+    body.innerHTML = `This will delete all books and policies for <strong>${email}</strong>, returning them to the upload screen on next login. This cannot be undone.`;
+    btn.textContent = 'Yes, reset this user';
+    btn.style.background = '#c8943a';
+  }
+
+  btn.onclick = executeAction;
+  modal.classList.add('visible');
+}
+
+function closeModal() {
+  document.getElementById('confirm-modal').classList.remove('visible');
+  pendingAction = null;
+}
+
+async function executeAction() {
+  if (!pendingAction) return;
+  closeModal();
+
+  const { agentId } = pendingAction;
+  showToast('Deleting data…', '');
+
+  // 1. Delete all policies for all books belonging to this agent
+  const { data: books } = await bvp.from('books').select('id').eq('agent_id', agentId);
+  if (books && books.length > 0) {
+    const bookIds = books.map(b => b.id);
+    const { error: pe } = await bvp.from('policies').delete().in('book_id', bookIds);
+    if (pe) { showToast('Error deleting policies: ' + pe.message, 'error'); return; }
+  }
+
+  // 2. Delete all books
+  const { error: be } = await bvp.from('books').delete().eq('agent_id', agentId);
+  if (be) { showToast('Error deleting books: ' + be.message, 'error'); return; }
+
+  showToast('✓ All data deleted for this user', 'success');
+
+  // Update local state
+  allUsers = allUsers.map(u => {
+    if (u.agent_id === agentId) return { ...u, books: [], active_book: null, policy_count: 0, book_count: 0, last_upload: null };
+    return u;
+  });
+  filteredUsers = filteredUsers.map(u => {
+    if (u.agent_id === agentId) return allUsers.find(a => a.agent_id === agentId);
+    return u;
+  });
+  renderUserList();
+
+  // Re-render the detail panel to reflect empty state
+  selectedUser = allUsers.find(u => u.agent_id === agentId);
+  renderDetail(selectedUser, []);
+}
+
+// ── TOAST ─────────────────────────────────────────────────────
+let _toastTimer = null;
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast visible ${type}`;
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { t.classList.remove('visible'); }, 3500);
+}
+</script>
+</body>
+</html>
