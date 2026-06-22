@@ -1339,32 +1339,34 @@ async function _doUpload(mode, versionName) {
       const priority = calcPriority(dobStr, effDateStr, currDurYr);
 
       // Normalize plan type and look up the correct commission rate schedule
-      const planTypeVal  = row['Plan Type'] || row['plan_type'] || row['PlanType'] || null;
-      const plan         = bvpNormalizePlan(planTypeVal);
-      const curr_pcts    = buildRateArray(carrier, stateCode, plan, 'OpenEnrollment');
-      const ren_pcts     = buildRateArray(carrier, stateCode, plan, 'OpenEnrollment');
+      const planTypeVal    = row['Plan Type'] || row['plan_type'] || row['PlanType'] || null;
+      const plan           = bvpNormalizePlan(planTypeVal);
+      const enrollmentType = row['Enrollment Type'] || row['enrollment_type'] || 'OpenEnrollment';
+      const curr_pcts    = buildRateArray(carrier, stateCode, plan, enrollmentType);
+      const ren_pcts     = buildRateArray(carrier, stateCode, plan, enrollmentType);
 
       return {
-        policy_idx:   i + 1,
-        first_name:   row['First Name']  || row['first_name']  || null,
-        last_name:    row['Last Name']   || row['last_name']   || null,
-        dob:          dobStr,
-        attained_age: attainedAge(dobStr),
-        email:        row['Email'] || row['email'] || null,
-        phone:        row['Phone'] || row['phone'] || null,
-        plan_type:    row['Plan Type'] || row['plan_type'] || row['PlanType'] || null,
-        company:      carrier,
-        issued_state: stateCode,
-        eff_month:    effMonth(effDateStr),
-        duration_yr:  currDurYr,
+        policy_idx:      i + 1,
+        first_name:      row['First Name']  || row['first_name']  || null,
+        last_name:       row['Last Name']   || row['last_name']   || null,
+        dob:             dobStr,
+        attained_age:    attainedAge(dobStr),
+        email:           row['Email'] || row['email'] || null,
+        phone:           row['Phone'] || row['phone'] || null,
+        plan_type:       row['Plan Type'] || row['plan_type'] || row['PlanType'] || null,
+        company:         carrier,
+        issued_state:    stateCode,
+        eff_month:       effMonth(effDateStr),
+        duration_yr:     currDurYr,
+        enrollment_type: enrollmentType,
         priority,
-        calc_priority: priority,  // frozen at upload — never overwritten
-        comm_prem:    parseFloat(row['Commissionable Premium'] || row['comm_prem'] || 0),
-        curr_prem:    parseFloat(row['Current Premium'] || row['curr_prem'] || 0),
+        calc_priority:   priority,
+        comm_prem:       parseFloat(row['Commissionable Premium'] || row['comm_prem'] || 0),
+        curr_prem:       parseFloat(row['Current Premium'] || row['curr_prem'] || 0),
         curr_pcts,
         ren_pcts,
-        curr_npv:     null,
-        ren_npv:      null,
+        curr_npv:        null,
+        ren_npv:         null,
       };
     });
 
