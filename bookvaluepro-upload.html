@@ -930,24 +930,19 @@ const ALIASES = {
 };
 
 // ── PARENT CARRIERS (loaded from Supabase commission_rates table) ──────────
-let PARENT_CARRIERS = ['CVS Group', 'Humana', 'Mutual of Omaha', 'UnitedHealthCare'];
+let PARENT_CARRIERS = ['CVS Group', 'HealthSpring', 'Humana', 'Mutual of Omaha', 'UnitedHealthCare'];
 
 // Returns a promise that resolves once the carrier list is ready
 const carriersReady = (async () => {
   try {
-    const { data, error } = await bvp
-      .from('commission_rates')
-      .select('carrier')
-      .neq('carrier', 'Generic')
-      .order('carrier');
-    console.log('BVP carriers query - data:', data, 'error:', error);
+    const { data } = await bvp
+      .from('distinct_base_carriers')
+      .select('carrier');
     if (data && data.length) {
-      const unique = [...new Set(data.map(r => r.carrier))].filter(Boolean);
-      console.log('BVP unique carriers:', unique);
+      const unique = data.map(r => r.carrier).filter(Boolean);
       if (unique.length) PARENT_CARRIERS = unique;
     }
-    console.log('BVP PARENT_CARRIERS final:', PARENT_CARRIERS);
-  } catch(e) { console.error('BVP carrier load error:', e); }
+  } catch(e) { /* use fallback */ }
 })();
 
 // ── STATE ──────────────────────────────────────────────────────────────────
@@ -1269,9 +1264,7 @@ async function validateAndUpdate() {
 
 // ── CARRIER MAPPING UI ────────────────────────────────────────────────
 async function buildCarrierMappingUI() {
-  // Wait for carrier list to be loaded from Supabase before rendering
   await carriersReady;
-  console.log('BVP building carrier UI with:', PARENT_CARRIERS);
 
   const section   = document.getElementById('carrier-mapping-section');
   const intro     = document.getElementById('carrier-mapping-intro');
