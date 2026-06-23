@@ -930,13 +930,12 @@ const ALIASES = {
 };
 
 // ── PARENT CARRIERS (loaded from Supabase commission_rates table) ──────────
-// Fallback list used before Supabase responds
 let PARENT_CARRIERS = ['CVS Group', 'Humana', 'Mutual of Omaha', 'UnitedHealthCare'];
 
-// Load live carrier list from Supabase on init
-(async () => {
+// Returns a promise that resolves once the carrier list is ready
+const carriersReady = (async () => {
   try {
-    const { data, error } = await bvp
+    const { data } = await bvp
       .from('commission_rates')
       .select('carrier')
       .neq('carrier', 'Generic')
@@ -1220,7 +1219,7 @@ function updateRowStatus(key) {
 }
 
 // ── VALIDATION ────────────────────────────────────────────────────────
-function validateAndUpdate() {
+async function validateAndUpdate() {
   const missing = REQUIRED_FIELDS.filter(f => !state.mappings[f.key]);
 
   if (missing.length > 0) {
@@ -1231,13 +1230,12 @@ function validateAndUpdate() {
     btnAnalyze.disabled = true;
     ctaHint.textContent = 'Map all required fields to continue';
     state.ready = false;
-    // Hide carrier mapping until columns are done
     document.getElementById('carrier-mapping-section').classList.remove('visible');
     return;
   }
 
   // Column mapping complete — show carrier mapping
-  buildCarrierMappingUI();
+  await buildCarrierMappingUI();
 
   // Check carrier mapping completeness
   const carrierDone = isCarrierMappingComplete();
@@ -1267,7 +1265,10 @@ function validateAndUpdate() {
 }
 
 // ── CARRIER MAPPING UI ────────────────────────────────────────────────
-function buildCarrierMappingUI() {
+async function buildCarrierMappingUI() {
+  // Wait for carrier list to be loaded from Supabase before rendering
+  await carriersReady;
+
   const section   = document.getElementById('carrier-mapping-section');
   const intro     = document.getElementById('carrier-mapping-intro');
   const singleWrap= document.getElementById('carrier-single-wrap');
