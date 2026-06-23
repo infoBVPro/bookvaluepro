@@ -597,6 +597,103 @@ footer {
   letter-spacing: .04em;
 }
 
+/* ── CARRIER MAPPING ── */
+.carrier-mapping-section {
+  display: none;
+  margin-top: 28px;
+}
+.carrier-mapping-section.visible { display: block; }
+
+.carrier-mapping-intro {
+  font-size: 13px;
+  color: var(--ink-3);
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+
+.carrier-mapping-intro strong { color: var(--ink-2); }
+
+.carrier-single-wrap {
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.carrier-single-wrap.visible { display: flex; }
+
+.carrier-single-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.carrier-map-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.carrier-map-row {
+  display: grid;
+  grid-template-columns: 1fr 32px 1fr;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border: 1.5px solid var(--cream-2);
+  border-radius: 10px;
+  padding: 12px 14px;
+  transition: border-color .15s;
+}
+.carrier-map-row.mapped { border-color: #b8e0cc; }
+
+.carrier-file-name {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--cream);
+  border: 1px solid var(--cream-2);
+  border-radius: 6px;
+  padding: 7px 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.carrier-arrow { text-align: center; color: var(--ink-3); font-size: 14px; }
+
+.carrier-map-select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1.5px solid var(--cream-2);
+  border-radius: 8px;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  background: #fff;
+  outline: none;
+  cursor: pointer;
+  transition: border-color .15s;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237a8290' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}
+.carrier-map-select:focus { border-color: var(--accent-2); }
+.carrier-map-select.selected { border-color: #b8e0cc; color: var(--accent); }
+
+.carrier-generic-note {
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: #fdf8f0;
+  border: 1px solid #f0ddb4;
+  border-radius: 8px;
+  line-height: 1.5;
+}
+.carrier-generic-note strong { color: var(--gold); }
+
 /* ── RESPONSIVE ── */
 @media (max-width: 600px) {
   header { padding: 20px 24px; }
@@ -726,6 +823,29 @@ footer {
       </div>
     </div>
 
+    <!-- Carrier mapping (Step 3) -->
+    <div class="carrier-mapping-section" id="carrier-mapping-section">
+      <div class="section-label">Map your carriers</div>
+      <div class="carrier-mapping-intro" id="carrier-mapping-intro"></div>
+
+      <!-- Single-carrier selector (when no carrier column) -->
+      <div class="carrier-single-wrap" id="carrier-single-wrap">
+        <label class="carrier-single-label">This file is for carrier:</label>
+        <select class="carrier-map-select" id="carrier-single-select" onchange="onSingleCarrierChange(this)">
+          <option value="">— select a carrier —</option>
+        </select>
+      </div>
+
+      <!-- Multi-carrier grid (when carrier column exists) -->
+      <div class="carrier-map-grid" id="carrier-map-grid">
+        <!-- populated by JS -->
+      </div>
+
+      <div class="carrier-generic-note">
+        <strong>Don't see your carrier?</strong> Select <strong>Generic</strong> — your commission rates will use our standard schedule until your carrier is added to the platform.
+      </div>
+    </div>
+
     <!-- Validation banner -->
     <div class="validation-banner" id="validation-banner">
       <span class="val-icon" id="val-icon"></span>
@@ -809,12 +929,32 @@ const ALIASES = {
   PlanType:     ['plan type','plantype','plan_type','plan','med supp plan','medsupplan','policy plan','plan letter'],
 };
 
+// ── PARENT CARRIERS (loaded from Supabase commission_rates table) ──────────
+// Fallback list used before Supabase responds
+let PARENT_CARRIERS = ['CVS Group', 'Humana', 'Mutual of Omaha', 'UnitedHealthCare'];
+
+// Load live carrier list from Supabase on init
+(async () => {
+  try {
+    const { data } = await bvp
+      .from('commission_rates')
+      .select('carrier')
+      .neq('carrier', 'Generic')
+      .order('carrier');
+    if (data && data.length) {
+      const unique = [...new Set(data.map(r => r.carrier))];
+      if (unique.length) PARENT_CARRIERS = unique;
+    }
+  } catch(e) { /* use fallback */ }
+})();
+
 // ── STATE ──────────────────────────────────────────────────────────────────
 let state = {
   file: null,
   headers: [],
   rowCount: 0,
-  mappings: {},   // fieldKey -> columnName
+  mappings: {},        // fieldKey -> columnName
+  carrierMappings: {}, // fileCarrierName -> parentCarrierName
   ready: false,
 };
 
@@ -1083,21 +1223,7 @@ function updateRowStatus(key) {
 function validateAndUpdate() {
   const missing = REQUIRED_FIELDS.filter(f => !state.mappings[f.key]);
 
-  if (missing.length === 0) {
-    // All required fields mapped
-    const optMapped = OPTIONAL_FIELDS.filter(f => state.mappings[f.key]).length;
-    if (optMapped > 0) {
-      showValidation('success',
-        `Ready — ${state.rowCount.toLocaleString()} policies detected`,
-        [`${6 - missing.length} required fields mapped, ${optMapped} optional field${optMapped > 1 ? 's' : ''} included`]
-      );
-    } else {
-      hideValidation();
-    }
-    btnAnalyze.disabled = false;
-    ctaHint.textContent = `${state.rowCount.toLocaleString()} polic${state.rowCount === 1 ? 'y' : 'ies'} ready to analyze`;
-    state.ready = true;
-  } else {
+  if (missing.length > 0) {
     showValidation('warning',
       `${missing.length} required field${missing.length > 1 ? 's' : ''} not mapped`,
       missing.map(f => `"${f.label}" is required`)
@@ -1105,7 +1231,177 @@ function validateAndUpdate() {
     btnAnalyze.disabled = true;
     ctaHint.textContent = 'Map all required fields to continue';
     state.ready = false;
+    // Hide carrier mapping until columns are done
+    document.getElementById('carrier-mapping-section').classList.remove('visible');
+    return;
   }
+
+  // Column mapping complete — show carrier mapping
+  buildCarrierMappingUI();
+
+  // Check carrier mapping completeness
+  const carrierDone = isCarrierMappingComplete();
+  if (!carrierDone) {
+    const optMapped = OPTIONAL_FIELDS.filter(f => state.mappings[f.key]).length;
+    showValidation('warning', 'Map your carriers to continue',
+      ['Match each carrier in your file to a parent company below']);
+    btnAnalyze.disabled = true;
+    ctaHint.textContent = 'Map all carriers to continue';
+    state.ready = false;
+    return;
+  }
+
+  // All good
+  const optMapped = OPTIONAL_FIELDS.filter(f => state.mappings[f.key]).length;
+  if (optMapped > 0) {
+    showValidation('success',
+      `Ready — ${state.rowCount.toLocaleString()} policies detected`,
+      [`${REQUIRED_FIELDS.length} required fields mapped, ${optMapped} optional field${optMapped > 1 ? 's' : ''} included`]
+    );
+  } else {
+    hideValidation();
+  }
+  btnAnalyze.disabled = false;
+  ctaHint.textContent = `${state.rowCount.toLocaleString()} polic${state.rowCount === 1 ? 'y' : 'ies'} ready to analyze`;
+  state.ready = true;
+}
+
+// ── CARRIER MAPPING UI ────────────────────────────────────────────────
+function buildCarrierMappingUI() {
+  const section   = document.getElementById('carrier-mapping-section');
+  const intro     = document.getElementById('carrier-mapping-intro');
+  const singleWrap= document.getElementById('carrier-single-wrap');
+  const singleSel = document.getElementById('carrier-single-select');
+  const grid      = document.getElementById('carrier-map-grid');
+
+  section.classList.add('visible');
+
+  const hasCarrierCol = !!state.mappings['Company'];
+
+  if (!hasCarrierCol) {
+    // No carrier column — single selector mode
+    intro.innerHTML = `Your file doesn't have a carrier column. <strong>Which carrier are all these policies with?</strong>`;
+    singleWrap.classList.add('visible');
+    grid.innerHTML = '';
+
+    // Build options if not already built
+    if (singleSel.options.length <= 1) {
+      PARENT_CARRIERS.forEach(c => {
+        const o = document.createElement('option');
+        o.value = c; o.textContent = c;
+        singleSel.appendChild(o);
+      });
+      const gen = document.createElement('option');
+      gen.value = 'Generic'; gen.textContent = 'Generic (use standard rates)';
+      singleSel.appendChild(gen);
+    }
+
+    // Restore saved value
+    if (state.carrierMappings['__single__']) {
+      singleSel.value = state.carrierMappings['__single__'];
+    }
+  } else {
+    // Carrier column exists — multi-row mode
+    singleWrap.classList.remove('visible');
+
+    // Get unique carrier values from data
+    const companyCol = state.mappings['Company'];
+    const uniqueCarriers = [...new Set(
+      (state.rows || []).map(r => (r[companyCol] || '').trim()).filter(Boolean)
+    )].sort();
+
+    intro.innerHTML = `We found <strong>${uniqueCarriers.length} carrier${uniqueCarriers.length !== 1 ? 's' : ''}</strong> in your file. Match each one to a parent company so we can apply the right commission rates.`;
+
+    // Only rebuild if carriers have changed
+    const existingKeys = [...grid.querySelectorAll('.carrier-map-row')].map(r => r.dataset.carrier);
+    const sameCarriers = existingKeys.length === uniqueCarriers.length && uniqueCarriers.every((c,i) => c === existingKeys[i]);
+    if (sameCarriers) {
+      // Just update styles
+      uniqueCarriers.forEach(c => updateCarrierRowStyle(c));
+      return;
+    }
+
+    grid.innerHTML = '';
+    uniqueCarriers.forEach(fileCarrier => {
+      const row = document.createElement('div');
+      row.className = 'carrier-map-row';
+      row.dataset.carrier = fileCarrier;
+
+      const nameEl = document.createElement('div');
+      nameEl.className = 'carrier-file-name';
+      nameEl.textContent = fileCarrier;
+      nameEl.title = fileCarrier;
+
+      const arrow = document.createElement('div');
+      arrow.className = 'carrier-arrow';
+      arrow.textContent = '→';
+
+      const sel = document.createElement('select');
+      sel.className = 'carrier-map-select';
+      sel.dataset.carrier = fileCarrier;
+
+      const blank = document.createElement('option');
+      blank.value = ''; blank.textContent = '— select parent company —';
+      sel.appendChild(blank);
+
+      PARENT_CARRIERS.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p; o.textContent = p;
+        sel.appendChild(o);
+      });
+      const gen = document.createElement('option');
+      gen.value = 'Generic'; gen.textContent = 'Generic (use standard rates)';
+      sel.appendChild(gen);
+
+      // Auto-match if file carrier exactly matches a parent name
+      const autoMatch = PARENT_CARRIERS.find(p =>
+        p.toLowerCase() === fileCarrier.toLowerCase()
+      );
+      const saved = state.carrierMappings[fileCarrier];
+      if (saved) { sel.value = saved; sel.classList.add('selected'); }
+      else if (autoMatch) {
+        sel.value = autoMatch;
+        sel.classList.add('selected');
+        state.carrierMappings[fileCarrier] = autoMatch;
+      }
+
+      sel.addEventListener('change', () => {
+        state.carrierMappings[fileCarrier] = sel.value;
+        sel.classList.toggle('selected', !!sel.value);
+        updateCarrierRowStyle(fileCarrier);
+        validateAndUpdate();
+      });
+
+      row.appendChild(nameEl);
+      row.appendChild(arrow);
+      row.appendChild(sel);
+      grid.appendChild(row);
+      updateCarrierRowStyle(fileCarrier);
+    });
+  }
+}
+
+function updateCarrierRowStyle(fileCarrier) {
+  const row = document.querySelector(`.carrier-map-row[data-carrier="${CSS.escape(fileCarrier)}"]`);
+  if (row) row.classList.toggle('mapped', !!state.carrierMappings[fileCarrier]);
+}
+
+function onSingleCarrierChange(sel) {
+  state.carrierMappings['__single__'] = sel.value;
+  sel.classList.toggle('selected', !!sel.value);
+  validateAndUpdate();
+}
+
+function isCarrierMappingComplete() {
+  const hasCarrierCol = !!state.mappings['Company'];
+  if (!hasCarrierCol) {
+    return !!state.carrierMappings['__single__'];
+  }
+  const companyCol = state.mappings['Company'];
+  const uniqueCarriers = [...new Set(
+    (state.rows || []).map(r => (r[companyCol] || '').trim()).filter(Boolean)
+  )];
+  return uniqueCarriers.length > 0 && uniqueCarriers.every(c => !!state.carrierMappings[c]);
 }
 
 function showValidation(type, title, items) {
@@ -1134,11 +1430,15 @@ fileRemove.addEventListener('click', resetUpload);
 btnReset.addEventListener('click', resetUpload);
 
 function resetUpload() {
-  state = { file: null, headers: [], rowCount: 0, rows: [], mappings: {}, ready: false };
+  state = { file: null, headers: [], rowCount: 0, rows: [], mappings: {}, carrierMappings: {}, ready: false };
   fileInput.value = '';
   filePreview.classList.remove('visible');
   mappingSection.classList.remove('visible');
   mappingGrid.innerHTML = '';
+  document.getElementById('carrier-mapping-section').classList.remove('visible');
+  document.getElementById('carrier-map-grid').innerHTML = '';
+  document.getElementById('carrier-single-select').value = '';
+  document.getElementById('carrier-single-wrap').classList.remove('visible');
   hideValidation();
   btnAnalyze.disabled = true;
   btnReset.style.display = 'none';
@@ -1335,8 +1635,19 @@ async function _doUpload(mode, versionName) {
       return col ? row[col] : undefined;
     };
 
+    // Helper: resolve carrier name through carrier mapping
+    const resolveCarrier = (row) => {
+      const hasCarrierCol = !!state.mappings['Company'];
+      if (!hasCarrierCol) {
+        // Single-carrier mode — use the one the agent selected
+        return state.carrierMappings['__single__'] || 'Generic';
+      }
+      const fileCarrierName = (mapped(row, 'Company') || '').trim();
+      return state.carrierMappings[fileCarrierName] || 'Generic';
+    };
+
     const policies = (state.rows || []).map((row, i) => {
-      const carrier    = mapped(row, 'Company') || 'Generic';
+      const carrier    = resolveCarrier(row);
       const stateCode  = mapped(row, 'IssuedState') || null;
       const dobStr     = parseDate(mapped(row, 'DOB') || null);
       const effDateStr = parseDate(mapped(row, 'EffectiveDte') || null);
