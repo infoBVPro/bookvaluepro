@@ -936,13 +936,13 @@ let PARENT_CARRIERS = ['CVS Group', 'Humana', 'Mutual of Omaha', 'UnitedHealthCa
 // Load live carrier list from Supabase on init
 (async () => {
   try {
-    const { data } = await bvp
+    const { data, error } = await bvp
       .from('commission_rates')
       .select('carrier')
       .neq('carrier', 'Generic')
       .order('carrier');
     if (data && data.length) {
-      const unique = [...new Set(data.map(r => r.carrier))];
+      const unique = [...new Set(data.map(r => r.carrier))].filter(Boolean);
       if (unique.length) PARENT_CARRIERS = unique;
     }
   } catch(e) { /* use fallback */ }
@@ -1353,16 +1353,20 @@ function buildCarrierMappingUI() {
       gen.value = 'Generic'; gen.textContent = 'Generic (use standard rates)';
       sel.appendChild(gen);
 
-      // Auto-match if file carrier exactly matches a parent name
+      // Auto-match if file carrier exactly matches a parent name (case-insensitive)
       const autoMatch = PARENT_CARRIERS.find(p =>
         p.toLowerCase() === fileCarrier.toLowerCase()
       );
       const saved = state.carrierMappings[fileCarrier];
-      if (saved) { sel.value = saved; sel.classList.add('selected'); }
-      else if (autoMatch) {
+      if (saved && [...sel.options].some(o => o.value === saved)) {
+        sel.value = saved;
+        sel.classList.add('selected');
+      } else if (autoMatch) {
         sel.value = autoMatch;
         sel.classList.add('selected');
         state.carrierMappings[fileCarrier] = autoMatch;
+      } else {
+        sel.value = '';
       }
 
       sel.addEventListener('change', () => {
