@@ -906,22 +906,28 @@ function closeModal() {
 }
 
 async function executeAction() {
+  // DEBUG
+  console.log("BVP executeAction fired, pendingAction:", JSON.stringify(pendingAction));
   if (!pendingAction) return;
   closeModal();
 
   const { agentId } = pendingAction;
+  console.log("BVP Delete: agentId =", agentId);
   showToast('Deleting data…', '');
 
   // 1. Delete all policies for all books belonging to this agent
-  const { data: books } = await bvp.from('books').select('id').eq('agent_id', agentId);
+  const { data: books, error: bse } = await bvp.from('books').select('id').eq('agent_id', agentId);
+  console.log("BVP Delete: books found:", books, "error:", bse);
   if (books && books.length > 0) {
     const bookIds = books.map(b => b.id);
     const { error: pe } = await bvp.from('policies').delete().in('book_id', bookIds);
+    console.log("BVP Delete: policies delete error:", pe);
     if (pe) { showToast('Error deleting policies: ' + pe.message, 'error'); return; }
   }
 
   // 2. Delete all books
   const { error: be } = await bvp.from('books').delete().eq('agent_id', agentId);
+  console.log("BVP Delete: books delete error:", be);
   if (be) { showToast('Error deleting books: ' + be.message, 'error'); return; }
 
   showToast('✓ All data deleted for this user', 'success');
