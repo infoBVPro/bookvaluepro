@@ -906,12 +906,10 @@ function closeModal() {
 }
 
 async function executeAction() {
-  // DEBUG
-  console.log("BVP executeAction fired, pendingAction:", JSON.stringify(pendingAction));
   if (!pendingAction) return;
+  const { agentId } = pendingAction; // capture before closeModal clears it
   closeModal();
 
-  const { agentId } = pendingAction;
   console.log("BVP Delete: agentId =", agentId);
   showToast('Deleting data…', '');
 
