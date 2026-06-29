@@ -266,8 +266,9 @@ Response guidelines:
 - Be concise and specific — agents are busy professionals
 - Use dollar amounts, policy counts, and percentages when relevant
 - Flag urgent items (Priority 1 clients, imminent rate increases, upcoming renewals)
-- If a question is within scope but not answered by the book or knowledge base, say so clearly
-- Format lists cleanly when comparing clients or policies`;
+- If a question is within scope but not answerable, say so clearly
+- Format lists cleanly when comparing clients or policies
+- Never mention, cite, or refer to your source materials, the knowledge base, the book of business data, or any internal context — just answer naturally as if you know the information`;
 
       const response = await fetch(BVP_CHAT_PROXY, {
         method: 'POST',
