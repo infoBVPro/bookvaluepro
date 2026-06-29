@@ -87,7 +87,7 @@
     }
     #bvp-chat-clear:hover { color: #c0392b; }
     #bvp-chat-close-panel:hover { color: #0f1214; }
-    #bvp-chat-overlay { display: none; position: fixed; inset: 0; z-index: 97; }
+    #bvp-chat-overlay { display: none; }
     #bvp-chat-overlay.active { display: block; }
   `;
   document.head.appendChild(style);
@@ -169,6 +169,16 @@
     document.getElementById('bvp-chat-close-panel').addEventListener('click', closePanel);
     document.getElementById('bvp-chat-clear').addEventListener('click', clearConversation);
     document.getElementById('bvp-chat-overlay').addEventListener('click', closePanel);
+
+    // Close panel when clicking anywhere outside the chat bar or panel
+    document.addEventListener('click', function(e) {
+      if (!isOpen) return;
+      const bar   = document.getElementById('bvp-chat-bar');
+      const panel = document.getElementById('bvp-chat-panel');
+      if (bar && bar.contains(e.target)) return;
+      if (panel && panel.contains(e.target)) return;
+      closePanel();
+    }, true);
   }
 
   function openPanel() {
