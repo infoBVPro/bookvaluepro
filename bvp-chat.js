@@ -43,10 +43,10 @@
       border-radius: 0 0 16px 16px; box-shadow: 0 12px 40px rgba(0,0,0,0.12);
       width: 100%; max-width: 860px; max-height: 480px;
       display: flex; flex-direction: column; overflow: hidden;
-      font-family: 'DM Sans', sans-serif; pointer-events: all;
+      font-family: 'DM Sans', sans-serif; pointer-events: none;
       opacity: 0; transform: translateY(-8px); transition: opacity 0.2s, transform 0.2s;
     }
-    #bvp-chat-panel-inner.open { opacity: 1; transform: translateY(0); }
+    #bvp-chat-panel-inner.open { opacity: 1; transform: translateY(0); pointer-events: all; }
     #bvp-chat-messages {
       flex: 1; overflow-y: auto; padding: 20px 24px;
       display: flex; flex-direction: column; gap: 14px; background: #f7f4ef;
@@ -170,15 +170,15 @@
     document.getElementById('bvp-chat-clear').addEventListener('click', clearConversation);
     document.getElementById('bvp-chat-overlay').addEventListener('click', closePanel);
 
-    // Close panel when clicking anywhere outside the chat bar or panel
-    document.addEventListener('click', function(e) {
+    // Close panel when clicking outside the chat bar or panel (bubble phase, not capture)
+    document.addEventListener('mousedown', function(e) {
       if (!isOpen) return;
-      const bar   = document.getElementById('bvp-chat-bar');
-      const panel = document.getElementById('bvp-chat-panel');
-      if (bar && bar.contains(e.target)) return;
-      if (panel && panel.contains(e.target)) return;
+      const barEl   = document.getElementById('bvp-chat-bar');
+      const panelEl = document.getElementById('bvp-chat-panel-inner');
+      if (barEl && barEl.contains(e.target)) return;
+      if (panelEl && panelEl.contains(e.target)) return;
       closePanel();
-    }, true);
+    });
   }
 
   function openPanel() {
