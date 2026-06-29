@@ -336,7 +336,7 @@ header {
     <select class="filter-select" id="filter-carrier" onchange="applyFilters()">
       <option value="">All carriers</option>
     </select>
-    <select class="filter-select" id="filter-plan" onchange="setPlanView(this.value)" style="font-weight:500;">
+    <select class="filter-select" id="filter-plan" onchange="applyFilters()" style="font-weight:500;">
       <option value="">All plans</option>
       <option value="A">Plan A</option>
       <option value="F">Plan F</option>
@@ -527,6 +527,7 @@ function persistFilters() {
 function applyFilters() {
   filterCarrier = document.getElementById('filter-carrier').value;
   filterState   = document.getElementById('filter-state').value;
+  filterPlan    = document.getElementById('filter-plan').value;
   filterEnroll  = document.getElementById('filter-enroll').value;
   persistFilters();
   renderAll();
