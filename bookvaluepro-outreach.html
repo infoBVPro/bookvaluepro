@@ -20,16 +20,6 @@
   --shadow:0 1px 4px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.04);
 }
 html,body{background:var(--cream);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased;min-height:100vh}
-header{background:#0d2e1e;border-bottom:1px solid rgba(61,162,114,0.15);padding:0 2rem;height:64px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
-.logo-mark{font-family:var(--serif);font-size:20px;color:var(--accent)}
-.header-right{display:flex;align-items:center;gap:20px}
-.book-name{font-family:var(--mono);font-size:12px;color:var(--ink-3);background:var(--cream);border:1px solid var(--cream-2);padding:4px 10px;border-radius:6px}
-.steps{display:flex;align-items:center}
-.step{display:flex;align-items:center;gap:6px;font-size:12px;color:#7abf9a}
-.step.active{color:white;font-weight:500}.step.done{color:#3da272}
-.step-num{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;background:rgba(255,255,255,0.1);color:#7abf9a}
-.step.active .step-num{background:#3da272;color:#fff}.step.done .step-num{background:#1a5c3a;color:#3da272}
-.step-sep{width:24px;height:1px;background:rgba(122,191,154,0.2);margin:0 4px}
 .page{max-width:1280px;margin:0 auto;padding:36px 40px 80px}
 .page-header{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:16px}
 .page-title{font-family:var(--serif);font-size:32px;letter-spacing:-.02em}
@@ -261,8 +251,9 @@ tbody tr.selected { background:var(--accent-l) !important; }
 
 /* ── STANDARD HEADER ── */
 .bvp-header {
+  flex-wrap: nowrap;
   background: #0d2e1e;
-  height: 64px;
+  min-height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -341,6 +332,22 @@ tbody tr.selected { background:var(--accent-l) !important; }
   white-space: nowrap;
 }
 .bvp-signout:hover { border-color: #3da272; color: white; }
+
+@media (max-width: 1100px) {
+  .bvp-header {
+  flex-wrap: nowrap; height: auto; flex-wrap: wrap; padding: 10px 1.5rem; }
+  .bvp-header-nav { order: 3; width: 100%; justify-content: center; padding-bottom: 8px; }
+}
+@media (max-width: 900px) {
+  .bvp-header {
+  flex-wrap: nowrap; padding: 10px 1rem; }
+  .bvp-nav-step span { display: none; }
+  .bvp-nav-sep { width: 10px; }
+}
+@media (max-width: 580px) {
+  .bvp-agent-email { display: none; }
+  .bvp-book-chip { max-width: 120px; }
+}
 
 </style>
 </head>

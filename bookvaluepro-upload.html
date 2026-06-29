@@ -46,68 +46,106 @@ html, body {
   grid-template-columns: 1fr;
 }
 
-/* ── HEADER ── */
-header {
+/* ── HEADER (canonical — same across all pages) ── */
+.bvp-header {
   background: #0d2e1e;
-  border-bottom: 1px solid rgba(61,162,114,0.15);
-  padding: 0 2rem;
-  height: 64px;
+  min-height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 0 2rem;
+  border-bottom: 1px solid rgba(61,162,114,0.15);
   position: sticky;
   top: 0;
-  z-index: 50;
+  z-index: 100;
+  gap: 16px;
+  flex-wrap: nowrap;
 }
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  flex-shrink: 0;
+.bvp-logo {
+  display: flex; align-items: center; gap: 10px;
+  text-decoration: none; flex-shrink: 0;
 }
-
-.bvp-book-chip {
-  font-size: 11px; color: #7abf9a;
-  background: rgba(26,92,58,0.4);
-  border: 1px solid rgba(61,162,114,0.2);
-  padding: 4px 12px; border-radius: 20px;
-  font-family: var(--mono);
-  display: none;
+.bvp-logo-mark {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: #1a5c3a; border: 1.5px solid #3da272;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; color: white;
+  font-family: var(--sans);
 }
-
-.bvp-book-chip.visible { display: inline-block; }
-
-.steps {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+.bvp-logo-word {
+  font-family: var(--serif);
+  font-size: 17px; color: white;
 }
-
-.step {
+.bvp-logo-word span { color: #3da272; }
+.bvp-header-nav {
+  display: flex; align-items: center; gap: 0;
+  flex: 1; justify-content: center;
+  overflow: hidden;
+}
+.bvp-nav-step {
   display: flex; align-items: center; gap: 6px;
   font-size: 12px; color: #7abf9a;
-  text-decoration: none;
+  padding: 4px 8px; border-radius: 6px;
+  text-decoration: none; transition: all 0.2s;
+  font-family: var(--sans);
+  cursor: pointer; white-space: nowrap;
+  flex-shrink: 0;
 }
-
-.step.active { color: white; font-weight: 500; }
-.step.done   { color: #3da272; }
-
-.step-num {
+.bvp-nav-step:hover { color: white; }
+.bvp-nav-step.active { color: white; font-weight: 500; cursor: default; }
+.bvp-nav-step.done { color: #3da272; }
+.bvp-nav-num {
   width: 20px; height: 20px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-family: var(--mono); font-size: 10px;
   background: rgba(255,255,255,0.1); color: #7abf9a;
   flex-shrink: 0;
 }
+.bvp-nav-step.active .bvp-nav-num { background: #3da272; color: white; }
+.bvp-nav-step.done .bvp-nav-num { background: #1a5c3a; color: #3da272; }
+.bvp-nav-sep { width: 20px; height: 1px; background: rgba(122,191,154,0.2); margin: 0 2px; flex-shrink: 0; }
+.bvp-header-right {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+}
+.bvp-book-chip {
+  font-size: 11px; color: #7abf9a;
+  background: rgba(26,92,58,0.4);
+  border: 1px solid rgba(61,162,114,0.2);
+  padding: 4px 12px; border-radius: 20px;
+  font-family: var(--mono);
+  white-space: nowrap; max-width: 180px;
+  overflow: hidden; text-overflow: ellipsis;
+  display: none;
+}
+.bvp-book-chip.visible { display: inline-block; }
+.bvp-agent-email {
+  font-size: 12px; color: #7abf9a;
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+.bvp-signout {
+  font-size: 12px; color: #7abf9a; background: transparent;
+  border: 1px solid rgba(122,191,154,0.3); padding: 6px 14px;
+  border-radius: 6px; cursor: pointer;
+  font-family: var(--sans); transition: all 0.2s;
+  white-space: nowrap; display: none;
+}
+.bvp-signout:hover { border-color: #3da272; color: white; }
+.bvp-signout.visible { display: inline-block; }
 
-.step.active .step-num { background: #3da272; color: #fff; }
-.step.done   .step-num { background: #1a5c3a; color: #3da272; }
-
-.step-sep { width: 24px; height: 1px; background: rgba(122,191,154,0.2); margin: 0 4px; }
+@media (max-width: 1100px) {
+  .bvp-header { height: auto; flex-wrap: wrap; padding: 10px 1.5rem; }
+  .bvp-header-nav { order: 3; width: 100%; justify-content: center; padding-bottom: 8px; }
+}
+@media (max-width: 900px) {
+  .bvp-header { padding: 10px 1rem; }
+  .bvp-nav-step span { display: none; }
+  .bvp-nav-sep { width: 10px; }
+}
+@media (max-width: 580px) {
+  .bvp-agent-email { display: none; }
+  .bvp-book-chip { max-width: 120px; }
+}
 
 /* ── MAIN ── */
 main {
@@ -733,40 +771,25 @@ footer {
 <div class="shell">
 
 <!-- HEADER -->
-<header>
-  <a href="bookvaluepro-dashboard.html" style="text-decoration:none;display:flex;align-items:center;gap:10px;flex-shrink:0;">
-    <div style="width:34px;height:34px;border-radius:50%;background:#1a5c3a;border:1.5px solid #3da272;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:white;font-family:var(--sans);">BV</div>
-    <span style="font-family:var(--serif);font-size:17px;color:white;">Book<span style="color:#3da272;">Value</span>Pro</span>
+<header class="bvp-header">
+  <a class="bvp-logo" href="bookvaluepro-dashboard.html">
+    <div class="bvp-logo-mark">BV</div>
+    <div class="bvp-logo-word">Book<span>Value</span>Pro</div>
   </a>
-  <div class="steps">
-    <div class="step active">
-      <div class="step-num">1</div>
-      <span>Upload</span>
-    </div>
-    <div class="step-sep"></div>
-    <a href="bookvaluepro-dashboard.html" class="step" id="step-dashboard" style="text-decoration:none;">
-      <div class="step-num">2</div>
-      <span>Dashboard</span>
-    </a>
-    <div class="step-sep"></div>
-    <a href="bookvaluepro-clients.html" class="step" id="step-clients" style="text-decoration:none;">
-      <div class="step-num">3</div>
-      <span>Clients</span>
-    </a>
-    <div class="step-sep"></div>
-    <a href="bookvaluepro-outreach.html" class="step" id="step-outreach" style="text-decoration:none;">
-      <div class="step-num">4</div>
-      <span>Outreach</span>
-    </a>
-    <div class="step-sep"></div>
-    <a href="bookvaluepro-commissions.html" class="step" id="step-commissions" style="text-decoration:none;">
-      <div class="step-num">5</div>
-      <span>Commissions</span>
-    </a>
-  </div>
-  <div class="header-right">
-    <span id="agent-name" style="font-family:var(--mono);font-size:12px;color:#7abf9a;"></span>
-    <button id="btn-signout" onclick="bvpSignOut()" style="display:none;font-size:12px;color:#7abf9a;background:transparent;border:1px solid rgba(122,191,154,0.3);cursor:pointer;padding:6px 14px;border-radius:6px;font-family:var(--sans);transition:all 0.2s;">Sign out</button>
+  <nav class="bvp-header-nav">
+    <div class="bvp-nav-step active"><div class="bvp-nav-num">1</div><span>Upload</span></div>
+    <div class="bvp-nav-sep"></div>
+    <a href="bookvaluepro-dashboard.html" class="bvp-nav-step" id="step-dashboard"><div class="bvp-nav-num">2</div><span>Dashboard</span></a>
+    <div class="bvp-nav-sep"></div>
+    <a href="bookvaluepro-clients.html" class="bvp-nav-step" id="step-clients"><div class="bvp-nav-num">3</div><span>Clients</span></a>
+    <div class="bvp-nav-sep"></div>
+    <a href="bookvaluepro-outreach.html" class="bvp-nav-step" id="step-outreach"><div class="bvp-nav-num">4</div><span>Outreach</span></a>
+    <div class="bvp-nav-sep"></div>
+    <a href="bookvaluepro-commissions.html" class="bvp-nav-step" id="step-commissions"><div class="bvp-nav-num">5</div><span>Commissions</span></a>
+  </nav>
+  <div class="bvp-header-right">
+    <span class="bvp-agent-email" id="agent-name"></span>
+    <button class="bvp-signout" id="btn-signout" onclick="bvpSignOut()">Sign out</button>
     <span class="bvp-book-chip" id="book-name"></span>
   </div>
 </header>
@@ -1457,7 +1480,7 @@ bvpRequireAuth().then(async session => {
     const nameEl = document.getElementById('agent-name');
     if (nameEl) nameEl.textContent = session.user.email;
     const signOutBtn = document.getElementById('btn-signout');
-    if (signOutBtn) signOutBtn.style.display = '';
+    if (signOutBtn) signOutBtn.classList.add('visible');
 
     // If agent already has a book, activate the step links and show the book chip
     const existingBook = await bvpGetActiveBook(session.user.id);

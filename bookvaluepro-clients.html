@@ -34,7 +34,7 @@ header {
 /* ── STANDARD HEADER ── */
 .bvp-header {
   background: #0d2e1e;
-  height: 64px;
+  min-height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -44,6 +44,7 @@ header {
   top: 0;
   z-index: 100;
   gap: 16px;
+  flex-wrap: nowrap;
 }
 .bvp-logo {
   display: flex; align-items: center; gap: 10px;
@@ -101,6 +102,20 @@ header {
   font-family: var(--sans); transition: all 0.2s; white-space: nowrap;
 }
 .bvp-signout:hover { border-color: #3da272; color: white; }
+
+@media (max-width: 1100px) {
+  .bvp-header { height: auto; flex-wrap: wrap; padding: 10px 1.5rem; }
+  .bvp-header-nav { order: 3; width: 100%; justify-content: center; padding-bottom: 8px; }
+}
+@media (max-width: 900px) {
+  .bvp-header { padding: 10px 1rem; }
+  .bvp-nav-step span { display: none; }
+  .bvp-nav-sep { width: 10px; }
+}
+@media (max-width: 580px) {
+  .bvp-agent-email { display: none; }
+  .bvp-book-chip { max-width: 120px; }
+}
 
 /* ── PAGE LAYOUT ── */
 .page { max-width: 1400px; margin: 0 auto; padding: 2rem; }

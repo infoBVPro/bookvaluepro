@@ -46,10 +46,10 @@ html, body {
   min-height: 100vh;
 }
 
-/* ── HEADER ── */
+/* ── HEADER (canonical — same across all pages) ── */
 .bvp-header {
   background: #0d2e1e;
-  height: 64px;
+  min-height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -59,6 +59,7 @@ html, body {
   top: 0;
   z-index: 100;
   gap: 16px;
+  flex-wrap: nowrap;
 }
 .bvp-logo {
   display: flex; align-items: center; gap: 10px;
@@ -78,7 +79,8 @@ html, body {
 .bvp-logo-word span { color: #3da272; }
 .bvp-header-nav {
   display: flex; align-items: center; gap: 0;
-  flex: 1; justify-content: center; flex-wrap: wrap;
+  flex: 1; justify-content: center;
+  overflow: hidden;
 }
 .bvp-nav-step {
   display: flex; align-items: center; gap: 6px;
@@ -87,10 +89,12 @@ html, body {
   text-decoration: none; transition: all 0.2s;
   font-family: var(--sans);
   cursor: pointer; white-space: nowrap;
+  flex-shrink: 0;
 }
 .bvp-nav-step:hover { color: white; }
 .bvp-nav-step.active { color: white; font-weight: 500; cursor: default; }
 .bvp-nav-step.done { color: #3da272; }
+.bvp-nav-step.locked { color: rgba(122,191,154,0.3); cursor: not-allowed; }
 .bvp-nav-num {
   width: 20px; height: 20px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
@@ -100,6 +104,7 @@ html, body {
 }
 .bvp-nav-step.active .bvp-nav-num { background: #3da272; color: white; }
 .bvp-nav-step.done .bvp-nav-num { background: #1a5c3a; color: #3da272; }
+.bvp-nav-step.locked .bvp-nav-num { background: rgba(255,255,255,0.05); color: rgba(122,191,154,0.3); }
 .bvp-nav-sep { width: 20px; height: 1px; background: rgba(122,191,154,0.2); margin: 0 2px; flex-shrink: 0; }
 .bvp-header-right {
   display: flex; align-items: center; gap: 10px; flex-shrink: 0;
@@ -110,7 +115,7 @@ html, body {
   border: 1px solid rgba(61,162,114,0.2);
   padding: 4px 12px; border-radius: 20px;
   font-family: var(--mono);
-  white-space: nowrap; max-width: 220px;
+  white-space: nowrap; max-width: 180px;
   overflow: hidden; text-overflow: ellipsis;
 }
 .bvp-agent-email {
@@ -157,8 +162,8 @@ html, body {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex: 1;
-  min-width: 260px;
+  flex: 1 1 200px;
+  min-width: 0;
 }
 
 .assumption-field label {
@@ -170,6 +175,7 @@ html, body {
 
 .assumption-field input[type=range] {
   flex: 1;
+  min-width: 80px;
   accent-color: var(--accent);
   cursor: pointer;
 }
@@ -184,6 +190,7 @@ html, body {
   padding: 3px 10px;
   min-width: 52px;
   text-align: center;
+  flex-shrink: 0;
 }
 
 .assumption-note {
@@ -223,6 +230,7 @@ html, body {
   grid-template-columns: 1.4fr 1fr 1fr 1fr;
   gap: 16px;
   margin-bottom: 8px;
+  min-width: 0;
 }
 
 .npv-card {
@@ -233,6 +241,7 @@ html, body {
   box-shadow: var(--shadow);
   position: relative;
   overflow: hidden;
+  min-width: 0;
 }
 
 .npv-card.total {
@@ -274,13 +283,14 @@ html, body {
 
 .card-value {
   font-family: var(--serif);
-  font-size: 32px;
+  font-size: clamp(20px, 2.4vw, 32px);
   color: var(--ink);
   letter-spacing: -.02em;
   line-height: 1.1;
+  word-break: break-word;
 }
 
-.npv-card.total .card-value { color: #fff; font-size: 38px; }
+.npv-card.total .card-value { color: #fff; font-size: clamp(24px, 3vw, 38px); }
 
 .card-meta {
   margin-top: 12px;
@@ -567,18 +577,28 @@ tfoot td.num { text-align: right; }
 }
 
 /* ── RESPONSIVE ── */
+@media (max-width: 1100px) {
+  .bvp-header { min-height: 64px; height: auto; flex-wrap: wrap; padding: 10px 1.5rem; }
+  .bvp-header-nav { order: 3; width: 100%; justify-content: center; padding-bottom: 8px; }
+}
+
 @media (max-width: 900px) {
   .page { padding: 24px 20px 60px; }
-  .bvp-header { padding: 0 1rem; }
+  .bvp-header { padding: 10px 1rem; }
+  .bvp-nav-step span { display: none; }
+  .bvp-nav-sep { width: 10px; }
   .npv-grid { grid-template-columns: 1fr 1fr; }
   .npv-card.total { grid-column: 1 / -1; }
-  .assumption-bar { gap: 16px; }
-  .assumption-field { min-width: 100%; }
+  .assumption-bar { gap: 12px; }
+  .assumption-field { flex-basis: 100%; }
+  .assumption-label { flex-basis: 100%; }
   .assumption-note { display: none; }
 }
 
 @media (max-width: 580px) {
   .npv-grid { grid-template-columns: 1fr; }
+  .bvp-agent-email { display: none; }
+  .bvp-book-chip { max-width: 120px; }
 }
 </style>
 </head>
