@@ -160,16 +160,15 @@ async function bvpSetActiveBook(agentId, bookId) {
 
 async function bvpUploadBook(agentId, fileName, policies, mode = 'version', versionName = null, agentEmail = null) {
   let bookId;
+  let isNewBook = false;
+  let previousCount = 0;
 
   if (mode === 'append') {
     const active = await bvpGetActiveBook(agentId);
     if (!active) { console.error('bvpUploadBook: no active book to append to'); return null; }
     bookId = active.id;
-    await bvp.from('books').update({
-      policy_count: (active.policy_count || 0) + policies.length,
-      uploaded_at:  new Date().toISOString(),
-      ...(agentEmail ? { agent_email: agentEmail } : {}),
-    }).eq('id', bookId);
+    previousCount = active.policy_count || 0;
+    // NOTE: policy_count is finalized below, only after every row is confirmed inserted.
   } else {
     await bvp.from('books').update({ is_active: false }).eq('agent_id', agentId);
     const { data: book, error } = await bvp.from('books').insert({
@@ -178,20 +177,53 @@ async function bvpUploadBook(agentId, fileName, policies, mode = 'version', vers
       file_name:    fileName,
       version_name: versionName || fileName,
       is_active:    true,
-      policy_count: policies.length,
+      policy_count: 0, // placeholder — set to the real inserted count once the loop below succeeds
     }).select().single();
     if (error) { console.error('bvpUploadBook insert book error:', error); throw new Error('Book insert failed: ' + (error.message || JSON.stringify(error))); }
     bookId = book.id;
+    isNewBook = true;
+
+    // Fresh replace — clear any stale rows before inserting the new set
+    await bvp.from('policies').delete().eq('book_id', bookId);
   }
 
-  // Clear any existing policies for this book, then insert fresh
+  // Insert in chunks, tracking exactly which rows land (by id) so a failed
+  // chunk can be rolled back precisely instead of leaving a partial book.
   const CHUNK = 100;
-  await bvp.from('policies').delete().eq('book_id', bookId);
+  const insertedIds = [];
   for (let i = 0; i < policies.length; i += CHUNK) {
     const chunk = policies.slice(i, i + CHUNK).map(p => ({ ...p, book_id: bookId, agent_id: agentId }));
-    const { error } = await bvp.from('policies').insert(chunk);
-    if (error) { console.error('bvpUploadBook policies chunk error:', error); return null; }
+    const { data, error } = await bvp.from('policies').insert(chunk).select('id');
+    if (error) {
+      console.error(`bvpUploadBook: chunk at rows ${i}-${i + chunk.length - 1} failed —`, error);
+
+      // Roll back only the rows THIS call inserted — never touch pre-existing data.
+      if (insertedIds.length > 0) {
+        await bvp.from('policies').delete().in('id', insertedIds);
+      }
+      if (isNewBook) {
+        // The book has no valid data at all — remove the orphaned row entirely
+        // rather than leaving a book stuck at policy_count: 0 with no policies.
+        await bvp.from('books').delete().eq('id', bookId);
+      }
+      // (append mode: existing book/count is left untouched since nothing was added)
+
+      return null;
+    }
+    (data || []).forEach(r => insertedIds.push(r.id));
   }
+
+  // Every row is confirmed committed — now it's safe to record the real count.
+  if (mode === 'append') {
+    await bvp.from('books').update({
+      policy_count: previousCount + insertedIds.length,
+      uploaded_at:  new Date().toISOString(),
+      ...(agentEmail ? { agent_email: agentEmail } : {}),
+    }).eq('id', bookId);
+  } else {
+    await bvp.from('books').update({ policy_count: insertedIds.length }).eq('id', bookId);
+  }
+
   return bookId;
 }
 
