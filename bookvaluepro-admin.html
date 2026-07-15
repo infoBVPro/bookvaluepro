@@ -504,7 +504,7 @@ let adminSession = null;
 async function loadUsers() {
   const { data: books, error } = await bvp
     .from('books')
-    .select('agent_id, agent_email, file_name, version_name, policy_count, uploaded_at, is_active')
+    .select('id, agent_id, agent_email, file_name, version_name, policy_count, uploaded_at, is_active')
     .order('uploaded_at', { ascending: false });
 
   if (error) {
