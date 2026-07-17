@@ -1,4 +1,4 @@
-// bvp-chat.js — BookValuePro AI Chat Bar v3
+// bvp-chat.js — BookValuePro AI Chat Bar v2
 // Include AFTER bvp-supabase.js: <script src="bvp-chat.js"></script>
 
 (function () {
@@ -43,10 +43,10 @@
       border-radius: 0 0 16px 16px; box-shadow: 0 12px 40px rgba(0,0,0,0.12);
       width: 100%; max-width: 860px; max-height: 480px;
       display: flex; flex-direction: column; overflow: hidden;
-      font-family: 'DM Sans', sans-serif; pointer-events: all;
+      font-family: 'DM Sans', sans-serif; pointer-events: none;
       opacity: 0; transform: translateY(-8px); transition: opacity 0.2s, transform 0.2s;
     }
-    #bvp-chat-panel-inner.open { opacity: 1; transform: translateY(0); }
+    #bvp-chat-panel-inner.open { opacity: 1; transform: translateY(0); pointer-events: all; }
     #bvp-chat-messages {
       flex: 1; overflow-y: auto; padding: 20px 24px;
       display: flex; flex-direction: column; gap: 14px; background: #f7f4ef;
@@ -87,7 +87,10 @@
     }
     #bvp-chat-clear:hover { color: #c0392b; }
     #bvp-chat-close-panel:hover { color: #0f1214; }
-    #bvp-chat-overlay { display: none; position: fixed; inset: 0; z-index: 97; }
+    #bvp-chat-overlay {
+      display: none; position: fixed; inset: 0; z-index: 97;
+      background: rgba(7,22,13,0.25); cursor: pointer;
+    }
     #bvp-chat-overlay.active { display: block; }
   `;
   document.head.appendChild(style);
@@ -146,8 +149,8 @@
     'Who are my Priority 1 clients?',
     'Any upcoming rate increases?',
     'Which clients renew next month?',
-    'What states are in my book?',
-    'Which carrier has the most policies?',
+    'Show my top NPV policies',
+    'Any state regulation updates?',
   ];
 
   function init() {
@@ -169,6 +172,16 @@
     document.getElementById('bvp-chat-close-panel').addEventListener('click', closePanel);
     document.getElementById('bvp-chat-clear').addEventListener('click', clearConversation);
     document.getElementById('bvp-chat-overlay').addEventListener('click', closePanel);
+
+    // Close panel when clicking outside the chat bar or panel (bubble phase, not capture)
+    document.addEventListener('mousedown', function(e) {
+      if (!isOpen) return;
+      const barEl   = document.getElementById('bvp-chat-bar');
+      const panelEl = document.getElementById('bvp-chat-panel-inner');
+      if (barEl && barEl.contains(e.target)) return;
+      if (panelEl && panelEl.contains(e.target)) return;
+      closePanel();
+    });
   }
 
   function openPanel() {
@@ -244,19 +257,7 @@ IF ASKED ANYTHING OUTSIDE THIS SCOPE: Politely decline and say — "I'm only abl
 
 Do NOT answer questions about: general finance, investments, other insurance lines (auto, home, life), politics, technology, health topics unrelated to senior insurance products, or any other off-topic subject — even if the user insists or rephrases.
 
---- FIELD DEFINITIONS ---
-priority: 1=highest opportunity (save & switch candidate), 2=medium, 3=low/retain
-curr_npv: current net present value of future commissions ($)
-ren_npv: renewal NPV if client switches to a new carrier ($)
-eff_month: month number (1-12) when the policy anniversary/renewal occurs
-duration_yr: how many years the policy has been in force
-issued_state: US state where the policy was issued
-company: current insurance carrier
-plan_type: Medicare Supplement plan letter (G, N, F, etc.)
-curr_prem: current monthly premium
-comm_prem: commissionable premium
-ren_carrier: proposed renewal carrier (if set)
-enrollment_type: how the policy was originally issued (OpenEnrollment, Underwritten, StateGuaranteedIssue, etc.)
+You have access to two sources of information:
 
 --- AGENT'S BOOK OF BUSINESS ---
 ${bookContext}
@@ -265,12 +266,12 @@ ${bookContext}
 ${buildKnowledgeContext(knowledgeDocs)}
 
 Response guidelines:
-- Answer questions using the exact policy data provided above
-- When asked about states, carriers, plans, or any field — look it up in the policy data
 - Be concise and specific — agents are busy professionals
 - Use dollar amounts, policy counts, and percentages when relevant
 - Flag urgent items (Priority 1 clients, imminent rate increases, upcoming renewals)
-- Format lists cleanly when comparing clients or policies`;
+- If a question is within scope but not answerable, say so clearly
+- Format lists cleanly when comparing clients or policies
+- Never mention, cite, or refer to your source materials, the knowledge base, the book of business data, or any internal context — just answer naturally as if you know the information`;
 
       const response = await fetch(BVP_CHAT_PROXY, {
         method: 'POST',
@@ -334,81 +335,34 @@ Response guidelines:
       .replace(/\n/g, '<br>');
   }
 
-  // ── CONTEXT BUILDERS ─────────────────────────────────────────
-
   function buildBookContext(book, policies) {
     if (!policies || policies.length === 0) return 'Book loaded but no policies found.';
-
     const totalNPV     = policies.reduce((s, p) => s + (p.curr_npv || 0), 0);
     const p1           = policies.filter(p => p.priority === 1);
     const p2           = policies.filter(p => p.priority === 2);
     const p3           = policies.filter(p => p.priority === 3);
     const nextMonth    = new Date().getMonth() + 1 === 12 ? 1 : new Date().getMonth() + 2;
     const renewingNext = policies.filter(p => p.eff_month === nextMonth);
-
-    // Aggregates
-    const states   = [...new Set(policies.map(p => p.issued_state).filter(Boolean))].sort();
-    const carriers = [...new Set(policies.map(p => p.company).filter(Boolean))].sort();
-    const plans    = [...new Set(policies.map(p => p.plan_type).filter(Boolean))].sort();
-
-    const byCarrier = {};
-    const byState   = {};
-    const byPlan    = {};
-
+    const byCarrier    = {};
     policies.forEach(p => {
-      const c = p.company      || 'Unknown';
-      const s = p.issued_state || 'Unknown';
-      const pl = p.plan_type   || 'Unknown';
-
-      if (!byCarrier[c])  byCarrier[c]  = { count: 0, npv: 0 };
-      if (!byState[s])    byState[s]    = { count: 0, npv: 0 };
-      if (!byPlan[pl])    byPlan[pl]    = { count: 0, npv: 0 };
-
-      byCarrier[c].count++;  byCarrier[c].npv  += p.curr_npv || 0;
-      byState[s].count++;    byState[s].npv    += p.curr_npv || 0;
-      byPlan[pl].count++;    byPlan[pl].npv    += p.curr_npv || 0;
+      const c = p.company || 'Unknown';
+      if (!byCarrier[c]) byCarrier[c] = { count: 0, npv: 0 };
+      byCarrier[c].count++;
+      byCarrier[c].npv += p.curr_npv || 0;
     });
-
     const carrierLines = Object.entries(byCarrier)
       .sort((a, b) => b[1].npv - a[1].npv)
-      .map(([c, v]) => `  ${c}: ${v.count} policies, $${Math.round(v.npv).toLocaleString()} NPV`)
+      .map(([c, v]) => `  - ${c}: ${v.count} policies, $${Math.round(v.npv).toLocaleString()} NPV`)
       .join('\n');
-
-    const stateLines = Object.entries(byState)
-      .sort((a, b) => b[1].count - a[1].count)
-      .map(([s, v]) => `  ${s}: ${v.count} policies, $${Math.round(v.npv).toLocaleString()} NPV`)
-      .join('\n');
-
-    const planLines = Object.entries(byPlan)
-      .sort((a, b) => b[1].count - a[1].count)
-      .map(([pl, v]) => `  Plan ${pl}: ${v.count} policies, $${Math.round(v.npv).toLocaleString()} NPV`)
-      .join('\n');
-
-    // Full policy list — all fields the AI needs
-    const policyLines = policies.map(p =>
-      `  [P${p.priority}] ${p.first_name || ''} ${p.last_name || ''} | ${p.company || 'N/A'} | Plan ${p.plan_type || 'N/A'} | State: ${p.issued_state || 'N/A'} | Prem: $${p.curr_prem || 0}/mo | Dur: Yr${p.duration_yr || 1} | Renews: Mo${p.eff_month || 'N/A'} | Enrollment: ${p.enrollment_type || 'N/A'} | Curr NPV: $${Math.round(p.curr_npv || 0).toLocaleString()} | Ren NPV: $${Math.round(p.ren_npv || 0).toLocaleString()}${p.ren_carrier ? ` | Ren Carrier: ${p.ren_carrier}` : ''}`
+    const top10 = p1.slice(0, 10).map(p =>
+      `  - ${p.first_name || ''} ${p.last_name || ''} | ${p.company} | $${Math.round(p.curr_npv || 0).toLocaleString()} NPV | ${p.issued_state || 'N/A'} | Renews month ${p.eff_month || 'N/A'}`
     ).join('\n');
-
-    return `BOOK SUMMARY
-File: ${book.file_name} | Total Policies: ${book.policy_count}
+    return `Book: ${book.file_name} (${book.policy_count} policies)
 Total Book NPV: $${Math.round(totalNPV).toLocaleString()}
 Priority 1: ${p1.length} | Priority 2: ${p2.length} | Priority 3: ${p3.length}
 Renewing next month (month ${nextMonth}): ${renewingNext.length} policies
-States in book: ${states.join(', ')}
-Carriers in book: ${carriers.join(', ')}
-Plans in book: ${plans.join(', ')}
-
-BY CARRIER:
-${carrierLines}
-
-BY STATE:
-${stateLines}
-
-BY PLAN:
-${planLines}
-
-ALL POLICIES (${policies.length} total):
-${policyLines}`;
+Carrier Breakdown:\n${carrierLines}
+Top Priority 1 Clients (up to 10):\n${top10 || '  None'}`;
   }
 
   function buildKnowledgeContext(docs) {
