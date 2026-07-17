@@ -476,7 +476,7 @@ const POLICIES = []; // Populated from Supabase
 const SAVINGS_PCT = +(localStorage.getItem('bvp_savings_pct') || 10);
 
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
-const CURRENT_MONTH=4; // May 2026 = month 5; April 2026 = month 4
+const CURRENT_MONTH=new Date().getMonth()+1; // 1=January ... 12=December, matches MONTHS[m-1] indexing below
 const fmt$=v=>'$'+Math.round(v).toLocaleString();
 
 // Compute contact month: effMonth shifted back by leadMonths, wrapping around calendar
