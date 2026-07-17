@@ -1109,35 +1109,96 @@ function parsePDF(file) {
   pdfjsLib.GlobalWorkerOptions.workerSrc =
     'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
+  // Tuning constants for reconstructing a table from raw word positions.
+  const ROW_Y_TOLERANCE = 3;   // px: words within this baseline distance are the same row
+  const COL_GAP_THRESHOLD = 15; // px: gap between words bigger than this starts a new column
+
   const reader = new FileReader();
   reader.onload = async e => {
     try {
       const pdf = await pdfjsLib.getDocument({ data: e.target.result }).promise;
-      let allText = '';
+
+      // 1. Pull every word from every page with its position, and group words into
+      //    visual rows. We used to join all page text with a single space, which
+      //    throws away column boundaries entirely — that (plus never assigning
+      //    state.rows below) is why PDF uploads always found 0 carriers.
+      const allRows = [];
       for (let p = 1; p <= pdf.numPages; p++) {
         const page = await pdf.getPage(p);
         const content = await page.getTextContent();
-        allText += content.items.map(i => i.str).join(' ') + '\n';
+
+        const words = content.items
+          .map(it => ({
+            str: it.str.trim(),
+            x0: it.transform[4],
+            x1: it.transform[4] + (it.width || 0),
+            y: it.transform[5],
+          }))
+          .filter(w => w.str);
+
+        // PDF y runs bottom-up; sort words top-to-bottom, then bucket by baseline
+        words.sort((a, b) => b.y - a.y);
+        const buckets = [];
+        for (const w of words) {
+          let bucket = buckets.find(b => Math.abs(b.y - w.y) <= ROW_Y_TOLERANCE);
+          if (!bucket) { bucket = { y: w.y, items: [] }; buckets.push(bucket); }
+          bucket.items.push(w);
+        }
+        buckets.forEach(b => b.items.sort((a, c) => a.x0 - c.x0));
+        allRows.push(...buckets.map(b => b.items));
       }
-      // Heuristic: find header-like line (row with 4+ short words)
-      const lines = allText.split('\n').filter(l => l.trim());
-      let headerLine = lines[0];
-      for (const line of lines) {
-        const words = line.trim().split(/\s{2,}|\t/);
-        if (words.length >= 4) { headerLine = line; break; }
+
+      if (!allRows.length) throw new Error('No text found in PDF');
+
+      // 2. Determine column start positions from the first DATA row (not the header —
+      //    multi-word header labels like "Effective Date" sit closer together than
+      //    the gaps between columns, which throws off clustering).
+      const headerItems = allRows[0];
+      const sampleItems = allRows[1] || headerItems;
+      const colStarts = [];
+      sampleItems.forEach((it, i) => {
+        const gap = i === 0 ? Infinity : it.x0 - sampleItems[i - 1].x1;
+        if (gap > COL_GAP_THRESHOLD) colStarts.push(it.x0);
+      });
+      const colBounds = colStarts.map((x, i) =>
+        i === colStarts.length - 1 ? Infinity : (x + colStarts[i + 1]) / 2
+      );
+
+      function rowToCells(items) {
+        const cells = colStarts.map(() => []);
+        items.forEach(it => {
+          let idx = colBounds.findIndex(b => it.x0 < b);
+          if (idx === -1) idx = colStarts.length - 1;
+          cells[idx].push(it.str);
+        });
+        return cells.map(c => c.join(' ').trim());
       }
-      const headers = headerLine.trim().split(/\s{2,}|\t/).map(h => h.trim()).filter(h => h);
-      const rowCount = Math.max(0, lines.length - 2);
+
+      const headers = rowToCells(headerItems).filter(Boolean);
+      const headerText = headers.join(' ');
+
       showParsing(false);
+
       if (headers.length < 2) {
         showValidation('warning', 'PDF parsed — manual mapping needed',
           ['We extracted text but couldn\'t auto-detect columns. Please map fields below.',
            'For best results, use the Excel template or a CSV export.']);
-        // Show mapping with blank options
-        onHeadersDetected(['Column A', 'Column B', 'Column C', 'Column D', 'Column E', 'Column F'], rowCount, true);
-      } else {
-        onHeadersDetected(headers, rowCount);
+        onHeadersDetected(['Column A', 'Column B', 'Column C', 'Column D', 'Column E', 'Column F'], 0, true);
+        return;
       }
+
+      // 3. Every row after the header becomes a data row, skipping the header
+      //    line where it repeats on later pages.
+      state.rows = allRows.slice(1)
+        .map(items => rowToCells(items))
+        .filter(cells => cells.join(' ').trim() !== headerText && cells.some(c => c !== ''))
+        .map(cells => {
+          const obj = {};
+          headers.forEach((h, i) => { obj[h] = cells[i] || ''; });
+          return obj;
+        });
+
+      onHeadersDetected(headers, state.rows.length);
     } catch(err) {
       showParsing(false);
       showValidation('error', 'Could not read PDF', [
