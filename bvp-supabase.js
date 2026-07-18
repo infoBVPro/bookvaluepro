@@ -17,6 +17,24 @@ const BVP_GI_TYPES = [
   'FederalGuaranteedIssue', 'StateGuaranteedIssue', 'Disabled',
 ];
 
+// ── ADMIN ACCESS ─────────────────────────────────────────────
+// Single source of truth for who can see/use the admin tools.
+// bookvaluepro-admin.html also enforces this server-side-of-the-UI
+// (redirects away if the signed-in email isn't on this list).
+const BVP_ADMIN_EMAILS = ['info@bookvaluepro.com', 'jasonyoo@cox.net'];
+
+function bvpIsAdmin(email) {
+  return !!email && BVP_ADMIN_EMAILS.includes(email);
+}
+
+// Shows the "Admin" link in the side nav only for whitelisted emails.
+// Call once per page, right after the auth session is confirmed.
+function bvpSetAdminNavVisible(email) {
+  const el = document.getElementById('bvp-sidenav-admin');
+  if (!el) return;
+  el.style.display = bvpIsAdmin(email) ? 'flex' : 'none';
+}
+
 // Enrollment type display name map — populated at runtime from enrollment_types table.
 // Keys are camelCase DB values; values are human-readable display names.
 // Falls back to the key itself if not yet loaded.
