@@ -1668,6 +1668,15 @@ async function _doUpload(mode, versionName) {
     const VALUATION = new Date(); // today's date — always current
 
     // ── Helper functions ──────────────────────────────────────────
+    // Strips currency symbols, thousands separators, and stray whitespace
+    // before parsing — parseFloat("$183.22") is NaN, and NaN || 0 silently
+    // becomes 0, which is why premiums were coming through blank.
+    function parseMoney(val) {
+      if (val === null || val === undefined || val === '') return 0;
+      const cleaned = String(val).replace(/[^0-9.\-]/g, '');
+      const num = parseFloat(cleaned);
+      return isNaN(num) ? 0 : num;
+    }
     function parseDate(val) {
       if (!val || val === '') return null;
       // Handle Excel serial number dates (e.g. 21035)
@@ -1822,8 +1831,8 @@ async function _doUpload(mode, versionName) {
         enrollment_type: enrollmentType,
         priority,
         calc_priority:   priority,
-        comm_prem:       parseFloat(mapped(row, 'CommPremium') || 0),
-        curr_prem:       parseFloat(mapped(row, 'CurrPremium') || 0),
+        comm_prem:       parseMoney(mapped(row, 'CommPremium')),
+        curr_prem:       parseMoney(mapped(row, 'CurrPremium')),
         curr_pcts,
         ren_pcts,
         curr_npv:        null,
