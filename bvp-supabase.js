@@ -691,3 +691,126 @@ async function bvpGetKnowledgeForBook(agentId) {
     !doc.carrier || carriers.includes(doc.carrier)
   );
 }
+
+// ── LEADS / PROSPECTS ─────────────────────────────────────────────────
+// Fully separate from `policies`/`books` — leads are agent-entered prospects
+// that have not (yet) become a client. See bvp_leads_schema.sql.
+
+const BVP_LEAD_STAGES = ['new', 'contacted', 'quoted', 'won', 'lost'];
+
+const BVP_LEAD_STAGE_LABELS = {
+  new:       'New',
+  contacted: 'Contacted',
+  quoted:    'Quoted',
+  won:       'Won',
+  lost:      'Lost',
+};
+
+const BVP_LEAD_SOURCES = [
+  'Referral', 'Cold Call', 'Web Form', 'Event', 'Purchased List', 'Other',
+];
+
+// Fetches all leads for an agent, newest first.
+async function bvpGetLeads(agentId) {
+  const { data, error } = await bvp
+    .from('leads')
+    .select('*')
+    .eq('agent_id', agentId)
+    .order('created_at', { ascending: false });
+  if (error) { console.error('bvpGetLeads:', error); return []; }
+  return data || [];
+}
+
+// Fetches only open (non-terminal) leads — used by the Outreach page.
+async function bvpGetOpenLeads(agentId) {
+  const { data, error } = await bvp
+    .from('leads')
+    .select('*')
+    .eq('agent_id', agentId)
+    .not('stage', 'in', '(won,lost)')
+    .order('next_follow_up', { ascending: true, nullsFirst: false });
+  if (error) { console.error('bvpGetOpenLeads:', error); return []; }
+  return data || [];
+}
+
+async function bvpGetLead(leadId) {
+  const { data, error } = await bvp.from('leads').select('*').eq('id', leadId).maybeSingle();
+  if (error) { console.error('bvpGetLead:', error); return null; }
+  return data;
+}
+
+// Creates a new lead. `fields` may include any column from the leads table.
+async function bvpCreateLead(agentId, agentEmail, fields) {
+  const { data, error } = await bvp.from('leads').insert({
+    agent_id:    agentId,
+    agent_email: agentEmail || null,
+    stage:       'new',
+    ...fields,
+  }).select().single();
+  if (error) { console.error('bvpCreateLead:', error); return null; }
+  return data;
+}
+
+// Updates arbitrary fields on a lead (e.g. contact info, notes, next_follow_up).
+async function bvpUpdateLead(leadId, fields) {
+  const { data, error } = await bvp.from('leads').update(fields).eq('id', leadId).select().single();
+  if (error) { console.error('bvpUpdateLead:', error); return null; }
+  return data;
+}
+
+async function bvpDeleteLead(leadId) {
+  const { error } = await bvp.from('leads').delete().eq('id', leadId);
+  if (error) { console.error('bvpDeleteLead:', error); return false; }
+  return true;
+}
+
+// Moves a lead to a new pipeline stage, stamps last_contacted_at when moving
+// out of "new", and logs the transition to lead_activity.
+async function bvpAdvanceLeadStage(leadId, fromStage, toStage, agentEmail, note = null) {
+  const updates = { stage: toStage };
+  if (toStage !== 'new') updates.last_contacted_at = new Date().toISOString();
+  if (toStage === 'won')  updates.converted_at = new Date().toISOString();
+
+  const { data, error } = await bvp.from('leads').update(updates).eq('id', leadId).select().single();
+  if (error) { console.error('bvpAdvanceLeadStage:', error); return null; }
+
+  await bvpLogLeadActivity(leadId, agentEmail, 'stage_change', { fromStage, toStage, note });
+  return data;
+}
+
+// Logs a touch (call/email/note) against a lead without changing its stage,
+// and bumps last_contacted_at so staleness sorting on Outreach stays accurate.
+async function bvpLogLeadContact(leadId, agentEmail, activityType, note = null) {
+  await bvp.from('leads').update({ last_contacted_at: new Date().toISOString() }).eq('id', leadId);
+  return bvpLogLeadActivity(leadId, agentEmail, activityType, { note });
+}
+
+async function bvpLogLeadActivity(leadId, agentEmail, activityType, { fromStage = null, toStage = null, note = null } = {}) {
+  const { error } = await bvp.from('lead_activity').insert({
+    lead_id:       leadId,
+    agent_email:   agentEmail || null,
+    activity_type: activityType,
+    from_stage:    fromStage,
+    to_stage:      toStage,
+    note,
+  });
+  if (error) console.error('bvpLogLeadActivity:', error);
+}
+
+async function bvpGetLeadActivity(leadId) {
+  const { data, error } = await bvp
+    .from('lead_activity')
+    .select('*')
+    .eq('lead_id', leadId)
+    .order('created_at', { ascending: false });
+  if (error) { console.error('bvpGetLeadActivity:', error); return []; }
+  return data || [];
+}
+
+// Days since the lead was last contacted (falls back to created_at for
+// leads that have never been touched). Used to sort/flag stale leads.
+function bvpLeadStaleDays(lead) {
+  const ref = lead.last_contacted_at || lead.created_at;
+  if (!ref) return null;
+  return Math.floor((Date.now() - new Date(ref).getTime()) / 86400000);
+}
