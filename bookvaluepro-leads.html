@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BookValuePro — Leads</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="bvp-supabase.js"></script>
+<style>
+:root {
+  --forest: #1a5c3a; --emerald: #3da272; --deep: #0d2e1e;
+  --slate: #5a6472; --mist: #e6f5ee; --sage: #7abf9a;
+  --border: #dde8e2; --text: #1a1a1a; --text-muted: #556b5e;
+  --light-bg: #f7faf8; --white: #fff;
+  --stg-new: #5a6472; --stg-new-bg: #eef1f0;
+  --stg-contacted: #2563a8; --stg-contacted-bg: #e8f1fb;
+  --stg-quoted: #a97830; --stg-quoted-bg: #fdf4e7;
+  --stg-won: #1a5c3a; --stg-won-bg: #e6f5ee;
+  --stg-lost: #b02a2a; --stg-lost-bg: #fdeceb;
+  --sans: 'DM Sans', sans-serif;
+  --serif: 'DM Serif Display', serif;
+  --mono: 'DM Mono', monospace;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--sans); color: var(--text); background: var(--light-bg); overflow-x: hidden; }
+
+/* ── STANDARD HEADER ── */
+.bvp-header {
+  background: #0d2e1e; min-height: 64px;
+  display: flex; align-items: center; justify-content: flex-end;
+  padding: 0 2rem; border-bottom: 1px solid rgba(61,162,114,0.15);
+  position: sticky; top: 0; z-index: 100; gap: 16px; flex-wrap: nowrap;
+}
+.bvp-book-chip {
+  font-size: 11px; color: #7abf9a; background: rgba(26,92,58,0.4);
+  border: 1px solid rgba(61,162,114,0.2); padding: 4px 12px; border-radius: 20px;
+  font-family: var(--mono); white-space: nowrap; max-width: 220px;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.bvp-agent-email { font-size: 12px; color: #7abf9a; font-family: var(--mono); white-space: nowrap; }
+.bvp-signout {
+  font-size: 12px; color: #7abf9a; background: transparent;
+  border: 1px solid rgba(122,191,154,0.3); padding: 6px 14px;
+  border-radius: 6px; cursor: pointer; font-family: var(--sans);
+  transition: all 0.2s; white-space: nowrap;
+}
+.bvp-signout:hover { border-color: #3da272; color: white; }
+.bvp-header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+@media (max-width: 580px) { .bvp-agent-email { display: none; } .bvp-book-chip { display: none; } }
+
+/* ── PAGE LAYOUT ── */
+.page { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+.page-header { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+.page-title { font-family: var(--serif); font-size: 32px; color: var(--deep); line-height: 1; }
+.page-sub { font-size: 14px; color: var(--text-muted); margin-top: 4px; }
+.header-right-group { display: flex; align-items: center; gap: 14px; }
+.lead-count { font-size: 13px; color: var(--text-muted); font-family: var(--mono); }
+
+.btn-primary {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 600; font-family: var(--sans);
+  color: white; background: var(--forest); border: none;
+  padding: 10px 18px; border-radius: 8px; cursor: pointer; transition: all 0.2s;
+  white-space: nowrap;
+}
+.btn-primary:hover { background: var(--emerald); }
+
+/* ── PIPELINE SUMMARY ── */
+.stage-summary { display: grid; grid-template-columns: repeat(5,1fr); gap: 12px; margin-bottom: 1.25rem; }
+.stage-card {
+  background: var(--white); border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px 16px; cursor: pointer; transition: all 0.15s; border-top: 3px solid var(--border);
+}
+.stage-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+.stage-card.active { box-shadow: 0 0 0 2px rgba(61,162,114,0.25); }
+.stage-card-count { font-family: var(--serif); font-size: 26px; color: var(--deep); line-height: 1; }
+.stage-card-label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+.stage-card.new { border-top-color: var(--stg-new); }
+.stage-card.contacted { border-top-color: var(--stg-contacted); }
+.stage-card.quoted { border-top-color: var(--stg-quoted); }
+.stage-card.won { border-top-color: var(--stg-won); }
+.stage-card.lost { border-top-color: var(--stg-lost); }
+
+/* ── TOOLBAR ── */
+.toolbar {
+  background: var(--white); border: 1px solid var(--border); border-radius: 14px;
+  padding: 1rem 1.25rem; display: flex; align-items: center; gap: 12px;
+  margin-bottom: 1.25rem; flex-wrap: wrap;
+}
+.search-wrap { position: relative; flex: 1; min-width: 200px; }
+.search-wrap svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; stroke: var(--slate); fill: none; stroke-width: 1.5; pointer-events: none; }
+.search-input { width: 100%; padding: 9px 12px 9px 36px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; font-family: var(--sans); color: var(--text); background: var(--light-bg); outline: none; transition: border-color 0.2s; }
+.search-input:focus { border-color: var(--emerald); background: white; }
+.search-input::placeholder { color: #aab8b2; }
+.filter-select { padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; font-family: var(--sans); color: var(--text); background: var(--light-bg); outline: none; cursor: pointer; transition: border-color 0.2s; min-width: 130px; }
+.filter-select:focus { border-color: var(--emerald); }
+.toolbar-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.btn-clear { font-size: 12px; color: var(--text-muted); background: none; border: 1px solid var(--border); padding: 7px 14px; border-radius: 7px; cursor: pointer; font-family: var(--sans); transition: all 0.2s; }
+.btn-clear:hover { border-color: var(--slate); color: var(--text); }
+
+/* ── TABLE ── */
+.table-wrap { background: var(--white); border: 1px solid var(--border); border-radius: 14px; overflow-x: auto; overflow-y: visible; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead { background: var(--light-bg); border-bottom: 1px solid var(--border); }
+th { padding: 11px 16px; text-align: left; font-size: 11px; font-weight: 600; color: var(--slate); letter-spacing: 0.07em; text-transform: uppercase; white-space: nowrap; cursor: pointer; user-select: none; transition: color 0.15s; }
+th:hover { color: var(--forest); }
+th.sort-asc::after { content: ' \25B2'; font-size: 9px; }
+th.sort-desc::after { content: ' \25BC'; font-size: 9px; }
+tbody tr { border-bottom: 1px solid var(--border); transition: background 0.15s; cursor: pointer; }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: var(--mist); }
+td { padding: 12px 16px; vertical-align: middle; }
+.lead-name { font-weight: 500; color: var(--deep); }
+.lead-name.unnamed { color: var(--text-muted); font-style: italic; font-weight: 400; }
+.stage-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.stage-badge.new { background: var(--stg-new-bg); color: var(--stg-new); }
+.stage-badge.contacted { background: var(--stg-contacted-bg); color: var(--stg-contacted); }
+.stage-badge.quoted { background: var(--stg-quoted-bg); color: var(--stg-quoted); }
+.stage-badge.won { background: var(--stg-won-bg); color: var(--stg-won); }
+.stage-badge.lost { background: var(--stg-lost-bg); color: var(--stg-lost); }
+.source-tag { font-size: 12px; color: var(--text-muted); background: var(--light-bg); padding: 2px 8px; border-radius: 4px; font-family: var(--mono); }
+.contact-cell { font-size: 12px; color: var(--text-muted); }
+.contact-cell a { color: var(--emerald); text-decoration: none; }
+.contact-cell a:hover { text-decoration: underline; }
+.no-contact { color: #ccc; }
+.stale-flag { color: #b02a2a; font-size: 11px; font-weight: 600; margin-left: 4px; }
+.empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); font-size: 14px; }
+.empty-state div:first-child { font-size: 32px; margin-bottom: 12px; }
+.loading-state { text-align: center; padding: 60px 20px; color: var(--text-muted); font-size: 14px; }
+
+/* ── DETAIL PANEL ── */
+.panel-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(7,22,13,0.6); backdrop-filter: blur(4px); display: none; justify-content: flex-end; }
+.panel-overlay.active { display: flex; }
+.detail-panel { width: 460px; max-width: 100vw; height: 100vh; background: white; overflow-y: auto; box-shadow: -8px 0 40px rgba(0,0,0,0.15); animation: slideIn 0.25s ease; display: flex; flex-direction: column; }
+@keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+.panel-header { background: var(--deep); padding: 1.25rem 1.5rem; display: flex; align-items: flex-start; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+.panel-title { font-family: var(--serif); font-size: 20px; color: white; margin-bottom: 4px; }
+.panel-subtitle { font-size: 12px; color: var(--sage); font-family: var(--mono); }
+.panel-close { background: rgba(255,255,255,0.1); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; transition: background 0.2s; flex-shrink: 0; }
+.panel-close:hover { background: rgba(255,255,255,0.2); }
+.panel-body { padding: 1.5rem; flex: 1; }
+.panel-section { margin-bottom: 1.75rem; }
+.panel-section-title { font-size: 11px; font-weight: 600; color: var(--slate); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 0.75rem; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field-group { display: flex; flex-direction: column; gap: 4px; }
+.field-group.full { grid-column: 1 / -1; }
+.field-label { font-size: 11px; font-weight: 600; color: var(--slate); letter-spacing: 0.06em; text-transform: uppercase; }
+.field-value { font-size: 14px; color: var(--text); padding: 8px 10px; background: var(--light-bg); border-radius: 8px; border: 1.5px solid var(--border); font-family: var(--sans); min-height: 36px; display: flex; align-items: center; }
+.field-value.mono { font-family: var(--mono); font-size: 13px; }
+.field-input, .field-select, .field-textarea { font-size: 14px; color: var(--text); padding: 8px 10px; background: white; border-radius: 8px; border: 1.5px solid var(--emerald); font-family: var(--sans); outline: none; width: 100%; transition: box-shadow 0.2s; }
+.field-input:focus, .field-select:focus, .field-textarea:focus { box-shadow: 0 0 0 3px rgba(61,162,114,0.12); }
+.field-textarea { resize: vertical; min-height: 70px; }
+
+/* stage stepper */
+.stage-stepper { display: flex; gap: 6px; flex-wrap: wrap; }
+.stage-step-btn { flex: 1; min-width: 80px; padding: 9px 6px; border-radius: 8px; border: 1.5px solid var(--border); background: var(--light-bg); font-size: 12px; font-weight: 600; font-family: var(--sans); cursor: pointer; transition: all 0.15s; color: var(--text-muted); text-align: center; }
+.stage-step-btn:hover { border-color: var(--slate); }
+.stage-step-btn.current { cursor: default; }
+.stage-step-btn.current.new { background: var(--stg-new-bg); color: var(--stg-new); border-color: var(--stg-new); }
+.stage-step-btn.current.contacted { background: var(--stg-contacted-bg); color: var(--stg-contacted); border-color: var(--stg-contacted); }
+.stage-step-btn.current.quoted { background: var(--stg-quoted-bg); color: var(--stg-quoted); border-color: var(--stg-quoted); }
+.stage-step-btn.current.won { background: var(--stg-won-bg); color: var(--stg-won); border-color: var(--stg-won); }
+.stage-step-btn.current.lost { background: var(--stg-lost-bg); color: var(--stg-lost); border-color: var(--stg-lost); }
+.stage-terminal-row { display: flex; gap: 8px; margin-top: 8px; }
+.stage-terminal-row .stage-step-btn.won:hover { background: var(--stg-won-bg); color: var(--stg-won); border-color: var(--stg-won); }
+.stage-terminal-row .stage-step-btn.lost:hover { background: var(--stg-lost-bg); color: var(--stg-lost); border-color: var(--stg-lost); }
+
+/* activity log */
+.activity-list { display: flex; flex-direction: column; gap: 10px; }
+.activity-item { font-size: 12px; color: var(--text-muted); padding-left: 14px; border-left: 2px solid var(--border); position: relative; }
+.activity-item::before { content: ''; position: absolute; left: -5px; top: 4px; width: 8px; height: 8px; border-radius: 50%; background: var(--emerald); }
+.activity-time { font-family: var(--mono); font-size: 10px; color: #aab8b2; }
+.activity-text { color: var(--text); margin-top: 1px; }
+
+.panel-actions { padding: 1.25rem 1.5rem; border-top: 1px solid var(--border); display: flex; gap: 10px; background: var(--light-bg); position: sticky; bottom: 0; flex-wrap: wrap; }
+.btn-save { flex: 1; background: var(--forest); color: white; border: none; padding: 11px; border-radius: 9px; font-size: 14px; font-family: var(--sans); font-weight: 600; cursor: pointer; transition: all 0.2s; }
+.btn-save:hover { background: var(--emerald); }
+.btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-cancel { background: white; color: var(--text-muted); border: 1px solid var(--border); padding: 11px 20px; border-radius: 9px; font-size: 14px; font-family: var(--sans); cursor: pointer; transition: all 0.2s; }
+.btn-cancel:hover { border-color: var(--slate); }
+.edit-toggle { background: var(--mist); color: var(--forest); border: 1px solid var(--border); padding: 7px 16px; border-radius: 7px; font-size: 13px; font-family: var(--sans); font-weight: 500; cursor: pointer; transition: all 0.2s; }
+.edit-toggle:hover { background: var(--emerald); color: white; border-color: var(--emerald); }
+.btn-delete { background: white; color: #b02a2a; border: 1px solid #f5c6c2; padding: 7px 16px; border-radius: 7px; font-size: 13px; font-family: var(--sans); font-weight: 500; cursor: pointer; transition: all 0.2s; margin-left: auto; }
+.btn-delete:hover { background: #fdecea; }
+.save-msg { font-size: 12px; padding: 8px 12px; border-radius: 7px; margin-bottom: 10px; display: none; }
+.save-msg.success { background: var(--mist); color: var(--forest); border: 1px solid #b8dfc8; display: block; }
+.save-msg.error { background: #fdecea; color: #c0392b; border: 1px solid #f5c6c2; display: block; }
+
+/* ── NEW LEAD MODAL ── */
+.modal-overlay { position: fixed; inset: 0; z-index: 300; background: rgba(7,22,13,0.55); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; padding: 24px; }
+.modal-overlay.active { display: flex; }
+.modal-box { background: white; border-radius: 16px; width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.2); animation: modalIn 0.2s ease; }
+@keyframes modalIn { from { transform: scale(0.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.modal-header { padding: 1.5rem 1.5rem 1rem; border-bottom: 1px solid var(--border); display:flex; align-items:flex-start; justify-content:space-between; }
+.modal-title { font-family: var(--serif); font-size: 22px; color: var(--deep); margin-bottom: 4px; }
+.modal-sub { font-size: 13px; color: var(--text-muted); }
+.modal-body { padding: 1.25rem 1.5rem; }
+.modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border); display: flex; gap: 10px; background: var(--light-bg); border-radius: 0 0 16px 16px; }
+.modal-close-x { background: rgba(0,0,0,0.06); border: none; color: var(--slate); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 15px; flex-shrink:0; }
+
+.copy-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--deep); color: white; padding: 12px 22px; border-radius: 10px; font-size: 13px; font-family: var(--sans); box-shadow: 0 6px 24px rgba(0,0,0,0.2); z-index: 400; display: none; align-items: center; gap: 8px; white-space: nowrap; }
+.copy-toast.active { display: flex; }
+
+/* ── SIDE NAVIGATION (canonical — same across all pages) ── */
+.bvp-sidenav { position: fixed; top: 0; left: 0; bottom: 0; width: 64px; background: #0d2e1e; border-right: 1px solid rgba(61,162,114,0.15); display: flex; flex-direction: column; z-index: 500; overflow: hidden; transition: width .18s ease; font-family: 'DM Sans', sans-serif; }
+.bvp-sidenav:hover, .bvp-sidenav.expanded { width: 218px; box-shadow: 6px 0 28px rgba(0,0,0,.18); }
+.bvp-sidenav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; height: 64px; padding: 0 15px; flex-shrink: 0; border-bottom: 1px solid rgba(61,162,114,0.12); }
+.bvp-sidenav-mark { width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; background: #1a5c3a; border: 1.5px solid #3da272; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: white; font-family: 'DM Sans', sans-serif; }
+.bvp-sidenav-word { font-family: 'DM Serif Display', serif; font-size: 16px; color: white; white-space: nowrap; opacity: 0; transition: opacity .12s; }
+.bvp-sidenav-word em { color: #3da272; font-style: normal; }
+.bvp-sidenav:hover .bvp-sidenav-word, .bvp-sidenav.expanded .bvp-sidenav-word { opacity: 1; transition-delay: .06s; }
+.bvp-sidenav-steps { position: relative; padding: 14px 0; }
+
+.bvp-sidenav-item { position: relative; display: flex; align-items: center; gap: 14px; height: 44px; padding: 0 21px; color: #7abf9a; text-decoration: none; white-space: nowrap; cursor: pointer; transition: color .15s, background .15s; }
+.bvp-sidenav-item:hover { color: white; background: rgba(61,162,114,0.08); }
+.bvp-sidenav-item.active { color: white; font-weight: 500; background: rgba(61,162,114,0.14); cursor: default; }
+.bvp-sidenav-item.locked { color: rgba(122,191,154,0.3); cursor: not-allowed; pointer-events: none; }
+.bvp-sidenav-node { width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; background: rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; position: relative; z-index: 1; }
+.bvp-sidenav-node svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.bvp-sidenav-item.active .bvp-sidenav-node { background: #3da272; color: white; }
+.bvp-sidenav-item.done .bvp-sidenav-node { background: #1a5c3a; color: #3da272; }
+.bvp-sidenav-item.locked .bvp-sidenav-node { background: rgba(255,255,255,0.05); color: rgba(122,191,154,0.3); }
+.bvp-sidenav-label { font-size: 13px; opacity: 0; transition: opacity .12s; }
+.bvp-sidenav:hover .bvp-sidenav-label, .bvp-sidenav.expanded .bvp-sidenav-label { opacity: 1; transition-delay: .06s; }
+.bvp-sidenav-bottom { border-top: 1px solid rgba(61,162,114,0.12); padding: 10px 0; flex-shrink: 0; }
+#bvp-sidenav-admin { display: none; }
+body { padding-left: 64px; }
+@media (max-width: 640px) { .bvp-sidenav.expanded { width: 200px; } }
+@media (max-width: 900px) { .stage-summary { grid-template-columns: repeat(3,1fr); } .field-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<nav class="bvp-sidenav" id="bvp-sidenav">
+  <a href="bookvaluepro-dashboard.html" class="bvp-sidenav-logo">
+    <div class="bvp-sidenav-mark">BV</div>
+    <span class="bvp-sidenav-word">Book<em>Value</em>Pro</span>
+  </a>
+  <div class="bvp-sidenav-steps">
+    <a href="bookvaluepro-upload.html" class="bvp-sidenav-item done"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M12 16V4M12 4l-5 5M12 4l5 5"/><path d="M4 16v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg></span><span class="bvp-sidenav-label">Upload</span></a>
+    <a href="bookvaluepro-dashboard.html" class="bvp-sidenav-item done"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.3"/><rect x="14" y="3" width="7" height="7" rx="1.3"/><rect x="3" y="14" width="7" height="7" rx="1.3"/><rect x="14" y="14" width="7" height="7" rx="1.3"/></svg></span><span class="bvp-sidenav-label">Dashboard</span></a>
+    <a href="bookvaluepro-clients.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"/><circle cx="17" cy="8.5" r="2.4"/><path d="M15.5 14.7c2.6.3 4.5 2.3 4.5 5.3"/></svg></span><span class="bvp-sidenav-label">Clients</span></a>
+    <div class="bvp-sidenav-item active"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="3.5"/><path d="M3 20c0-3.6 2.7-6 6-6s6 2.4 6 6"/><path d="M18 8v6M21 11h-6"/></svg></span><span class="bvp-sidenav-label">Leads</span></div>
+    <a href="bookvaluepro-outreach.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 6.5l8.5 7 8.5-7"/></svg></span><span class="bvp-sidenav-label">Outreach</span></a>
+    <a href="bookvaluepro-commissions.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6.5v11M15 9.2c0-1.4-1.3-2.2-3-2.2s-3 .9-3 2.2c0 1.4 1.3 1.8 3 2.2 1.7.4 3 1 3 2.4 0 1.3-1.3 2.2-3 2.2s-3-.8-3-2.2"/></svg></span><span class="bvp-sidenav-label">Commissions</span></a>
+  </div>
+  <div class="bvp-sidenav-bottom">
+    <a href="bookvaluepro-admin.html" class="bvp-sidenav-item" id="bvp-sidenav-admin"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg></span><span class="bvp-sidenav-label">Admin</span></a>
+  </div>
+</nav>
+
+<header class="bvp-header">
+  <div class="bvp-header-right">
+    <span class="bvp-book-chip" id="book-name">BookValuePro</span>
+    <span class="bvp-agent-email" id="agent-name"></span>
+    <button class="bvp-signout" onclick="bvpSignOut()">Sign out</button>
+  </div>
+</header>
+
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Leads</div>
+      <div class="page-sub">Your prospect pipeline — track leads from first contact through close</div>
+    </div>
+    <div class="header-right-group">
+      <div class="lead-count" id="lead-count">— leads</div>
+      <button class="btn-primary" onclick="openNewLeadModal()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+        New lead
+      </button>
+    </div>
+  </div>
+
+  <!-- PIPELINE SUMMARY -->
+  <div class="stage-summary" id="stage-summary"></div>
+
+  <!-- TOOLBAR -->
+  <div class="toolbar">
+    <div class="search-wrap">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input class="search-input" type="text" id="search-input" placeholder="Search by name, phone, or email..."/>
+    </div>
+    <select class="filter-select" id="filter-stage">
+      <option value="">All stages</option>
+      <option value="new">New</option>
+      <option value="contacted">Contacted</option>
+      <option value="quoted">Quoted</option>
+      <option value="won">Won</option>
+      <option value="lost">Lost</option>
+    </select>
+    <select class="filter-select" id="filter-source">
+      <option value="">All sources</option>
+    </select>
+    <select class="filter-select" id="filter-state">
+      <option value="">All states</option>
+    </select>
+    <div class="toolbar-right">
+      <button class="btn-clear" onclick="clearFilters()">Clear filters</button>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="table-wrap">
+    <div id="loading-state" class="loading-state">
+      <div>⏳</div>
+      <div>Loading your leads...</div>
+    </div>
+    <table id="leads-table" style="display:none;">
+      <thead>
+        <tr>
+          <th onclick="sortBy('name')" id="th-name">Lead</th>
+          <th onclick="sortBy('stage')" id="th-stage">Stage</th>
+          <th onclick="sortBy('source')" id="th-source">Source</th>
+          <th onclick="sortBy('state')" id="th-state">State</th>
+          <th onclick="sortBy('estimated_premium')" id="th-estimated_premium">Est. Premium</th>
+          <th onclick="sortBy('next_follow_up')" id="th-next_follow_up">Next Follow-up</th>
+          <th onclick="sortBy('staleDays')" id="th-staleDays">Last Contact</th>
+          <th>Contact</th>
+        </tr>
+      </thead>
+      <tbody id="leads-tbody"></tbody>
+    </table>
+    <div id="empty-state" class="empty-state" style="display:none;">
+      <div>🔍</div>
+      <div id="empty-msg">No leads match your filters</div>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL PANEL -->
+<div class="panel-overlay" id="panel-overlay" onclick="closePanelOnOverlay(event)">
+  <div class="detail-panel" id="detail-panel">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title" id="panel-title">Lead Detail</div>
+        <div class="panel-subtitle" id="panel-subtitle"></div>
+      </div>
+      <button class="panel-close" onclick="closePanel()">✕</button>
+    </div>
+    <div class="panel-body" id="panel-body"><!-- populated by JS --></div>
+    <div class="panel-actions" id="panel-actions">
+      <button class="btn-save" id="btn-save" onclick="saveLead()" style="display:none;">Save changes</button>
+      <button class="btn-cancel" id="btn-cancel" onclick="toggleEdit(false)" style="display:none;">Cancel</button>
+      <button class="edit-toggle" id="edit-toggle" onclick="toggleEdit(true)">✏️ Edit lead</button>
+      <button class="btn-delete" onclick="deleteActiveLead()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- NEW LEAD MODAL -->
+<div class="modal-overlay" id="new-lead-overlay" onclick="closeNewLeadModalOnOverlay(event)">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">New Lead</div>
+        <div class="modal-sub">Add a prospect to your pipeline</div>
+      </div>
+      <button class="modal-close-x" onclick="closeNewLeadModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="save-msg" id="new-lead-msg"></div>
+      <div class="field-grid">
+        <div class="field-group"><div class="field-label">First name</div><input class="field-input" id="nl-first"></div>
+        <div class="field-group"><div class="field-label">Last name</div><input class="field-input" id="nl-last"></div>
+        <div class="field-group"><div class="field-label">Phone</div><input class="field-input" id="nl-phone"></div>
+        <div class="field-group"><div class="field-label">Email</div><input class="field-input" id="nl-email"></div>
+        <div class="field-group"><div class="field-label">State</div><input class="field-input" id="nl-state" maxlength="2" style="text-transform:uppercase" placeholder="e.g. TX"></div>
+        <div class="field-group"><div class="field-label">Age</div><input class="field-input" id="nl-age" type="number" min="0"></div>
+        <div class="field-group"><div class="field-label">Source</div>
+          <select class="field-select" id="nl-source">
+            <option value="Referral">Referral</option>
+            <option value="Cold Call">Cold Call</option>
+            <option value="Web Form">Web Form</option>
+            <option value="Event">Event</option>
+            <option value="Purchased List">Purchased List</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="field-group"><div class="field-label">Interested plan</div><input class="field-input" id="nl-plan" placeholder="e.g. Plan G"></div>
+        <div class="field-group"><div class="field-label">Est. monthly premium</div><input class="field-input" id="nl-premium" type="number" step="0.01" min="0"></div>
+        <div class="field-group"><div class="field-label">Next follow-up</div><input class="field-input" id="nl-followup" type="date"></div>
+        <div class="field-group full"><div class="field-label">Notes</div><textarea class="field-textarea" id="nl-notes"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeNewLeadModal()">Cancel</button>
+      <button class="btn-save" id="nl-save-btn" onclick="createLead()">Create lead</button>
+    </div>
+  </div>
+</div>
+
+<div class="copy-toast" id="copy-toast">Saved ✓</div>
+
+<script>
+// ── STATE ─────────────────────────────────────────────────────────────
+let allLeads = [];
+let filtered = [];
+let sortCol  = 'created_at';
+let sortDir  = 'desc';
+let activeLead = null;
+let editMode = false;
+let bvpSession = null;
+
+// ── INIT ──────────────────────────────────────────────────────────────
+(async () => {
+  bvpSession = await bvpRequireAuth();
+  if (!bvpSession) return;
+  bvpSetAdminNavVisible(bvpSession.user.email);
+  document.getElementById('agent-name').textContent = bvpSession.user.email;
+
+  await loadLeads();
+})();
+
+async function loadLeads() {
+  const raw = await bvpGetLeads(bvpSession.user.id);
+  allLeads = raw.map(l => ({
+    ...l,
+    name: [l.first_name, l.last_name].filter(Boolean).join(' ') || null,
+    staleDays: bvpLeadStaleDays(l),
+  }));
+  buildFilterOptions();
+  renderStageSummary();
+  applyFilters();
+  document.getElementById('loading-state').style.display = 'none';
+  document.getElementById('leads-table').style.display = 'table';
+}
+
+// ── FILTER OPTIONS ────────────────────────────────────────────────────
+function buildFilterOptions() {
+  const sources = [...new Set(allLeads.map(l => l.source).filter(Boolean))].sort();
+  const states  = [...new Set(allLeads.map(l => l.state).filter(Boolean))].sort();
+  const sourceSel = document.getElementById('filter-source');
+  sourceSel.querySelectorAll('option:not(:first-child)').forEach(o => o.remove());
+  sources.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; sourceSel.appendChild(o); });
+  const stateSel = document.getElementById('filter-state');
+  stateSel.querySelectorAll('option:not(:first-child)').forEach(o => o.remove());
+  states.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; stateSel.appendChild(o); });
+}
+
+// ── PIPELINE SUMMARY ──────────────────────────────────────────────────
+let activeStageFilter = '';
+function renderStageSummary() {
+  const stages = ['new','contacted','quoted','won','lost'];
+  const el = document.getElementById('stage-summary');
+  el.innerHTML = stages.map(s => {
+    const count = allLeads.filter(l => l.stage === s).length;
+    const active = activeStageFilter === s ? ' active' : '';
+    return `<div class="stage-card ${s}${active}" onclick="toggleStageFilter('${s}')">
+      <div class="stage-card-count">${count}</div>
+      <div class="stage-card-label">${BVP_LEAD_STAGE_LABELS[s]}</div>
+    </div>`;
+  }).join('');
+}
+function toggleStageFilter(s) {
+  activeStageFilter = activeStageFilter === s ? '' : s;
+  document.getElementById('filter-stage').value = activeStageFilter;
+  renderStageSummary();
+  applyFilters();
+}
+
+// ── FILTER + SORT ─────────────────────────────────────────────────────
+function applyFilters() {
+  const search = document.getElementById('search-input').value.toLowerCase();
+  const stage  = document.getElementById('filter-stage').value;
+  const source = document.getElementById('filter-source').value;
+  const state  = document.getElementById('filter-state').value;
+
+  filtered = allLeads.filter(l => {
+    if (stage  && l.stage  !== stage)  return false;
+    if (source && l.source !== source) return false;
+    if (state  && l.state  !== state)  return false;
+    if (search) {
+      const nameMatch  = l.name && l.name.toLowerCase().includes(search);
+      const phoneMatch = l.phone && l.phone.toLowerCase().includes(search);
+      const emailMatch = l.email && l.email.toLowerCase().includes(search);
+      if (!nameMatch && !phoneMatch && !emailMatch) return false;
+    }
+    return true;
+  });
+
+  filtered.sort((a, b) => {
+    let av = a[sortCol], bv = b[sortCol];
+    if (sortCol === 'name') { av = a.name || 'zzz'; bv = b.name || 'zzz'; }
+    if (av === null || av === undefined) av = sortDir === 'asc' ? Infinity : -Infinity;
+    if (bv === null || bv === undefined) bv = sortDir === 'asc' ? Infinity : -Infinity;
+    if (av < bv) return sortDir === 'asc' ? -1 : 1;
+    if (av > bv) return sortDir === 'asc' ?  1 : -1;
+    return 0;
+  });
+
+  renderTable();
+}
+
+function sortBy(col) {
+  if (sortCol === col) { sortDir = sortDir === 'asc' ? 'desc' : 'asc'; }
+  else { sortCol = col; sortDir = 'asc'; }
+  document.querySelectorAll('th').forEach(th => th.classList.remove('sort-asc','sort-desc'));
+  const th = document.getElementById('th-' + col);
+  if (th) th.classList.add('sort-' + sortDir);
+  applyFilters();
+}
+
+function clearFilters() {
+  document.getElementById('search-input').value = '';
+  document.getElementById('filter-stage').value = '';
+  document.getElementById('filter-source').value = '';
+  document.getElementById('filter-state').value = '';
+  activeStageFilter = '';
+  renderStageSummary();
+  applyFilters();
+}
+
+// ── RENDER TABLE ──────────────────────────────────────────────────────
+function renderTable() {
+  const tbody = document.getElementById('leads-tbody');
+  const empty = document.getElementById('empty-state');
+
+  document.getElementById('lead-count').textContent = filtered.length + ' of ' + allLeads.length + ' leads';
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '';
+    document.getElementById('empty-msg').textContent = allLeads.length === 0
+      ? 'No leads yet — click "New lead" to add your first prospect.'
+      : 'No leads match your filters';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = filtered.map(l => `
+    <tr onclick="openPanel('${l.id}')">
+      <td><span class="${l.name ? 'lead-name' : 'lead-name unnamed'}">${l.name || 'Unnamed lead'}</span></td>
+      <td>${stageBadge(l.stage)}</td>
+      <td>${l.source ? `<span class="source-tag">${l.source}</span>` : '—'}</td>
+      <td>${l.state || '—'}</td>
+      <td class="mono">${l.estimated_premium != null ? '$' + Number(l.estimated_premium).toFixed(2) + '/mo' : '—'}</td>
+      <td>${l.next_follow_up ? formatDate(l.next_follow_up) : '—'}</td>
+      <td>${staleCell(l)}</td>
+      <td class="contact-cell">${contactCell(l)}</td>
+    </tr>
+  `).join('');
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────
+function stageBadge(stage) {
+  return `<span class="stage-badge ${stage}">${BVP_LEAD_STAGE_LABELS[stage] || stage}</span>`;
+}
+function formatDate(d) { return d ? d.substring(0, 10) : '—'; }
+function contactCell(l) {
+  if (!l.phone && !l.email) return '<span class="no-contact">—</span>';
+  const parts = [];
+  if (l.phone) parts.push(`<a href="tel:${l.phone}" onclick="event.stopPropagation()">${l.phone}</a>`);
+  if (l.email) parts.push(`<a href="mailto:${l.email}" onclick="event.stopPropagation()">${l.email}</a>`);
+  return parts.join(' · ');
+}
+function staleCell(l) {
+  if (l.stage === 'won' || l.stage === 'lost') return '<span class="no-contact">—</span>';
+  if (l.staleDays == null) return '—';
+  const flag = l.staleDays >= 7 ? `<span class="stale-flag">⚠ ${l.staleDays}d</span>` : `${l.staleDays}d ago`;
+  return flag;
+}
+
+// ── DETAIL PANEL ──────────────────────────────────────────────────────
+function openPanel(id) {
+  activeLead = allLeads.find(l => l.id === id);
+  if (!activeLead) return;
+  editMode = false;
+  renderPanel();
+  document.getElementById('panel-overlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+function closePanel() {
+  document.getElementById('panel-overlay').classList.remove('active');
+  document.body.style.overflow = '';
+  activeLead = null; editMode = false;
+}
+function closePanelOnOverlay(e) {
+  if (e.target === document.getElementById('panel-overlay')) closePanel();
+}
+
+async function renderPanel() {
+  const l = activeLead;
+  document.getElementById('panel-title').textContent = l.name || 'Unnamed lead';
+  document.getElementById('panel-subtitle').textContent = `${l.source || 'Unknown source'} · ${l.state || ''}`.trim();
+
+  const activity = await bvpGetLeadActivity(l.id);
+
+  const saveMsg = `<div class="save-msg" id="save-msg"></div>`;
+
+  const stages = ['new','contacted','quoted'];
+  const stepper = `
+    <div class="stage-stepper">
+      ${stages.map(s => `<button class="stage-step-btn ${s}${l.stage===s?' current':''}" onclick="advanceStage('${s}')" ${l.stage===s?'disabled':''}>${BVP_LEAD_STAGE_LABELS[s]}</button>`).join('')}
+    </div>
+    <div class="stage-terminal-row">
+      <button class="stage-step-btn won${l.stage==='won'?' current':''}" onclick="advanceStage('won')" ${l.stage==='won'?'disabled':''}>✓ Mark Won</button>
+      <button class="stage-step-btn lost${l.stage==='lost'?' current':''}" onclick="advanceStage('lost')" ${l.stage==='lost'?'disabled':''}>✕ Mark Lost</button>
+    </div>`;
+
+  document.getElementById('panel-body').innerHTML = saveMsg + `
+    <div class="panel-section">
+      <div class="panel-section-title">Pipeline stage</div>
+      ${stepper}
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">Contact info</div>
+      <div class="field-grid">
+        <div class="field-group"><div class="field-label">First name</div>${editMode ? `<input class="field-input" id="edit-first" value="${l.first_name||''}">` : `<div class="field-value">${l.first_name||'—'}</div>`}</div>
+        <div class="field-group"><div class="field-label">Last name</div>${editMode ? `<input class="field-input" id="edit-last" value="${l.last_name||''}">` : `<div class="field-value">${l.last_name||'—'}</div>`}</div>
+        <div class="field-group"><div class="field-label">Phone</div>${editMode ? `<input class="field-input" id="edit-phone" value="${l.phone||''}">` : `<div class="field-value">${l.phone||'—'}</div>`}</div>
+        <div class="field-group"><div class="field-label">Email</div>${editMode ? `<input class="field-input" id="edit-email" value="${l.email||''}">` : `<div class="field-value">${l.email||'—'}</div>`}</div>
+        <div class="field-group"><div class="field-label">State</div>${editMode ? `<input class="field-input" id="edit-state" value="${l.state||''}" maxlength="2" style="text-transform:uppercase">` : `<div class="field-value">${l.state||'—'}</div>`}</div>
+        <div class="field-group"><div class="field-label">Age</div>${editMode ? `<input class="field-input" id="edit-age" type="number" value="${l.age??''}">` : `<div class="field-value">${l.age??'—'}</div>`}</div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">Opportunity</div>
+      <div class="field-grid">
+        <div class="field-group"><div class="field-label">Source</div>
+          ${editMode ? `<select class="field-select" id="edit-source">${BVP_LEAD_SOURCES.map(s=>`<option value="${s}" ${l.source===s?'selected':''}>${s}</option>`).join('')}</select>` : `<div class="field-value">${l.source||'—'}</div>`}
+        </div>
+        <div class="field-group"><div class="field-label">Interested plan</div>${editMode ? `<input class="field-input" id="edit-plan" value="${l.interested_plan||''}">` : `<div class="field-value">${l.interested_plan||'—'}</div>`}</div>
+        <div class="field-group"><div class="field-label">Est. monthly premium</div>${editMode ? `<input class="field-input" id="edit-premium" type="number" step="0.01" value="${l.estimated_premium??''}">` : `<div class="field-value mono">${l.estimated_premium!=null?'$'+Number(l.estimated_premium).toFixed(2):'—'}</div>`}</div>
+        <div class="field-group"><div class="field-label">Next follow-up</div>${editMode ? `<input class="field-input" id="edit-followup" type="date" value="${l.next_follow_up||''}">` : `<div class="field-value">${l.next_follow_up?formatDate(l.next_follow_up):'—'}</div>`}</div>
+        ${l.stage==='lost' ? `<div class="field-group full"><div class="field-label">Lost reason</div>${editMode ? `<input class="field-input" id="edit-lost-reason" value="${l.lost_reason||''}">` : `<div class="field-value">${l.lost_reason||'—'}</div>`}</div>` : ''}
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">Notes</div>
+      ${editMode ? `<textarea class="field-textarea" id="edit-notes" style="width:100%">${l.notes||''}</textarea>` : `<div class="field-value" style="min-height:60px;align-items:flex-start;white-space:pre-wrap">${l.notes||'—'}</div>`}
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">Activity</div>
+      <div class="activity-list">
+        ${activity.length ? activity.map(a => `
+          <div class="activity-item">
+            <div class="activity-time">${new Date(a.created_at).toLocaleString()}</div>
+            <div class="activity-text">${activityText(a)}</div>
+          </div>`).join('') : '<div style="font-size:12px;color:var(--text-muted)">No activity logged yet.</div>'}
+      </div>
+    </div>
+  `;
+}
+
+function activityText(a) {
+  if (a.activity_type === 'stage_change') {
+    return `Moved from <strong>${BVP_LEAD_STAGE_LABELS[a.from_stage]||a.from_stage}</strong> to <strong>${BVP_LEAD_STAGE_LABELS[a.to_stage]||a.to_stage}</strong>${a.note?': '+a.note:''}`;
+  }
+  return `${a.activity_type}${a.note?': '+a.note:''}`;
+}
+
+async function advanceStage(newStage) {
+  if (!activeLead || activeLead.stage === newStage) return;
+  const updated = await bvpAdvanceLeadStage(activeLead.id, activeLead.stage, newStage, bvpSession.user.email);
+  if (updated) {
+    Object.assign(activeLead, updated, { staleDays: bvpLeadStaleDays(updated) });
+    const idx = allLeads.findIndex(l => l.id === activeLead.id);
+    if (idx > -1) Object.assign(allLeads[idx], activeLead);
+    renderStageSummary();
+    applyFilters();
+    renderPanel();
+    showToast('Stage updated ✓');
+  }
+}
+
+function toggleEdit(on) {
+  editMode = on;
+  renderPanel();
+  document.getElementById('btn-save').style.display   = on ? 'block' : 'none';
+  document.getElementById('btn-cancel').style.display  = on ? 'block' : 'none';
+  document.getElementById('edit-toggle').style.display = on ? 'none'  : 'block';
+}
+
+async function saveLead() {
+  const btn = document.getElementById('btn-save');
+  btn.disabled = true; btn.textContent = 'Saving...';
+
+  const fields = {
+    first_name: document.getElementById('edit-first').value.trim() || null,
+    last_name:  document.getElementById('edit-last').value.trim() || null,
+    phone:      document.getElementById('edit-phone').value.trim() || null,
+    email:      document.getElementById('edit-email').value.trim() || null,
+    state:      document.getElementById('edit-state').value.trim().toUpperCase() || null,
+    age:        document.getElementById('edit-age').value ? +document.getElementById('edit-age').value : null,
+    source:     document.getElementById('edit-source').value,
+    interested_plan: document.getElementById('edit-plan').value.trim() || null,
+    estimated_premium: document.getElementById('edit-premium').value ? +document.getElementById('edit-premium').value : null,
+    next_follow_up: document.getElementById('edit-followup').value || null,
+    notes:      document.getElementById('edit-notes').value.trim() || null,
+  };
+  const lostEl = document.getElementById('edit-lost-reason');
+  if (lostEl) fields.lost_reason = lostEl.value.trim() || null;
+
+  const updated = await bvpUpdateLead(activeLead.id, fields);
+  btn.disabled = false; btn.textContent = 'Save changes';
+
+  if (updated) {
+    Object.assign(activeLead, updated, {
+      name: [updated.first_name, updated.last_name].filter(Boolean).join(' ') || null,
+      staleDays: bvpLeadStaleDays(updated),
+    });
+    const idx = allLeads.findIndex(l => l.id === activeLead.id);
+    if (idx > -1) Object.assign(allLeads[idx], activeLead);
+    buildFilterOptions();
+    applyFilters();
+    toggleEdit(false);
+    showToast('Lead saved ✓');
+  } else {
+    const msg = document.getElementById('save-msg');
+    if (msg) { msg.className = 'save-msg error'; msg.textContent = 'Could not save. Please try again.'; }
+  }
+}
+
+async function deleteActiveLead() {
+  if (!activeLead) return;
+  if (!confirm(`Delete ${activeLead.name || 'this lead'}? This cannot be undone.`)) return;
+  const ok = await bvpDeleteLead(activeLead.id);
+  if (ok) {
+    allLeads = allLeads.filter(l => l.id !== activeLead.id);
+    closePanel();
+    renderStageSummary();
+    applyFilters();
+    showToast('Lead deleted');
+  }
+}
+
+// ── NEW LEAD MODAL ────────────────────────────────────────────────────
+function openNewLeadModal() {
+  ['nl-first','nl-last','nl-phone','nl-email','nl-state','nl-age','nl-plan','nl-premium','nl-followup','nl-notes']
+    .forEach(id => document.getElementById(id).value = '');
+  document.getElementById('nl-source').value = 'Referral';
+  document.getElementById('new-lead-msg').className = 'save-msg';
+  document.getElementById('new-lead-msg').textContent = '';
+  document.getElementById('new-lead-overlay').classList.add('active');
+}
+function closeNewLeadModal() { document.getElementById('new-lead-overlay').classList.remove('active'); }
+function closeNewLeadModalOnOverlay(e) { if (e.target === document.getElementById('new-lead-overlay')) closeNewLeadModal(); }
+
+async function createLead() {
+  const first = document.getElementById('nl-first').value.trim();
+  const last  = document.getElementById('nl-last').value.trim();
+  const phone = document.getElementById('nl-phone').value.trim();
+  const email = document.getElementById('nl-email').value.trim();
+  const msg = document.getElementById('new-lead-msg');
+
+  if (!first && !last && !phone && !email) {
+    msg.className = 'save-msg error';
+    msg.textContent = 'Enter at least a name, phone, or email.';
+    return;
+  }
+
+  const btn = document.getElementById('nl-save-btn');
+  btn.disabled = true; btn.textContent = 'Creating...';
+
+  const fields = {
+    first_name: first || null,
+    last_name:  last || null,
+    phone:      phone || null,
+    email:      email || null,
+    state:      document.getElementById('nl-state').value.trim().toUpperCase() || null,
+    age:        document.getElementById('nl-age').value ? +document.getElementById('nl-age').value : null,
+    source:     document.getElementById('nl-source').value,
+    interested_plan: document.getElementById('nl-plan').value.trim() || null,
+    estimated_premium: document.getElementById('nl-premium').value ? +document.getElementById('nl-premium').value : null,
+    next_follow_up: document.getElementById('nl-followup').value || null,
+    notes:      document.getElementById('nl-notes').value.trim() || null,
+  };
+
+  const created = await bvpCreateLead(bvpSession.user.id, bvpSession.user.email, fields);
+  btn.disabled = false; btn.textContent = 'Create lead';
+
+  if (created) {
+    await bvpLogLeadActivity(created.id, bvpSession.user.email, 'stage_change', { fromStage: null, toStage: 'new' });
+    closeNewLeadModal();
+    await loadLeads();
+    showToast('Lead created ✓');
+  } else {
+    msg.className = 'save-msg error';
+    msg.textContent = 'Could not create lead. Please try again.';
+  }
+}
+
+function showToast(text) {
+  const t = document.getElementById('copy-toast');
+  t.textContent = text;
+  t.classList.add('active');
+  setTimeout(() => t.classList.remove('active'), 2500);
+}
+
+// ── EVENT LISTENERS ───────────────────────────────────────────────────
+document.getElementById('search-input').addEventListener('input', applyFilters);
+document.getElementById('filter-stage').addEventListener('change', () => { activeStageFilter = document.getElementById('filter-stage').value; renderStageSummary(); applyFilters(); });
+document.getElementById('filter-source').addEventListener('change', applyFilters);
+document.getElementById('filter-state').addEventListener('change', applyFilters);
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    if (document.getElementById('new-lead-overlay').classList.contains('active')) closeNewLeadModal();
+    else closePanel();
+  }
+});
+</script>
+
+<script>
+(function () {
+  var nav = document.getElementById('bvp-sidenav');
+  if (!nav) return;
+  var hoverCapable = window.matchMedia('(hover: hover)').matches;
+  if (!hoverCapable) {
+    nav.addEventListener('click', function (e) {
+      if (!nav.classList.contains('expanded')) {
+        var link = e.target.closest('a');
+        if (link) { e.preventDefault(); nav.classList.add('expanded'); }
+      }
+    });
+    document.addEventListener('click', function (e) {
+      if (!nav.contains(e.target)) nav.classList.remove('expanded');
+    });
+  }
+})();
+</script>
+</body>
+</html>

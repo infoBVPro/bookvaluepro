@@ -56,6 +56,9 @@ html,body{background:var(--cream);color:var(--ink);font-family:var(--sans);font-
 .c-pill.ss{background:var(--accent-l);color:var(--accent)}.c-pill.sb{background:var(--blue-l);color:var(--blue-2)}.c-pill.lw{background:var(--gold-l);color:var(--gold-2)}
 .c-pill-dot{width:5px;height:5px;border-radius:50%}
 .c-pill.ss .c-pill-dot{background:var(--accent-2)}.c-pill.sb .c-pill-dot{background:var(--blue)}.c-pill.lw .c-pill-dot{background:var(--gold)}
+.stale-pill{font-family:var(--mono);font-size:10px;font-weight:600;color:#b02a2a;background:#fdeceb;border:1px solid #f5c6c2;padding:2px 7px;border-radius:10px;white-space:nowrap}
+.stage-pill-btn{font-size:11px;font-family:var(--sans);font-weight:500;padding:4px 10px;border-radius:14px;border:1px solid var(--cream-2);background:var(--white);color:var(--ink-2);cursor:pointer;transition:all .15s;white-space:nowrap}
+.stage-pill-btn:hover{border-color:var(--accent-2);color:var(--accent)}
 .month-header-right{display:flex;align-items:center;gap:16px;flex-shrink:0;margin-left:16px}
 .month-opp{font-family:var(--mono);font-size:13px;color:var(--accent);font-weight:500}
 .chevron{color:var(--ink-3);font-size:14px;transition:transform .2s}
@@ -374,10 +377,7 @@ tbody tr.selected { background:var(--accent-l) !important; }
 .bvp-sidenav-word em { color: #3da272; font-style: normal; }
 .bvp-sidenav:hover .bvp-sidenav-word, .bvp-sidenav.expanded .bvp-sidenav-word { opacity: 1; transition-delay: .06s; }
 .bvp-sidenav-steps { position: relative; padding: 14px 0; }
-.bvp-sidenav-steps::before {
-  content: ''; position: absolute; top: 26px; bottom: 26px; left: 34px; width: 1px;
-  background: rgba(122,191,154,0.18);
-}
+
 .bvp-sidenav-item {
   position: relative; display: flex; align-items: center; gap: 14px;
   height: 44px; padding: 0 21px; color: #7abf9a; text-decoration: none;
@@ -415,6 +415,7 @@ body { padding-left: 64px; }
     <a href="bookvaluepro-upload.html" class="bvp-sidenav-item done"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M12 16V4M12 4l-5 5M12 4l5 5"/><path d="M4 16v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg></span><span class="bvp-sidenav-label">Upload</span></a>
     <a href="bookvaluepro-dashboard.html" class="bvp-sidenav-item done"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.3"/><rect x="14" y="3" width="7" height="7" rx="1.3"/><rect x="3" y="14" width="7" height="7" rx="1.3"/><rect x="14" y="14" width="7" height="7" rx="1.3"/></svg></span><span class="bvp-sidenav-label">Dashboard</span></a>
     <a href="bookvaluepro-clients.html" class="bvp-sidenav-item done"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"/><circle cx="17" cy="8.5" r="2.4"/><path d="M15.5 14.7c2.6.3 4.5 2.3 4.5 5.3"/></svg></span><span class="bvp-sidenav-label">Clients</span></a>
+    <a href="bookvaluepro-leads.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="3.5"/><path d="M3 20c0-3.6 2.7-6 6-6s6 2.4 6 6"/><path d="M18 8v6M21 11h-6"/></svg></span><span class="bvp-sidenav-label">Leads</span></a>
     <div class="bvp-sidenav-item active"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 6.5l8.5 7 8.5-7"/></svg></span><span class="bvp-sidenav-label">Outreach</span></div>
     <a href="bookvaluepro-commissions.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6.5v11M15 9.2c0-1.4-1.3-2.2-3-2.2s-3 .9-3 2.2c0 1.4 1.3 1.8 3 2.2 1.7.4 3 1 3 2.4 0 1.3-1.3 2.2-3 2.2s-3-.8-3-2.2"/></svg></span><span class="bvp-sidenav-label">Commissions</span></a>
   </div>
@@ -433,11 +434,15 @@ body { padding-left: 64px; }
 <div class="page">
   <div class="page-header">
     <div>
-      <h1 class="page-title">Outreach Schedule</h1>
-      <p class="page-sub">Policies shown in the month the agent should reach out · Save &amp; Switch listed first · <span id="savings-indicator" style="font-family:var(--mono);font-size:11px;background:var(--accent-l);color:var(--accent);padding:2px 8px;border-radius:4px;border:1px solid var(--accent-2)"></span></p>
+      <h1 class="page-title">Outreach</h1>
+      <p class="page-sub" id="outreach-page-sub">Policies shown in the month the agent should reach out · Save &amp; Switch listed first · <span id="savings-indicator" style="font-family:var(--mono);font-size:11px;background:var(--accent-l);color:var(--accent);padding:2px 8px;border-radius:4px;border:1px solid var(--accent-2)"></span></p>
     </div>
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:0">
-      <div class="lead-control">
+      <div class="filter-bar" id="outreach-tabs">
+        <button class="filter-btn active-all" data-tab="renewals" onclick="setOutreachTab('renewals')">📅 Renewals</button>
+        <button class="filter-btn" data-tab="leads" onclick="setOutreachTab('leads')">🧲 Leads</button>
+      </div>
+      <div class="lead-control" id="renewals-lead-control">
         <label for="lead-months">Reach out</label>
         <input class="lead-input" id="lead-months" type="number" min="1" max="6" value="3">
         <span class="lead-unit">months before anniversary</span>
@@ -450,8 +455,18 @@ body { padding-left: 64px; }
       </div>
     </div>
   </div>
-  <div class="summary-strip" id="summary-strip"></div>
-  <div class="month-list" id="month-list"></div>
+
+  <!-- ── RENEWALS TAB ── -->
+  <div id="renewals-tab">
+    <div class="summary-strip" id="summary-strip"></div>
+    <div class="month-list" id="month-list"></div>
+  </div>
+
+  <!-- ── LEADS TAB ── -->
+  <div id="leads-tab" style="display:none">
+    <div class="summary-strip" id="leads-summary-strip"></div>
+    <div class="month-list" id="leads-stage-list"></div>
+  </div>
 </div>
 <!-- ── BULK ACTION BAR ── -->
 <div class="bulk-bar" id="bulk-bar">
@@ -553,6 +568,26 @@ const fmtK=v=>'$'+(Math.abs(v)>=1000?(Math.abs(v)/1000).toFixed(1)+'K':Math.roun
 let activeFilter='all';
 let leadMonths = +(localStorage.getItem('bvp_lead_months') || 3);
 let openMonths=new Set([CURRENT_MONTH]);
+
+// ── LEADS TAB STATE ──────────────────────────────────────────────────
+const LEADS = []; // Populated from Supabase — open (non-won/lost) leads only
+let outreachTab = 'renewals';
+let openLeadStages = new Set(['new']);
+
+function setOutreachTab(tab) {
+  outreachTab = tab;
+  document.querySelectorAll('#outreach-tabs .filter-btn').forEach(b => {
+    b.classList.toggle('active-all', b.dataset.tab === tab);
+  });
+  document.getElementById('renewals-tab').style.display = tab === 'renewals' ? 'block' : 'none';
+  document.getElementById('leads-tab').style.display     = tab === 'leads'    ? 'block' : 'none';
+  document.getElementById('renewals-lead-control').style.display = tab === 'renewals' ? 'flex' : 'none';
+  document.getElementById('filter-bar').style.display            = tab === 'renewals' ? 'flex' : 'none';
+  const sub = document.getElementById('outreach-page-sub');
+  if (sub) sub.innerHTML = tab === 'renewals'
+    ? 'Policies shown in the month the agent should reach out · Save &amp; Switch listed first · <span id="savings-indicator" style="font-family:var(--mono);font-size:11px;background:var(--accent-l);color:var(--accent);padding:2px 8px;border-radius:4px;border:1px solid var(--accent-2)">' + SAVINGS_PCT + '% avg. savings assumption</span>'
+    : 'Open leads grouped by pipeline stage · Most overdue contacts listed first';
+}
 
 function setFilter(f){
   activeFilter=f;
@@ -660,6 +695,252 @@ function renderAll(){
   if(ind) ind.textContent = SAVINGS_PCT + '% avg. savings assumption';
   renderSummary();
   renderCalendar();
+  renderLeadsTab();
+}
+
+// ── LEADS TAB ─────────────────────────────────────────────────────────
+const LEAD_STAGE_ORDER = ['new','contacted','quoted'];
+const LEAD_STAGE_META = {
+  new:       { label: 'New',       cls: 'ss', dot: 'var(--accent-2)' },
+  contacted: { label: 'Contacted', cls: 'sb', dot: 'var(--blue)' },
+  quoted:    { label: 'Quoted',    cls: 'lw', dot: 'var(--gold)' },
+};
+
+function leadsForStage(stage){ return LEADS.filter(l => l.stage === stage); }
+
+function renderLeadsSummary(){
+  const counts = { new: leadsForStage('new').length, contacted: leadsForStage('contacted').length, quoted: leadsForStage('quoted').length };
+  const stale7 = LEADS.filter(l => (l.staleDays ?? 0) >= 7).length;
+  document.getElementById('leads-summary-strip').innerHTML = `
+    <div class="summary-card"><div class="summary-val">${LEADS.length}</div><div class="summary-lbl">Open leads</div></div>
+    <div class="summary-card" style="border-top:3px solid var(--accent-2)"><div class="summary-val" style="color:var(--accent)">${counts.new}</div><div class="summary-lbl">New</div></div>
+    <div class="summary-card" style="border-top:3px solid var(--blue)"><div class="summary-val" style="color:var(--blue)">${counts.contacted}</div><div class="summary-lbl">Contacted</div></div>
+    <div class="summary-card" style="border-top:3px solid #b02a2a"><div class="summary-val" style="color:#b02a2a">${stale7}</div><div class="summary-lbl">Stale 7+ days</div></div>`;
+}
+
+function renderLeadsTab(){
+  renderLeadsSummary();
+  const list = document.getElementById('leads-stage-list');
+  list.innerHTML = '';
+
+  if (LEADS.length === 0) {
+    list.innerHTML = `<div class="month-card"><div style="padding:40px 24px;text-align:center;color:var(--ink-3)">
+      No open leads yet. Add prospects from the <a href="bookvaluepro-leads.html" style="color:var(--accent)">Leads page</a> and they'll show up here for follow-up.
+    </div></div>`;
+    return;
+  }
+
+  LEAD_STAGE_ORDER.forEach(stage => {
+    const rows = leadsForStage(stage).sort((a,b) => (b.staleDays ?? 0) - (a.staleDays ?? 0));
+    const meta = LEAD_STAGE_META[stage];
+    const isOpen = openLeadStages.has(stage);
+    const staleCount = rows.filter(l => (l.staleDays ?? 0) >= 7).length;
+
+    const card = document.createElement('div');
+    card.className = 'month-card' + (isOpen ? ' open' : '') + (rows.length === 0 ? ' empty-month' : '');
+    card.id = `leadstage-${stage}`;
+    card.innerHTML = `
+      <div class="month-header" onclick="toggleLeadStage('${stage}')">
+        <div class="month-header-left">
+          <span class="month-name">${meta.label}</span>
+          <div class="cohort-pills">
+            <span class="c-pill ${meta.cls}"><span class="c-pill-dot"></span>${rows.length} lead${rows.length===1?'':'s'}</span>
+            ${staleCount ? `<span class="stale-pill">⚠ ${staleCount} stale 7+ days</span>` : ''}
+            ${rows.length===0 ? '<span style="font-size:12px;color:var(--ink-3)">No leads at this stage</span>' : ''}
+          </div>
+        </div>
+        <div class="month-header-right"><span class="chevron">▾</span></div>
+      </div>
+      <div class="policy-table-wrap" id="leadtable-${stage}">${buildLeadTable(stage)}</div>`;
+    list.appendChild(card);
+  });
+}
+
+function toggleLeadStage(stage){
+  const card = document.getElementById(`leadstage-${stage}`);
+  if(openLeadStages.has(stage)){ openLeadStages.delete(stage); card.classList.remove('open'); }
+  else { openLeadStages.add(stage); card.classList.add('open'); document.getElementById(`leadtable-${stage}`).innerHTML = buildLeadTable(stage); }
+}
+
+function buildLeadTable(stage){
+  const rows = leadsForStage(stage).sort((a,b) => (b.staleDays ?? 0) - (a.staleDays ?? 0));
+  if(!rows.length) return `<table><tbody><tr class="no-policies-row"><td colspan="8">No leads at this stage.</td></tr></tbody></table>`;
+  const thead = `<thead><tr>
+    <th>Lead</th><th>Source</th><th>State</th><th class="num">Est. premium</th>
+    <th>Next follow-up</th><th>Last contact</th><th>Contact</th><th>Actions</th>
+  </tr></thead>`;
+  const nextStage = { new: 'contacted', contacted: 'quoted', quoted: null };
+  const body = rows.map(l => `
+    <tr>
+      <td class="name-cell"><span class="client-name-link" onclick="openLeadScriptModal('${l.id}')" style="cursor:pointer;border-bottom:1px dashed var(--accent-2);color:var(--ink)">${l.name || 'Unnamed lead'}</span></td>
+      <td><span class="carrier-badge">${l.source || '—'}</span></td>
+      <td><span class="carrier-badge">${l.state || '—'}</span></td>
+      <td class="num">${l.estimated_premium!=null ? fmt$(l.estimated_premium)+'/mo' : '—'}</td>
+      <td>${l.next_follow_up ? l.next_follow_up.substring(0,10) : '—'}</td>
+      <td>${l.staleDays==null ? '—' : (l.staleDays>=7 ? `<span class="stale-pill">${l.staleDays}d</span>` : l.staleDays+'d ago')}</td>
+      <td>${l.phone?`<a class="contact-link" href="tel:${l.phone}">${l.phone}</a>`:''}${l.phone&&l.email?' · ':''}${l.email?`<a class="contact-link" href="mailto:${l.email}">${l.email}</a>`:''} ${!l.phone&&!l.email?'<span class="no-contact">—</span>':''}</td>
+      <td><div class="row-actions">
+        <button class="btn-row-action btn-email-row" onclick="openLeadEmailModal('${l.id}')">✉ Email</button>
+        <button class="btn-row-action btn-script-row" onclick="openLeadScriptModal('${l.id}')">📞 Script</button>
+        ${nextStage[stage] ? `<button class="stage-pill-btn" onclick="advanceLeadFromOutreach('${l.id}','${nextStage[stage]}')">→ ${LEAD_STAGE_META[nextStage[stage]]?.label || nextStage[stage]}</button>` : ''}
+      </div></td>
+    </tr>`).join('');
+  return `<table>${thead}<tbody>${body}</tbody></table>`;
+}
+
+async function advanceLeadFromOutreach(leadId, newStage){
+  const l = LEADS.find(x => x.id === leadId);
+  if (!l) return;
+  const updated = await bvpAdvanceLeadStage(leadId, l.stage, newStage, bvpSession.user.email);
+  if (!updated) return;
+  if (newStage === 'won' || newStage === 'lost') {
+    LEADS.splice(LEADS.indexOf(l), 1); // leaves the open-leads worklist
+  } else {
+    l.stage = newStage;
+    l.staleDays = 0;
+  }
+  renderLeadsTab();
+  showToast('Lead moved to ' + (LEAD_STAGE_META[newStage]?.label || newStage));
+}
+
+async function loadLeadsForOutreach(){
+  const raw = await bvpGetOpenLeads(bvpSession.user.id);
+  LEADS.length = 0;
+  raw.forEach(l => LEADS.push({
+    ...l,
+    name: [l.first_name, l.last_name].filter(Boolean).join(' ') || null,
+    staleDays: bvpLeadStaleDays(l),
+  }));
+}
+
+// ── AI HELPERS — LEADS ────────────────────────────────────────────────
+function leadContext(l){
+  return `Prospect: ${l.name || 'Unnamed lead'}
+State: ${l.state || 'N/A'}, Age: ${l.age ?? 'N/A'}
+Source: ${l.source || 'N/A'}
+Pipeline stage: ${BVP_LEAD_STAGE_LABELS[l.stage] || l.stage}
+Interested plan: ${l.interested_plan || 'Not yet specified'}
+Estimated monthly premium: ${l.estimated_premium != null ? '$' + Number(l.estimated_premium).toFixed(2) : 'N/A'}
+Notes: ${l.notes || 'None'}`;
+}
+
+async function openLeadScriptModal(leadId){
+  const l = LEADS.find(x => x.id === leadId);
+  if (!l) return;
+
+  const overlay = document.getElementById('script-overlay');
+  const titleEl = document.getElementById('script-modal-title');
+  const subEl = document.getElementById('script-modal-sub');
+  const genEl = document.getElementById('script-generating');
+  const contentEl = document.getElementById('script-content');
+
+  titleEl.textContent = `Call Script — ${l.name || 'Lead'}`;
+  subEl.textContent = `${l.source || 'Unknown source'} · ${BVP_LEAD_STAGE_LABELS[l.stage] || l.stage} · ${l.state || 'N/A'}`;
+  genEl.style.display = 'flex';
+  contentEl.style.display = 'none';
+  contentEl.innerHTML = '';
+  currentScriptText = '';
+  overlay.classList.add('open');
+
+  const SYSTEM = `You are a Medicare Supplement insurance agent assistant. Generate a concise phone call script in JSON for a PROSPECT (not yet a client).
+Return ONLY a JSON object with these keys: "opener", "value_prop", "objection_handler", "close".
+Each key maps to a string of 2-4 sentences of natural speech. The goal is to move this prospect to the next pipeline stage — not to discuss renewal. Keep it conversational and confident, not salesy.`;
+
+  try {
+    const raw = await callClaude(SYSTEM, `Create a call script for:\n${leadContext(l)}\nThe agent is calling to move this prospect forward in the pipeline (currently: ${BVP_LEAD_STAGE_LABELS[l.stage] || l.stage}).`);
+    let parsed = {};
+    try { parsed = JSON.parse(raw.replace(/```json|```/g,'').trim()); }
+    catch { parsed = { opener: raw, value_prop:'', objection_handler:'', close:'' }; }
+
+    currentScriptText = `CALL SCRIPT: ${l.name || 'Lead'}\n\n` +
+      `OPENER:\n${parsed.opener || ''}\n\nVALUE PROPOSITION:\n${parsed.value_prop || ''}\n\n` +
+      `HANDLING OBJECTIONS:\n${parsed.objection_handler || ''}\n\nCLOSE:\n${parsed.close || ''}`;
+
+    const strip = `<div class="client-info-strip">
+      <span class="cis-chip"><strong>${l.name || 'Lead'}</strong></span>
+      <span class="cis-chip">🧲 ${l.source || 'N/A'}</span>
+      <span class="cis-chip">📍 ${l.state || 'N/A'}</span>
+      <span class="cis-chip">🎂 Age ${l.age ?? 'N/A'}</span>
+      <span class="cis-chip" style="background:var(--accent-l);border-color:var(--accent-2);color:var(--accent)">Stage: ${BVP_LEAD_STAGE_LABELS[l.stage] || l.stage}</span>
+    </div>`;
+    const sections = [
+      { key:'opener', label:'Opener', cls:'opener', icon:'👋' },
+      { key:'value_prop', label:'Value Proposition', cls:'value', icon:'💡' },
+      { key:'objection_handler', label:'Handling Objections', cls:'objection', icon:'🛡' },
+      { key:'close', label:'The Close', cls:'close', icon:'✅' },
+    ];
+    contentEl.innerHTML = strip + sections.map(s => `
+      <div class="script-section">
+        <div class="script-section-label">${s.icon} ${s.label}</div>
+        <div class="script-block ${s.cls}">
+          <div class="script-tag ${s.cls}">${s.label}</div>
+          <div>${(parsed[s.key] || '').replace(/\n/g,'<br>')}</div>
+        </div>
+      </div>`).join('');
+
+    genEl.style.display = 'none';
+    contentEl.style.display = 'block';
+    await bvpLogLeadContact(l.id, bvpSession.user.email, 'call', 'Generated call script');
+    l.staleDays = 0;
+  } catch(e) {
+    genEl.style.display = 'none';
+    contentEl.style.display = 'block';
+    contentEl.innerHTML = `<div style="color:red;padding:20px">Error generating script. Please try again.</div>`;
+  }
+}
+
+async function openLeadEmailModal(leadId){
+  const l = LEADS.find(x => x.id === leadId);
+  if (!l) return;
+
+  const overlay = document.getElementById('email-overlay');
+  const titleEl = document.getElementById('email-modal-title');
+  const subEl = document.getElementById('email-modal-sub');
+  const genEl = document.getElementById('email-generating');
+  const tabsRow = document.getElementById('email-tabs-row');
+  const panelsEl = document.getElementById('email-panels');
+  const copyBtn = document.getElementById('email-copy-btn');
+
+  titleEl.textContent = `Email — ${l.name || 'Lead'}`;
+  subEl.textContent = 'AI-generated · edit before sending';
+  genEl.style.display = 'flex';
+  tabsRow.style.display = 'none';
+  panelsEl.innerHTML = '';
+  copyBtn.style.display = 'none';
+  emailDrafts = [];
+  activeEmailTab = 0;
+  overlay.classList.add('open');
+
+  const SYSTEM = `You are a Medicare Supplement insurance agent assistant. Write a concise, warm, professional follow-up email to a PROSPECT (not yet a client).
+Return ONLY a JSON object with keys "subject" and "body". No markdown, no explanation.
+The body should be 3-4 paragraphs, conversational, and end with a clear call to action appropriate to their current pipeline stage. Sign off as "Your agent".`;
+
+  try {
+    const raw = await callClaude(SYSTEM, `Write a follow-up email for this prospect:\n${leadContext(l)}`);
+    let subject = '', body = '';
+    try {
+      const parsed = JSON.parse(raw.replace(/```json|```/g,'').trim());
+      subject = parsed.subject || ''; body = parsed.body || raw;
+    } catch { body = raw; subject = `Following up on your Medicare Supplement quote`; }
+    emailDrafts.push({ name: l.name || 'Lead', subject, body, idx: l.id });
+
+    genEl.style.display = 'none';
+    copyBtn.style.display = 'flex';
+    panelsEl.innerHTML = `
+      <div class="email-panel active" id="email-panel-0">
+        <div class="email-subject-row">
+          <span class="email-subject-label">Subject</span>
+          <span class="email-subject-val" id="email-subj-0" contenteditable="true" style="outline:none">${subject}</span>
+        </div>
+        <textarea class="email-body-area" id="email-body-0">${body}</textarea>
+      </div>`;
+
+    await bvpLogLeadContact(l.id, bvpSession.user.email, 'email', 'Drafted follow-up email');
+    l.staleDays = 0;
+  } catch(e) {
+    genEl.style.display = 'none';
+    panelsEl.innerHTML = `<div style="color:red;padding:20px">Error generating email. Please try again.</div>`;
+  }
 }
 
 document.addEventListener('DOMContentLoaded', function(){
@@ -996,11 +1277,16 @@ async function initFromSupabase() {
       if (bnEl) bnEl.textContent = bvpBook.file_name + ' — ' + bvpBook.policy_count + ' policies';
 
       hideLoadingState();
+      await loadLeadsForOutreach();
       renderAll();
     } else {
+      await loadLeadsForOutreach();
+      renderLeadsTab();
       showNoDataState();
     }
   } else {
+    await loadLeadsForOutreach();
+    renderLeadsTab();
     showNoDataState();
   }
 }
