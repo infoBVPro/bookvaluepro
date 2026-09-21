@@ -293,22 +293,13 @@ body { padding-left: 64px; }
 <div class="page">
   <div class="page-header">
     <div class="page-title">UW Assistant</div>
-    <div class="page-sub">Pick a state and the carrier(s) you're considering, enter the applicant's profile, conditions, and medications, and get a quick read on who's likely to accept, review, or decline the case — before you submit a full application.</div>
+    <div class="page-sub">Pick the carrier(s) you're considering, enter the applicant's profile, conditions, and medications, and get a quick read on who's likely to accept, review, or decline the case — before you submit a full application.</div>
   </div>
 
   <div class="uw-card">
-    <!-- STATE + CARRIERS -->
+    <!-- CARRIERS -->
     <div class="uw-section">
-      <div class="uw-section-label">State &amp; carriers</div>
-      <div class="uw-grid" style="margin-bottom:14px;">
-        <div class="uw-field">
-          <label for="uw-state">Issued state</label>
-          <select class="uw-select" id="uw-state">
-            <option value="">— select a state —</option>
-          </select>
-        </div>
-      </div>
-      <label style="display:block;font-size:12px;font-weight:500;color:var(--text-muted);margin-bottom:8px;">Carrier(s) to check</label>
+      <div class="uw-section-label">Carriers</div>
       <div class="uw-carrier-grid" id="uw-carrier-grid"></div>
       <div class="uw-carrier-all-row">
         <button class="uw-link-btn" onclick="selectAllCarriers(true)">Select all</button>
@@ -395,14 +386,10 @@ const selectedConditions = []; // array of condition names (strings)
 const selectedDrugs      = []; // array of drug names (strings)
 
 // ── INIT STATIC FORM OPTIONS ────────────────────────────────────────────
+// No state picker for now — UW criteria are treated as national per carrier
+// until we move to a carrier+state model (BVP_ALL_STATES stays defined in
+// bvp-supabase.js for when that lands).
 function initFormOptions() {
-  const stateSel = document.getElementById('uw-state');
-  BVP_ALL_STATES.forEach(s => {
-    const o = document.createElement('option');
-    o.value = s; o.textContent = s;
-    stateSel.appendChild(o);
-  });
-
   const carrierGrid = document.getElementById('uw-carrier-grid');
   BVP_UW_CARRIERS.forEach(c => {
     const chip = document.createElement('button');
