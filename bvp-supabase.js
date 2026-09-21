@@ -838,31 +838,51 @@ const BVP_UW_FALLBACK_DRUGS = [
 // breaks the page — bvpLoadUWData falls back to the built-in taxonomy above
 // for the two master lists, and simply omits carrier-specific data until
 // Josh populates it.
+//
+// Supabase/PostgREST caps any single request at the project's "Max Rows"
+// setting (1000 by default), silently truncating anything past that — no
+// error, just a short result. uw_drug_list alone has 5,600+ rows, so a
+// plain .select('*') only ever returns the first ~1000 in sort order and
+// quietly drops the rest (this is exactly why "Humalog" — and everything
+// alphabetically after roughly the first 1000 rows — was missing from the
+// medications picker). _bvpFetchAllRows pages through with .range() so
+// every getter below returns the FULL table regardless of that limit.
+const BVP_UW_PAGE_SIZE = 1000;
+
+async function _bvpFetchAllRows(buildQuery) {
+  let allRows = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await buildQuery().range(from, from + BVP_UW_PAGE_SIZE - 1);
+    if (error) throw error;
+    if (!data || !data.length) break;
+    allRows = allRows.concat(data);
+    if (data.length < BVP_UW_PAGE_SIZE) break; // last page was short — done
+    from += BVP_UW_PAGE_SIZE;
+  }
+  return allRows;
+}
 
 async function bvpGetUWConditionList() {
   try {
-    const { data, error } = await bvp.from('uw_condition_list').select('*').order('name');
-    if (error) { console.warn('bvpGetUWConditionList:', error.message || error); return []; }
-    return data || [];
-  } catch (e) { console.warn('bvpGetUWConditionList:', e); return []; }
+    return await _bvpFetchAllRows(() => bvp.from('uw_condition_list').select('*').order('name'));
+  } catch (e) { console.warn('bvpGetUWConditionList:', e.message || e); return []; }
 }
 
 async function bvpGetUWDrugList() {
   try {
-    const { data, error } = await bvp.from('uw_drug_list').select('*').order('name');
-    if (error) { console.warn('bvpGetUWDrugList:', error.message || error); return []; }
-    return data || [];
-  } catch (e) { console.warn('bvpGetUWDrugList:', e); return []; }
+    return await _bvpFetchAllRows(() => bvp.from('uw_drug_list').select('*').order('name'));
+  } catch (e) { console.warn('bvpGetUWDrugList:', e.message || e); return []; }
 }
 
 async function bvpGetUWBuildCharts(carriers = null) {
   try {
-    let q = bvp.from('uw_build_charts').select('*');
-    if (carriers && carriers.length) q = q.in('carrier', carriers);
-    const { data, error } = await q;
-    if (error) { console.warn('bvpGetUWBuildCharts:', error.message || error); return []; }
-    return data || [];
-  } catch (e) { console.warn('bvpGetUWBuildCharts:', e); return []; }
+    return await _bvpFetchAllRows(() => {
+      let q = bvp.from('uw_build_charts').select('*').order('id');
+      if (carriers && carriers.length) q = q.in('carrier', carriers);
+      return q;
+    });
+  } catch (e) { console.warn('bvpGetUWBuildCharts:', e.message || e); return []; }
 }
 
 // uw_knockout_questions holds BOTH carrier application knockout questions
@@ -873,22 +893,22 @@ async function bvpGetUWBuildCharts(carriers = null) {
 // attached, e.g. "diagnosed or treated for CHF in the last 2 years?").
 async function bvpGetUWKnockoutQuestions(carriers = null) {
   try {
-    let q = bvp.from('uw_knockout_questions').select('*').order('question_order');
-    if (carriers && carriers.length) q = q.in('carrier', carriers);
-    const { data, error } = await q;
-    if (error) { console.warn('bvpGetUWKnockoutQuestions:', error.message || error); return []; }
-    return data || [];
-  } catch (e) { console.warn('bvpGetUWKnockoutQuestions:', e); return []; }
+    return await _bvpFetchAllRows(() => {
+      let q = bvp.from('uw_knockout_questions').select('*').order('question_order');
+      if (carriers && carriers.length) q = q.in('carrier', carriers);
+      return q;
+    });
+  } catch (e) { console.warn('bvpGetUWKnockoutQuestions:', e.message || e); return []; }
 }
 
 async function bvpGetUWDeclinableDrugs(carriers = null) {
   try {
-    let q = bvp.from('uw_declinable_drugs').select('*');
-    if (carriers && carriers.length) q = q.in('carrier', carriers);
-    const { data, error } = await q;
-    if (error) { console.warn('bvpGetUWDeclinableDrugs:', error.message || error); return []; }
-    return data || [];
-  } catch (e) { console.warn('bvpGetUWDeclinableDrugs:', e); return []; }
+    return await _bvpFetchAllRows(() => {
+      let q = bvp.from('uw_declinable_drugs').select('*').order('id');
+      if (carriers && carriers.length) q = q.in('carrier', carriers);
+      return q;
+    });
+  } catch (e) { console.warn('bvpGetUWDeclinableDrugs:', e.message || e); return []; }
 }
 
 // Loads everything the UW Assistant page needs in one call. `carriers`
