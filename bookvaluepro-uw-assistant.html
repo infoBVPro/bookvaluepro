@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BookValuePro — UW Assistant</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="bvp-supabase.js"></script>
+<style>
+:root {
+  --forest: #1a5c3a; --emerald: #3da272; --deep: #0d2e1e;
+  --slate: #5a6472; --mist: #e6f5ee; --sage: #7abf9a;
+  --border: #dde8e2; --text: #1a1a1a; --text-muted: #556b5e;
+  --light-bg: #f7faf8; --white: #fff;
+  --sans: 'DM Sans', sans-serif;
+  --serif: 'DM Serif Display', serif;
+  --mono: 'DM Mono', monospace;
+  --accept: #1a5c3a;    --accept-bg: #e6f5ee;    --accept-border: #b8dfc8;
+  --review: #92640a;    --review-bg: #fef3e2;    --review-border: #fde68a;
+  --decline: #b91c1c;   --decline-bg: #fdecea;   --decline-border: #f5c6c2;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--sans); color: var(--text); background: var(--light-bg); overflow-x: hidden; }
+
+/* ── STANDARD HEADER ── */
+.bvp-header {
+  background: #0d2e1e;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 2rem;
+  border-bottom: 1px solid rgba(61,162,114,0.15);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  gap: 16px;
+  flex-wrap: nowrap;
+}
+.bvp-header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.bvp-book-chip {
+  font-size: 11px; color: #7abf9a;
+  background: rgba(26,92,58,0.4);
+  border: 1px solid rgba(61,162,114,0.2);
+  padding: 4px 12px; border-radius: 20px;
+  font-family: var(--mono);
+  white-space: nowrap; max-width: 220px;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.bvp-agent-email { font-size: 12px; color: #7abf9a; font-family: var(--mono); white-space: nowrap; }
+.bvp-signout {
+  font-size: 12px; color: #7abf9a; background: transparent;
+  border: 1px solid rgba(122,191,154,0.3); padding: 6px 14px;
+  border-radius: 6px; cursor: pointer;
+  font-family: var(--sans); transition: all 0.2s; white-space: nowrap;
+}
+.bvp-signout:hover { border-color: #3da272; color: white; }
+
+@media (max-width: 1100px) { .bvp-header { height: auto; flex-wrap: wrap; padding: 10px 1.5rem; } }
+@media (max-width: 900px)  { .bvp-header { padding: 10px 1rem; } }
+@media (max-width: 580px)  { .bvp-agent-email { display: none; } .bvp-book-chip { max-width: 120px; } }
+
+/* ── PAGE LAYOUT ── */
+.page { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+.page-header { margin-bottom: 1.5rem; }
+.page-title { font-family: var(--serif); font-size: 32px; color: var(--deep); line-height: 1; }
+.page-sub { font-size: 14px; color: var(--text-muted); margin-top: 6px; max-width: 640px; line-height: 1.5; }
+
+/* ── INPUT CARD ── */
+.uw-card {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: 16px; padding: 1.75rem; margin-bottom: 24px;
+}
+.uw-section { margin-bottom: 1.75rem; }
+.uw-section:last-child { margin-bottom: 0; }
+.uw-section-label {
+  font-size: 11px; font-weight: 600; color: var(--slate);
+  letter-spacing: 0.08em; text-transform: uppercase;
+  margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+}
+.uw-section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+.uw-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+.uw-field label {
+  display: block; font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 6px;
+}
+.uw-select, .uw-input {
+  width: 100%; padding: 10px 12px; border: 1.5px solid var(--border);
+  border-radius: 9px; font-size: 14px; font-family: var(--sans);
+  color: var(--text); background: var(--light-bg); outline: none; transition: border-color 0.2s;
+}
+.uw-select:focus, .uw-input:focus { border-color: var(--emerald); background: white; }
+
+.uw-toggle-row { display: flex; gap: 8px; }
+.uw-toggle-btn {
+  flex: 1; padding: 10px; border-radius: 9px; border: 1.5px solid var(--border);
+  background: var(--light-bg); font-size: 13px; font-weight: 500; color: var(--text-muted);
+  cursor: pointer; transition: all 0.15s; text-align: center;
+}
+.uw-toggle-btn.selected { background: var(--mist); border-color: var(--emerald); color: var(--forest); }
+
+/* Carrier chip picker */
+.uw-carrier-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.uw-carrier-chip {
+  padding: 8px 16px; border-radius: 20px; border: 1.5px solid var(--border);
+  background: var(--light-bg); font-size: 13px; font-weight: 500; color: var(--text-muted);
+  cursor: pointer; transition: all 0.15s; user-select: none;
+}
+.uw-carrier-chip.selected { background: var(--forest); border-color: var(--forest); color: white; }
+.uw-carrier-chip:hover:not(.selected) { border-color: var(--emerald); color: var(--forest); }
+.uw-carrier-all-row { display: flex; gap: 8px; margin-top: 10px; }
+.uw-link-btn {
+  font-size: 12px; color: var(--emerald); background: none; border: none;
+  cursor: pointer; font-family: var(--sans); text-decoration: underline; padding: 0;
+}
+
+/* Tag / typeahead input */
+.uw-tag-input-wrap { position: relative; }
+.uw-tag-box {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  border: 1.5px solid var(--border); border-radius: 9px; padding: 8px 10px;
+  background: var(--light-bg); min-height: 46px; transition: border-color 0.2s;
+}
+.uw-tag-box:focus-within { border-color: var(--emerald); background: white; }
+.uw-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--mist); color: var(--forest); border: 1px solid var(--accept-border);
+  padding: 4px 6px 4px 10px; border-radius: 14px; font-size: 12.5px; font-weight: 500;
+  white-space: nowrap;
+}
+.uw-chip button {
+  background: none; border: none; color: var(--forest); cursor: pointer;
+  font-size: 13px; line-height: 1; padding: 2px; opacity: 0.6; border-radius: 50%;
+}
+.uw-chip button:hover { opacity: 1; background: rgba(26,92,58,0.12); }
+.uw-tag-box input {
+  flex: 1; min-width: 140px; border: none; outline: none; background: transparent;
+  font-size: 13.5px; font-family: var(--sans); color: var(--text); padding: 4px 2px;
+}
+.uw-suggest {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20;
+  background: white; border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1); max-height: 220px; overflow-y: auto;
+  display: none;
+}
+.uw-suggest.open { display: block; }
+.uw-suggest-item { padding: 9px 14px; font-size: 13px; cursor: pointer; display: flex; flex-direction: column; gap: 1px; }
+.uw-suggest-item:hover, .uw-suggest-item.active { background: var(--mist); }
+.uw-suggest-item .sname { color: var(--text); font-weight: 500; }
+.uw-suggest-item .smeta { color: var(--text-muted); font-size: 11px; }
+.uw-suggest-empty { padding: 10px 14px; font-size: 12.5px; color: var(--text-muted); font-style: italic; }
+
+/* Run button */
+.uw-run-row { display: flex; align-items: center; gap: 14px; margin-top: 4px; }
+.btn-run {
+  background: var(--forest); color: white; border: none; padding: 13px 28px;
+  border-radius: 10px; font-size: 14.5px; font-weight: 600; font-family: var(--sans);
+  cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 8px;
+}
+.btn-run:hover:not(:disabled) { background: var(--emerald); }
+.btn-run:disabled { background: var(--border); color: var(--text-muted); cursor: not-allowed; }
+.uw-run-hint { font-size: 12.5px; color: var(--text-muted); }
+
+/* ── RESULTS ── */
+.uw-results { display: flex; flex-direction: column; gap: 14px; }
+.uw-empty {
+  text-align: center; padding: 60px 20px; color: var(--text-muted);
+  background: var(--white); border: 1px dashed var(--border); border-radius: 16px;
+}
+.uw-empty div:first-child { font-size: 32px; margin-bottom: 10px; }
+
+.result-card {
+  background: var(--white); border: 1.5px solid var(--border); border-radius: 14px;
+  overflow: hidden; border-left-width: 5px;
+}
+.result-card.accept  { border-left-color: var(--accept); }
+.result-card.review  { border-left-color: var(--review); }
+.result-card.decline { border-left-color: var(--decline); }
+
+.result-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px; gap: 12px; flex-wrap: wrap;
+}
+.result-carrier { font-size: 16px; font-weight: 600; color: var(--deep); }
+.result-badge {
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.03em;
+  padding: 5px 14px; border-radius: 20px; white-space: nowrap;
+}
+.result-badge.accept  { background: var(--accept-bg);  color: var(--accept);  border: 1px solid var(--accept-border); }
+.result-badge.review  { background: var(--review-bg);  color: var(--review);  border: 1px solid var(--review-border); }
+.result-badge.decline { background: var(--decline-bg); color: var(--decline); border: 1px solid var(--decline-border); }
+
+.result-body { padding: 0 20px 18px; }
+.result-list { display: flex; flex-direction: column; gap: 8px; }
+.result-item {
+  display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.5;
+  padding: 9px 12px; border-radius: 9px;
+}
+.result-item.reason { background: var(--decline-bg); color: #7a1f1f; }
+.result-item.flag    { background: var(--review-bg); color: #6b4a05; }
+.result-item .ri-icon { flex-shrink: 0; font-size: 13px; margin-top: 1px; }
+.result-item .ri-notes { display: block; color: var(--text-muted); font-size: 11.5px; margin-top: 2px; }
+.result-clean {
+  font-size: 13px; color: var(--text-muted); padding: 6px 2px; font-style: italic;
+}
+.result-nodata {
+  font-size: 12px; color: var(--text-muted); padding: 8px 12px; background: var(--light-bg);
+  border-radius: 8px; margin-top: 4px;
+}
+
+/* ── SIDE NAVIGATION (canonical — same across all pages) ── */
+.bvp-sidenav {
+  position: fixed; top: 0; left: 0; bottom: 0; width: 64px;
+  background: #0d2e1e; border-right: 1px solid rgba(61,162,114,0.15);
+  display: flex; flex-direction: column; z-index: 500;
+  overflow: hidden; transition: width .18s ease;
+  font-family: 'DM Sans', sans-serif;
+}
+.bvp-sidenav:hover, .bvp-sidenav.expanded { width: 218px; box-shadow: 6px 0 28px rgba(0,0,0,.18); }
+.bvp-sidenav-logo {
+  display: flex; align-items: center; gap: 10px; text-decoration: none;
+  height: 64px; padding: 0 15px; flex-shrink: 0;
+  border-bottom: 1px solid rgba(61,162,114,0.12);
+}
+.bvp-sidenav-mark {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+  background: #1a5c3a; border: 1.5px solid #3da272;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; color: white; font-family: 'DM Sans', sans-serif;
+}
+.bvp-sidenav-word {
+  font-family: 'DM Serif Display', serif; font-size: 16px; color: white;
+  white-space: nowrap; opacity: 0; transition: opacity .12s;
+}
+.bvp-sidenav-word em { color: #3da272; font-style: normal; }
+.bvp-sidenav:hover .bvp-sidenav-word, .bvp-sidenav.expanded .bvp-sidenav-word { opacity: 1; transition-delay: .06s; }
+.bvp-sidenav-steps { position: relative; padding: 14px 0; }
+
+.bvp-sidenav-item {
+  position: relative; display: flex; align-items: center; gap: 14px;
+  height: 44px; padding: 0 21px; color: #7abf9a; text-decoration: none;
+  white-space: nowrap; cursor: pointer; transition: color .15s, background .15s;
+}
+.bvp-sidenav-item:hover { color: white; background: rgba(61,162,114,0.08); }
+.bvp-sidenav-item.active { color: white; font-weight: 500; background: rgba(61,162,114,0.14); cursor: default; }
+.bvp-sidenav-item.locked { color: rgba(122,191,154,0.3); cursor: not-allowed; pointer-events: none; }
+.bvp-sidenav-node {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center;
+  position: relative; z-index: 1;
+}
+.bvp-sidenav-node svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.bvp-sidenav-item.active .bvp-sidenav-node { background: #3da272; color: white; }
+.bvp-sidenav-item.done .bvp-sidenav-node { background: #1a5c3a; color: #3da272; }
+.bvp-sidenav-item.locked .bvp-sidenav-node { background: rgba(255,255,255,0.05); color: rgba(122,191,154,0.3); }
+.bvp-sidenav-label { font-size: 13px; opacity: 0; transition: opacity .12s; }
+.bvp-sidenav:hover .bvp-sidenav-label, .bvp-sidenav.expanded .bvp-sidenav-label { opacity: 1; transition-delay: .06s; }
+.bvp-sidenav-bottom { border-top: 1px solid rgba(61,162,114,0.12); padding: 10px 0; flex-shrink: 0; }
+#bvp-sidenav-admin { display: none; }
+body { padding-left: 64px; }
+@media (max-width: 640px) { .bvp-sidenav.expanded { width: 200px; } }
+</style>
+</head>
+<body>
+<nav class="bvp-sidenav" id="bvp-sidenav">
+  <a href="bookvaluepro-dashboard.html" class="bvp-sidenav-logo">
+    <div class="bvp-sidenav-mark">BV</div>
+    <span class="bvp-sidenav-word">Book<em>Value</em>Pro</span>
+  </a>
+  <div class="bvp-sidenav-steps">
+    <a href="bookvaluepro-upload.html" class="bvp-sidenav-item done"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M12 16V4M12 4l-5 5M12 4l5 5"/><path d="M4 16v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg></span><span class="bvp-sidenav-label">Upload</span></a>
+    <a href="bookvaluepro-dashboard.html" class="bvp-sidenav-item done"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.3"/><rect x="14" y="3" width="7" height="7" rx="1.3"/><rect x="3" y="14" width="7" height="7" rx="1.3"/><rect x="14" y="14" width="7" height="7" rx="1.3"/></svg></span><span class="bvp-sidenav-label">Dashboard</span></a>
+    <a href="bookvaluepro-clients.html" class="bvp-sidenav-item done"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"/><circle cx="17" cy="8.5" r="2.4"/><path d="M15.5 14.7c2.6.3 4.5 2.3 4.5 5.3"/></svg></span><span class="bvp-sidenav-label">Clients</span></a>
+    <a href="bookvaluepro-leads.html" class="bvp-sidenav-item done"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="3.5"/><path d="M3 20c0-3.6 2.7-6 6-6s6 2.4 6 6"/><path d="M18 8v6M21 11h-6"/></svg></span><span class="bvp-sidenav-label">Leads</span></a>
+    <a href="bookvaluepro-outreach.html" class="bvp-sidenav-item done"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 6.5l8.5 7 8.5-7"/></svg></span><span class="bvp-sidenav-label">Outreach</span></a>
+    <a href="bookvaluepro-commissions.html" class="bvp-sidenav-item done"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6.5v11M15 9.2c0-1.4-1.3-2.2-3-2.2s-3 .9-3 2.2c0 1.4 1.3 1.8 3 2.2 1.7.4 3 1 3 2.4 0 1.3-1.3 2.2-3 2.2s-3-.8-3-2.2"/></svg></span><span class="bvp-sidenav-label">Commissions</span></a>
+    <div class="bvp-sidenav-item active"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg></span><span class="bvp-sidenav-label">UW Assistant</span></div>
+  </div>
+  <div class="bvp-sidenav-bottom">
+    <a href="bookvaluepro-admin.html" class="bvp-sidenav-item" id="bvp-sidenav-admin"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg></span><span class="bvp-sidenav-label">Admin</span></a>
+  </div>
+</nav>
+
+<header class="bvp-header">
+  <div class="bvp-header-right">
+    <span class="bvp-book-chip" id="book-name">Loading...</span>
+    <span class="bvp-agent-email" id="agent-name"></span>
+    <button class="bvp-signout" onclick="bvpSignOut()">Sign out</button>
+  </div>
+</header>
+
+<div class="page">
+  <div class="page-header">
+    <div class="page-title">UW Assistant</div>
+    <div class="page-sub">Pick a state and the carrier(s) you're considering, enter the applicant's profile, conditions, and medications, and get a quick read on who's likely to accept, review, or decline the case — before you submit a full application.</div>
+  </div>
+
+  <div class="uw-card">
+    <!-- STATE + CARRIERS -->
+    <div class="uw-section">
+      <div class="uw-section-label">State &amp; carriers</div>
+      <div class="uw-grid" style="margin-bottom:14px;">
+        <div class="uw-field">
+          <label for="uw-state">Issued state</label>
+          <select class="uw-select" id="uw-state">
+            <option value="">— select a state —</option>
+          </select>
+        </div>
+      </div>
+      <label style="display:block;font-size:12px;font-weight:500;color:var(--text-muted);margin-bottom:8px;">Carrier(s) to check</label>
+      <div class="uw-carrier-grid" id="uw-carrier-grid"></div>
+      <div class="uw-carrier-all-row">
+        <button class="uw-link-btn" onclick="selectAllCarriers(true)">Select all</button>
+        <span style="color:var(--border)">·</span>
+        <button class="uw-link-btn" onclick="selectAllCarriers(false)">Clear</button>
+      </div>
+    </div>
+
+    <!-- APPLICANT PROFILE -->
+    <div class="uw-section">
+      <div class="uw-section-label">Applicant profile</div>
+      <div class="uw-grid">
+        <div class="uw-field">
+          <label>Sex</label>
+          <div class="uw-toggle-row">
+            <button type="button" class="uw-toggle-btn selected" id="uw-sex-m" onclick="setSex('M')">Male</button>
+            <button type="button" class="uw-toggle-btn" id="uw-sex-f" onclick="setSex('F')">Female</button>
+          </div>
+        </div>
+        <div class="uw-field">
+          <label for="uw-height-ft">Height</label>
+          <div style="display:flex;gap:8px;">
+            <select class="uw-select" id="uw-height-ft"></select>
+            <select class="uw-select" id="uw-height-in"></select>
+          </div>
+        </div>
+        <div class="uw-field">
+          <label for="uw-weight">Weight (lbs)</label>
+          <input class="uw-input" type="number" id="uw-weight" min="60" max="500" placeholder="e.g. 185">
+        </div>
+        <div class="uw-field">
+          <label for="uw-age">Age (optional)</label>
+          <input class="uw-input" type="number" id="uw-age" min="0" max="120" placeholder="e.g. 68">
+        </div>
+      </div>
+    </div>
+
+    <!-- CONDITIONS -->
+    <div class="uw-section">
+      <div class="uw-section-label">Health conditions</div>
+      <div class="uw-tag-input-wrap">
+        <div class="uw-tag-box" id="uw-condition-box">
+          <input type="text" id="uw-condition-input" placeholder="Start typing a condition, e.g. &quot;diabetes&quot;...">
+        </div>
+        <div class="uw-suggest" id="uw-condition-suggest"></div>
+      </div>
+    </div>
+
+    <!-- MEDICATIONS -->
+    <div class="uw-section">
+      <div class="uw-section-label">Medications</div>
+      <div class="uw-tag-input-wrap">
+        <div class="uw-tag-box" id="uw-drug-box">
+          <input type="text" id="uw-drug-input" placeholder="Start typing a medication, e.g. &quot;eliquis&quot;...">
+        </div>
+        <div class="uw-suggest" id="uw-drug-suggest"></div>
+      </div>
+    </div>
+
+    <div class="uw-run-row">
+      <button class="btn-run" id="btn-run-uw" onclick="runUWCheck()">Check eligibility →</button>
+      <span class="uw-run-hint" id="uw-run-hint">Select at least one carrier to continue</span>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="uw-results-wrap">
+    <div class="uw-empty" id="uw-empty-state">
+      <div>🩺</div>
+      <div>Fill in the applicant's details above and run a check to see results here.</div>
+    </div>
+    <div class="uw-results" id="uw-results" style="display:none;"></div>
+  </div>
+</div>
+
+<script>
+// ── STATE ─────────────────────────────────────────────────────────────
+let bvpSession = null;
+let bvpBook    = null;
+let uwData     = null; // { conditionList, drugList, buildCharts, knockouts, declinableConditions, declinableDrugs }
+let selectedSex = 'M';
+const selectedCarriers   = new Set();
+const selectedConditions = []; // array of condition names (strings)
+const selectedDrugs      = []; // array of drug names (strings)
+
+// ── INIT STATIC FORM OPTIONS ────────────────────────────────────────────
+function initFormOptions() {
+  const stateSel = document.getElementById('uw-state');
+  BVP_ALL_STATES.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s; o.textContent = s;
+    stateSel.appendChild(o);
+  });
+
+  const carrierGrid = document.getElementById('uw-carrier-grid');
+  BVP_UW_CARRIERS.forEach(c => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'uw-carrier-chip';
+    chip.textContent = c;
+    chip.onclick = () => toggleCarrier(c, chip);
+    carrierGrid.appendChild(chip);
+  });
+
+  const ftSel = document.getElementById('uw-height-ft');
+  for (let ft = 4; ft <= 7; ft++) {
+    const o = document.createElement('option');
+    o.value = ft; o.textContent = ft + " ft";
+    if (ft === 5) o.selected = true;
+    ftSel.appendChild(o);
+  }
+  const inSel = document.getElementById('uw-height-in');
+  for (let inch = 0; inch <= 11; inch++) {
+    const o = document.createElement('option');
+    o.value = inch; o.textContent = inch + " in";
+    if (inch === 8) o.selected = true;
+    inSel.appendChild(o);
+  }
+
+  updateRunHint();
+}
+
+function toggleCarrier(carrier, chipEl) {
+  if (selectedCarriers.has(carrier)) {
+    selectedCarriers.delete(carrier);
+    chipEl.classList.remove('selected');
+  } else {
+    selectedCarriers.add(carrier);
+    chipEl.classList.add('selected');
+  }
+  updateRunHint();
+}
+
+function selectAllCarriers(all) {
+  selectedCarriers.clear();
+  document.querySelectorAll('.uw-carrier-chip').forEach(chip => {
+    if (all) { selectedCarriers.add(chip.textContent); chip.classList.add('selected'); }
+    else { chip.classList.remove('selected'); }
+  });
+  updateRunHint();
+}
+
+function setSex(sex) {
+  selectedSex = sex;
+  document.getElementById('uw-sex-m').classList.toggle('selected', sex === 'M');
+  document.getElementById('uw-sex-f').classList.toggle('selected', sex === 'F');
+}
+
+function updateRunHint() {
+  const hint = document.getElementById('uw-run-hint');
+  const btn  = document.getElementById('btn-run-uw');
+  if (selectedCarriers.size === 0) {
+    hint.textContent = 'Select at least one carrier to continue';
+    btn.disabled = true;
+  } else {
+    hint.textContent = `${selectedCarriers.size} carrier${selectedCarriers.size > 1 ? 's' : ''} selected`;
+    btn.disabled = false;
+  }
+}
+
+// ── TAG / TYPEAHEAD INPUTS ────────────────────────────────────────────
+function setupTagInput({ inputId, boxId, suggestId, list, selectedArr, getLabel, getMeta }) {
+  const input   = document.getElementById(inputId);
+  const box     = document.getElementById(boxId);
+  const suggest = document.getElementById(suggestId);
+  let activeIdx = -1;
+
+  function renderChips() {
+    box.querySelectorAll('.uw-chip').forEach(c => c.remove());
+    selectedArr.forEach((name, i) => {
+      const chip = document.createElement('span');
+      chip.className = 'uw-chip';
+      chip.innerHTML = `${name} <button type="button" aria-label="Remove">✕</button>`;
+      chip.querySelector('button').onclick = () => {
+        selectedArr.splice(i, 1);
+        renderChips();
+      };
+      box.insertBefore(chip, input);
+    });
+  }
+
+  function matches(q) {
+    const nq = q.trim().toLowerCase();
+    if (!nq) return [];
+    return list.filter(item => {
+      if (selectedArr.includes(getLabel(item))) return false;
+      const name = getLabel(item).toLowerCase();
+      const aliases = (item.aliases || []).map(a => a.toLowerCase());
+      const generic = (item.generic_name || '').toLowerCase();
+      return name.includes(nq) || generic.includes(nq) || aliases.some(a => a.includes(nq));
+    }).slice(0, 8);
+  }
+
+  function renderSuggest(q) {
+    const results = matches(q);
+    activeIdx = -1;
+    if (!q.trim()) { suggest.classList.remove('open'); suggest.innerHTML = ''; return; }
+    if (results.length === 0) {
+      suggest.innerHTML = `<div class="uw-suggest-empty">No matches — you can still type a full name and press Enter to add it as free text.</div>`;
+      suggest.classList.add('open');
+      return;
+    }
+    suggest.innerHTML = results.map((item, i) => `
+      <div class="uw-suggest-item" data-idx="${i}">
+        <span class="sname">${getLabel(item)}</span>
+        ${getMeta ? `<span class="smeta">${getMeta(item) || ''}</span>` : ''}
+      </div>`).join('');
+    suggest.querySelectorAll('.uw-suggest-item').forEach((el, i) => {
+      el.onclick = () => addItem(getLabel(results[i]));
+    });
+    suggest.classList.add('open');
+  }
+
+  function addItem(name) {
+    const trimmed = (name || '').trim();
+    if (!trimmed) return;
+    if (!selectedArr.some(s => s.toLowerCase() === trimmed.toLowerCase())) {
+      selectedArr.push(trimmed);
+    }
+    input.value = '';
+    renderChips();
+    suggest.classList.remove('open');
+    suggest.innerHTML = '';
+    input.focus();
+  }
+
+  input.addEventListener('input', () => renderSuggest(input.value));
+  input.addEventListener('keydown', e => {
+    const items = suggest.querySelectorAll('.uw-suggest-item');
+    if (e.key === 'ArrowDown') { e.preventDefault(); activeIdx = Math.min(activeIdx + 1, items.length - 1); items.forEach((el,i)=>el.classList.toggle('active', i===activeIdx)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); activeIdx = Math.max(activeIdx - 1, 0); items.forEach((el,i)=>el.classList.toggle('active', i===activeIdx)); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (activeIdx >= 0 && items[activeIdx]) items[activeIdx].click();
+      else if (input.value.trim()) addItem(input.value);
+    } else if (e.key === 'Backspace' && !input.value && selectedArr.length) {
+      selectedArr.pop();
+      renderChips();
+    } else if (e.key === 'Escape') {
+      suggest.classList.remove('open');
+    }
+  });
+  document.addEventListener('click', e => {
+    if (!box.contains(e.target) && !suggest.contains(e.target)) suggest.classList.remove('open');
+  });
+
+  renderChips();
+}
+
+// ── RUN CHECK ─────────────────────────────────────────────────────────
+async function runUWCheck() {
+  if (selectedCarriers.size === 0) return;
+  const btn = document.getElementById('btn-run-uw');
+  btn.disabled = true;
+  btn.textContent = 'Checking…';
+
+  const ft = +document.getElementById('uw-height-ft').value;
+  const inch = +document.getElementById('uw-height-in').value;
+  const heightIn = ft * 12 + inch;
+  const weightLb = +document.getElementById('uw-weight').value || null;
+
+  const profile = { gender: selectedSex, heightIn, weightLb };
+  const carriers = [...selectedCarriers];
+
+  if (!uwData) uwData = await bvpLoadUWData(BVP_UW_CARRIERS);
+
+  const results = bvpEvaluateUW(profile, selectedConditions, selectedDrugs, carriers, uwData);
+  renderResults(results, carriers);
+
+  btn.disabled = false;
+  btn.textContent = 'Check eligibility →';
+}
+
+function carrierHasAnyData(carrier) {
+  if (!uwData) return false;
+  return (uwData.buildCharts || []).some(r => r.carrier === carrier)
+    || (uwData.knockouts || []).some(r => r.carrier === carrier)
+    || (uwData.declinableDrugs || []).some(r => r.carrier === carrier);
+}
+
+function renderResults(results, carriers) {
+  document.getElementById('uw-empty-state').style.display = 'none';
+  const wrap = document.getElementById('uw-results');
+  wrap.style.display = 'flex';
+
+  const badgeLabel = { accept: 'Likely Accept', review: 'Needs Review', decline: 'Likely Decline' };
+  const badgeIcon  = { accept: '✓', review: '!', decline: '✕' };
+
+  // Sort: decline first, then review, then accept — worst news up top
+  const order = { decline: 0, review: 1, accept: 2 };
+  const sorted = [...results].sort((a, b) => order[a.status] - order[b.status]);
+
+  wrap.innerHTML = sorted.map(r => {
+    const hasData = carrierHasAnyData(r.carrier);
+    const items = [
+      ...r.reasons.map(x => `<div class="result-item reason"><span class="ri-icon">✕</span><span>${x.text}${x.notes ? `<span class="ri-notes">${x.notes}</span>` : ''}</span></div>`),
+      ...r.flags.map(x => `<div class="result-item flag"><span class="ri-icon">!</span><span>${x.text}${x.notes ? `<span class="ri-notes">${x.notes}</span>` : ''}</span></div>`),
+    ];
+    return `
+      <div class="result-card ${r.status}">
+        <div class="result-header">
+          <span class="result-carrier">${r.carrier}</span>
+          <span class="result-badge ${r.status}">${badgeIcon[r.status]} ${badgeLabel[r.status]}</span>
+        </div>
+        <div class="result-body">
+          ${items.length ? `<div class="result-list">${items.join('')}</div>` : `<div class="result-clean">No flags found based on what you entered.</div>`}
+          ${!hasData ? `<div class="result-nodata">No underwriting data has been loaded yet for ${r.carrier} — this result only reflects what's entered above, not ${r.carrier}'s actual rules.</div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── SUPABASE INIT ─────────────────────────────────────────────
+async function initFromSupabase() {
+  bvpSession = await bvpRequireAuth();
+  if (!bvpSession) return;
+  bvpSetAdminNavVisible(bvpSession.user.email);
+
+  const nameEl = document.getElementById('agent-name');
+  if (nameEl) nameEl.textContent = bvpSession.user.email;
+
+  bvpBook = await bvpGetActiveBook(bvpSession.user.id);
+  const bnEl = document.getElementById('book-name');
+  if (bnEl) bnEl.textContent = bvpBook ? (bvpBook.file_name + ' — ' + bvpBook.policy_count + ' policies') : 'No book uploaded';
+
+  // Pre-load UW reference data in the background so the first check is instant.
+  uwData = await bvpLoadUWData(BVP_UW_CARRIERS);
+
+  setupTagInput({
+    inputId: 'uw-condition-input', boxId: 'uw-condition-box', suggestId: 'uw-condition-suggest',
+    list: uwData.conditionList, selectedArr: selectedConditions,
+    getLabel: item => item.name, getMeta: item => item.category || '',
+  });
+  setupTagInput({
+    inputId: 'uw-drug-input', boxId: 'uw-drug-box', suggestId: 'uw-drug-suggest',
+    list: uwData.drugList, selectedArr: selectedDrugs,
+    getLabel: item => item.name, getMeta: item => item.generic_name || '',
+  });
+}
+
+initFormOptions();
+initFromSupabase();
+</script>
+<script src="bvp-chat.js"></script>
+
+<script>
+(function () {
+  var nav = document.getElementById('bvp-sidenav');
+  if (!nav) return;
+  var hoverCapable = window.matchMedia('(hover: hover)').matches;
+  if (!hoverCapable) {
+    nav.addEventListener('click', function (e) {
+      if (!nav.classList.contains('expanded')) {
+        var link = e.target.closest('a');
+        if (link) { e.preventDefault(); nav.classList.add('expanded'); }
+      }
+    });
+    document.addEventListener('click', function (e) {
+      if (!nav.contains(e.target)) nav.classList.remove('expanded');
+    });
+  }
+})();
+</script>
+</body>
+</html>

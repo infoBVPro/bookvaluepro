@@ -634,64 +634,6 @@ async function bvpGetKnowledgeForBook(agentId) {
   );
 }
 
-// ── KNOWLEDGE BASE ────────────────────────────────────────────
-// Fetches relevant knowledge documents for the AI agent.
-// Optionally filter by state and/or carrier to narrow results.
-// Returns up to `limit` most recent documents.
-
-async function bvpGetKnowledge(options = {}) {
-  const { state = null, carrier = null, category = null, limit = 10 } = options;
-
-  let query = bvp
-    .from('knowledge_documents')
-    .select('id, title, category, state, carrier, effective_date, summary, file_name')
-    .order('effective_date', { ascending: false, nullsFirst: false })
-    .order('created_at', { ascending: false })
-    .limit(limit);
-
-  if (state)    query = query.or(`state.eq.${state},state.is.null`);
-  if (carrier)  query = query.eq('carrier', carrier);
-  if (category) query = query.eq('category', category);
-
-  const { data, error } = await query;
-  if (error) { console.error('bvpGetKnowledge:', error); return []; }
-  return data || [];
-}
-
-// Fetches all knowledge docs relevant to an agent's book —
-// matches states and carriers present in their policies.
-async function bvpGetKnowledgeForBook(agentId) {
-  const book = await bvpGetActiveBook(agentId);
-  if (!book) return [];
-
-  const policies = await bvpGetPolicies(book.id);
-
-  // Collect unique states and carriers from the book
-  const states   = [...new Set(policies.map(p => p.issued_state).filter(Boolean))];
-  const carriers = [...new Set(policies.map(p => p.company).filter(Boolean))];
-
-  // Fetch knowledge docs — national docs (state IS NULL) always included
-  let query = bvp
-    .from('knowledge_documents')
-    .select('id, title, category, state, carrier, effective_date, summary, file_name')
-    .order('effective_date', { ascending: false, nullsFirst: false })
-    .order('created_at', { ascending: false })
-    .limit(20);
-
-  // Filter: state matches agent's states OR is null (national)
-  if (states.length > 0) {
-    query = query.or(`state.in.(${states.join(',')}),state.is.null`);
-  }
-
-  const { data, error } = await query;
-  if (error) { console.error('bvpGetKnowledgeForBook:', error); return []; }
-
-  // Further filter by carrier relevance in JS (Supabase OR across two columns is tricky)
-  return (data || []).filter(doc =>
-    !doc.carrier || carriers.includes(doc.carrier)
-  );
-}
-
 // ── LEADS / PROSPECTS ─────────────────────────────────────────────────
 // Fully separate from `policies`/`books` — leads are agent-entered prospects
 // that have not (yet) become a client. See bvp_leads_schema.sql.
@@ -813,4 +755,250 @@ function bvpLeadStaleDays(lead) {
   const ref = lead.last_contacted_at || lead.created_at;
   if (!ref) return null;
   return Math.floor((Date.now() - new Date(ref).getTime()) / 86400000);
+}
+
+// ── UW ASSISTANT ────────────────────────────────────────────────────
+// Field-underwriting triage: agent picks a state + carrier(s), enters an
+// applicant's profile/conditions/drugs, and gets a per-carrier Likely Accept /
+// Needs Review / Likely Decline verdict. See claude/uw-assistant-schema.md
+// for the full table design (uw_condition_list, uw_drug_list, uw_build_charts,
+// uw_knockout_questions, uw_declinable_drugs — 5 tables; declinable conditions
+// were merged into uw_knockout_questions, since a carrier's knockout question
+// about a condition IS how that condition's decline decision is made).
+// Every bvpGetUW* getter below is fail-soft (returns [] on any error, e.g.
+// "relation does not exist") so the page keeps working even before the
+// migration runs, or before Josh has loaded data into a given table.
+
+// Carriers relevant to UW purposes — "Generic" has no real underwriting
+// rules to attach, so it's excluded from this picker specifically.
+const BVP_UW_CARRIERS = BVP_CARRIERS.filter(c => c !== 'Generic');
+
+// All 50 states + DC, matching the two-letter codes used in IssuedState.
+const BVP_ALL_STATES = [
+  'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA',
+  'HI','ID','IL','IN','IA','KS','KY','LA','ME','MD',
+  'MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ',
+  'NM','NY','NC','ND','OH','OK','OR','PA','RI','SC',
+  'SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC',
+];
+
+// Small built-in taxonomy used only when the real uw_condition_list /
+// uw_drug_list tables are empty (or don't exist yet), so the condition and
+// medication typeahead pickers have something to search against from day one.
+const BVP_UW_FALLBACK_CONDITIONS = [
+  { name: 'Congestive Heart Failure',       aliases: ['CHF','heart failure'],                 category: 'cardiac' },
+  { name: 'Coronary Artery Disease',        aliases: ['CAD'],                                  category: 'cardiac' },
+  { name: 'Atrial Fibrillation',            aliases: ['afib','a-fib'],                         category: 'cardiac' },
+  { name: 'Heart Attack',                   aliases: ['myocardial infarction','MI'],           category: 'cardiac' },
+  { name: 'Pacemaker or Defibrillator',     aliases: ['ICD','pacemaker'],                      category: 'cardiac' },
+  { name: 'Stroke or TIA',                  aliases: ['stroke','transient ischemic attack'],   category: 'neuro' },
+  { name: "Parkinson's Disease",            aliases: ['parkinsons'],                           category: 'neuro' },
+  { name: "Alzheimer's or Dementia",        aliases: ['alzheimers','dementia','memory loss'],  category: 'neuro' },
+  { name: 'Multiple Sclerosis',             aliases: ['MS'],                                   category: 'neuro' },
+  { name: 'COPD',                           aliases: ['chronic obstructive pulmonary disease'],category: 'respiratory' },
+  { name: 'Emphysema',                      aliases: [],                                       category: 'respiratory' },
+  { name: 'Home Oxygen Use',                aliases: ['oxygen','O2'],                          category: 'respiratory' },
+  { name: 'Sleep Apnea',                    aliases: ['OSA','CPAP'],                            category: 'respiratory' },
+  { name: 'Cancer — active treatment',      aliases: ['chemo','chemotherapy','radiation'],     category: 'cancer' },
+  { name: 'Cancer — in remission',          aliases: ['cancer history','cancer survivor'],     category: 'cancer' },
+  { name: 'Diabetes Type 1',                aliases: ['type 1 diabetes','T1D'],                category: 'metabolic' },
+  { name: 'Diabetes Type 2',                aliases: ['type 2 diabetes','T2D'],                category: 'metabolic' },
+  { name: 'Kidney Disease or Dialysis',     aliases: ['CKD','ESRD','renal failure','dialysis'],category: 'renal' },
+  { name: 'Kidney Transplant',              aliases: ['organ transplant'],                     category: 'renal' },
+  { name: 'Liver Disease or Cirrhosis',     aliases: ['cirrhosis','hepatitis'],                category: 'metabolic' },
+  { name: 'Osteoporosis',                   aliases: [],                                       category: 'mobility' },
+  { name: 'Rheumatoid Arthritis',           aliases: ['RA'],                                    category: 'mobility' },
+  { name: 'Wheelchair or Walker Use',       aliases: ['mobility aid','wheelchair','walker'],   category: 'mobility' },
+  { name: 'Depression',                     aliases: [],                                       category: 'mental_health' },
+  { name: 'Anxiety',                        aliases: [],                                       category: 'mental_health' },
+  { name: 'Bipolar Disorder',               aliases: ['bipolar'],                              category: 'mental_health' },
+  { name: 'HIV/AIDS',                       aliases: ['HIV','AIDS'],                            category: 'metabolic' },
+  { name: 'Morbid Obesity',                 aliases: ['obesity'],                              category: 'metabolic' },
+];
+
+const BVP_UW_FALLBACK_DRUGS = [
+  { name: 'Eliquis',    generic_name: 'apixaban',                  aliases: [], common_conditions: ['Atrial Fibrillation'] },
+  { name: 'Xarelto',    generic_name: 'rivaroxaban',               aliases: [], common_conditions: ['Atrial Fibrillation'] },
+  { name: 'Warfarin',   generic_name: 'warfarin sodium',           aliases: ['coumadin'], common_conditions: ['Atrial Fibrillation'] },
+  { name: 'Metformin',  generic_name: 'metformin',                 aliases: [], common_conditions: ['Diabetes Type 2'] },
+  { name: 'Insulin',    generic_name: 'insulin',                   aliases: ['lantus','humalog','novolog'], common_conditions: ['Diabetes Type 1','Diabetes Type 2'] },
+  { name: 'Lipitor',    generic_name: 'atorvastatin',              aliases: [], common_conditions: [] },
+  { name: 'Lasix',      generic_name: 'furosemide',                aliases: [], common_conditions: ['Congestive Heart Failure'] },
+  { name: 'Entresto',   generic_name: 'sacubitril-valsartan',      aliases: [], common_conditions: ['Congestive Heart Failure'] },
+  { name: 'Spiriva',    generic_name: 'tiotropium',                aliases: [], common_conditions: ['COPD'] },
+  { name: 'Symbicort',  generic_name: 'budesonide-formoterol',     aliases: [], common_conditions: ['COPD'] },
+  { name: 'Humira',     generic_name: 'adalimumab',                aliases: [], common_conditions: ['Rheumatoid Arthritis'] },
+  { name: 'Xtandi',     generic_name: 'enzalutamide',              aliases: [], common_conditions: ['Cancer — active treatment'] },
+  { name: 'Prednisone', generic_name: 'prednisone',                aliases: [], common_conditions: [] },
+  { name: 'Zoloft',     generic_name: 'sertraline',                aliases: [], common_conditions: ['Depression'] },
+  { name: 'Aricept',    generic_name: 'donepezil',                 aliases: [], common_conditions: ["Alzheimer's or Dementia"] },
+];
+
+// Each getter below returns [] (never throws) so a missing table never
+// breaks the page — bvpLoadUWData falls back to the built-in taxonomy above
+// for the two master lists, and simply omits carrier-specific data until
+// Josh populates it.
+
+async function bvpGetUWConditionList() {
+  try {
+    const { data, error } = await bvp.from('uw_condition_list').select('*').order('name');
+    if (error) { console.warn('bvpGetUWConditionList:', error.message || error); return []; }
+    return data || [];
+  } catch (e) { console.warn('bvpGetUWConditionList:', e); return []; }
+}
+
+async function bvpGetUWDrugList() {
+  try {
+    const { data, error } = await bvp.from('uw_drug_list').select('*').order('name');
+    if (error) { console.warn('bvpGetUWDrugList:', error.message || error); return []; }
+    return data || [];
+  } catch (e) { console.warn('bvpGetUWDrugList:', e); return []; }
+}
+
+async function bvpGetUWBuildCharts(carriers = null) {
+  try {
+    let q = bvp.from('uw_build_charts').select('*');
+    if (carriers && carriers.length) q = q.in('carrier', carriers);
+    const { data, error } = await q;
+    if (error) { console.warn('bvpGetUWBuildCharts:', error.message || error); return []; }
+    return data || [];
+  } catch (e) { console.warn('bvpGetUWBuildCharts:', e); return []; }
+}
+
+// uw_knockout_questions holds BOTH carrier application knockout questions
+// AND the per-condition decline decision (declinable conditions merged in
+// here — per Josh, these were never really two separate things: a carrier's
+// knockout question about a condition typically *is* the source of that
+// condition's decline/case-by-case decision, often with a lookback period
+// attached, e.g. "diagnosed or treated for CHF in the last 2 years?").
+async function bvpGetUWKnockoutQuestions(carriers = null) {
+  try {
+    let q = bvp.from('uw_knockout_questions').select('*').order('question_order');
+    if (carriers && carriers.length) q = q.in('carrier', carriers);
+    const { data, error } = await q;
+    if (error) { console.warn('bvpGetUWKnockoutQuestions:', error.message || error); return []; }
+    return data || [];
+  } catch (e) { console.warn('bvpGetUWKnockoutQuestions:', e); return []; }
+}
+
+async function bvpGetUWDeclinableDrugs(carriers = null) {
+  try {
+    let q = bvp.from('uw_declinable_drugs').select('*');
+    if (carriers && carriers.length) q = q.in('carrier', carriers);
+    const { data, error } = await q;
+    if (error) { console.warn('bvpGetUWDeclinableDrugs:', error.message || error); return []; }
+    return data || [];
+  } catch (e) { console.warn('bvpGetUWDeclinableDrugs:', e); return []; }
+}
+
+// Loads everything the UW Assistant page needs in one call. `carriers`
+// scopes the carrier-specific tables (build charts, knockouts, declinable
+// drugs) to just the carriers the agent might check — pass BVP_UW_CARRIERS
+// for "all of them". The condition master list falls back to the small
+// built-in taxonomy above until real data exists; the drug master list
+// does the same until Josh's own list is loaded.
+async function bvpLoadUWData(carriers = BVP_UW_CARRIERS) {
+  const [conditionsDb, drugsDb, buildCharts, knockouts, declinableDrugs] = await Promise.all([
+    bvpGetUWConditionList(),
+    bvpGetUWDrugList(),
+    bvpGetUWBuildCharts(carriers),
+    bvpGetUWKnockoutQuestions(carriers),
+    bvpGetUWDeclinableDrugs(carriers),
+  ]);
+
+  return {
+    conditionList:   conditionsDb.length ? conditionsDb : BVP_UW_FALLBACK_CONDITIONS,
+    drugList:        drugsDb.length ? drugsDb : BVP_UW_FALLBACK_DRUGS,
+    buildCharts:     buildCharts,
+    knockouts:       knockouts,       // per-condition decline/case-by-case decisions + lookback live here now
+    declinableDrugs: declinableDrugs,
+  };
+}
+
+function _bvpUwNamesMatch(a, b) {
+  if (!a || !b) return false;
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+// Formats a lookback period onto a result message, e.g. " (within the last 2 years)".
+function _bvpUwLookbackSuffix(lookbackYears) {
+  if (lookbackYears === null || lookbackYears === undefined) return '';
+  return ` (within the last ${lookbackYears} year${lookbackYears === 1 ? '' : 's'})`;
+}
+
+// Pure evaluation logic — no network calls, safe to run synchronously once
+// `data` (from bvpLoadUWData) is in hand. Returns one result object per
+// carrier: { carrier, status: 'accept'|'review'|'decline', reasons, flags }.
+// `reasons` are hard-decline drivers; `flags` are case-by-case / informational.
+// Algorithm — see claude/uw-assistant-schema.md "Evaluation logic":
+//   1. Build chart check (gender + height + weight)
+//   2. Knockout-question / condition check — uw_knockout_questions now holds
+//      BOTH the carrier's application question text AND the decline decision
+//      + lookback period for each condition (these aren't separate concerns —
+//      the knockout question IS how a carrier decides the condition).
+//   3. Declinable drug check
+function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
+  const { gender, heightIn, weightLb } = profile || {};
+  conditions = conditions || [];
+  drugs      = drugs || [];
+
+  return (carriers || []).map(carrier => {
+    const reasons = [];
+    const flags   = [];
+
+    // 1. Build check — only evaluated when we have a matching height/gender row
+    if (weightLb && heightIn) {
+      const rows = (data.buildCharts || []).filter(r =>
+        r.carrier === carrier && r.gender === gender && r.height_in === heightIn);
+      if (rows.length > 0) {
+        const inRange = rows.some(r => weightLb >= r.min_weight && weightLb <= r.max_weight);
+        if (!inRange) {
+          reasons.push({
+            text: `Weight (${weightLb} lbs) falls outside ${carrier}'s acceptable build range for this height`,
+            notes: null,
+          });
+        }
+      }
+    }
+
+    // 2. Knockout question / condition check — matched by condition_name.
+    // A given condition can match multiple rows for the same carrier (e.g.
+    // one row per distinct application question), so every match is surfaced.
+    conditions.forEach(cond => {
+      const matches = (data.knockouts || []).filter(r =>
+        r.carrier === carrier && _bvpUwNamesMatch(r.condition_name, cond));
+      matches.forEach(m => {
+        const lookback = _bvpUwLookbackSuffix(m.lookback_years);
+        const quoted = m.question_text ? ` — application asks: "${m.question_text}"` : '';
+        if (m.decision === 'decline') {
+          reasons.push({ text: `${cond} is a declinable condition for ${carrier}${lookback}`, notes: (m.notes || '') + quoted || null });
+        } else if (m.decision === 'case_by_case' || m.decision === 'accept_with_rating') {
+          flags.push({ text: `${cond} may require case-by-case review or a rating with ${carrier}${lookback}`, notes: (m.notes || '') + quoted || null });
+        } else {
+          // 'flag' — carrier has this on file as a knockout question but no fixed decision is known
+          flags.push({ text: `${cond} appears on ${carrier}'s application knockout questions${lookback}`, notes: (m.notes || '') + quoted || null });
+        }
+      });
+    });
+
+    // 3. Declinable drug check
+    drugs.forEach(drug => {
+      const matches = (data.declinableDrugs || []).filter(r =>
+        r.carrier === carrier && _bvpUwNamesMatch(r.drug_name, drug));
+      matches.forEach(m => {
+        const lookback = _bvpUwLookbackSuffix(m.lookback_years);
+        if (m.decision === 'decline') {
+          reasons.push({ text: `${drug} is a declinable medication for ${carrier}${lookback}`, notes: m.notes || null });
+        } else if (m.decision === 'case_by_case') {
+          flags.push({ text: `${drug} may require case-by-case review with ${carrier}${lookback}`, notes: m.notes || null });
+        }
+      });
+    });
+
+    let status = 'accept';
+    if (reasons.length > 0) status = 'decline';
+    else if (flags.length > 0) status = 'review';
+
+    return { carrier, status, reasons, flags };
+  });
 }
