@@ -50,18 +50,51 @@ body{font-family:'DM Sans',sans-serif;color:var(--text);background:var(--white);
 .modal-msg.error{background:#fdecea;color:#c0392b;border:1px solid #f5c6c2;display:block;}
 .hero{min-height:100vh;background:var(--deep);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:7rem 2rem 5rem;position:relative;overflow:hidden;}
 .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 40%,rgba(26,92,58,0.45) 0%,transparent 70%);pointer-events:none;}
-.hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(26,92,58,0.5);color:var(--sage);font-size:12px;font-weight:500;letter-spacing:0.08em;padding:6px 16px;border-radius:20px;border:1px solid rgba(61,162,114,0.3);margin-bottom:2rem;position:relative;}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(26,92,58,0.5);color:var(--sage);font-size:12px;font-weight:500;letter-spacing:0.08em;padding:6px 16px;border-radius:20px;border:1px solid rgba(61,162,114,0.3);margin-bottom:2rem;position:relative;text-decoration:none;transition:all 0.2s;}
+a.hero-badge:hover{border-color:var(--emerald);color:white;background:rgba(26,92,58,0.75);}
 .hero-badge::before{content:'●';font-size:8px;color:var(--emerald);animation:pulse 2s infinite;}
+.hero-badge strong{color:white;font-weight:600;}
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
 .hero h1{font-family:'DM Serif Display',serif;font-size:clamp(42px,7vw,72px);color:white;line-height:1.1;margin-bottom:1.25rem;max-width:700px;position:relative;}
 .hero h1 em{color:var(--emerald);font-style:italic;}
-.hero-sub{font-size:clamp(15px,2vw,18px);color:var(--sage);line-height:1.75;max-width:520px;margin:0 auto 2.75rem;font-weight:300;position:relative;}
+.hero-sub{font-size:clamp(15px,2vw,18px);color:var(--sage);line-height:1.75;max-width:640px;margin:0 auto 2.75rem;font-weight:300;position:relative;}
 .hero-cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;position:relative;}
 .btn-hero-primary{background:var(--emerald);color:white;border:none;padding:14px 32px;border-radius:10px;font-size:15px;font-family:'DM Sans',sans-serif;font-weight:600;cursor:pointer;transition:all 0.25s;display:inline-flex;align-items:center;gap:8px;}
 .btn-hero-primary:hover{background:#2e8a5e;transform:translateY(-2px);box-shadow:0 12px 30px rgba(61,162,114,0.3);}
 .btn-hero-ghost{background:transparent;color:white;border:1px solid rgba(255,255,255,0.25);padding:14px 32px;border-radius:10px;font-size:15px;font-family:'DM Sans',sans-serif;font-weight:500;cursor:pointer;transition:all 0.25s;}
 .btn-hero-ghost:hover{border-color:white;background:rgba(255,255,255,0.06);}
 .hero-note{margin-top:1.5rem;font-size:12px;color:rgba(122,191,154,0.55);position:relative;}
+/* ── UW Assistant spotlight ── */
+.uw-spot{background:var(--light-bg);border-bottom:1px solid var(--border);padding:5rem 2rem;scroll-margin-top:64px;}
+.uw-inner{max-width:960px;margin:0 auto;display:grid;grid-template-columns:1.1fr 1fr;gap:3rem;align-items:center;}
+.uw-label{display:flex;align-items:center;gap:10px;margin-bottom:0.75rem;}
+.uw-label .section-label{margin-bottom:0;}
+.uw-copy h2{font-family:'DM Serif Display',serif;font-size:clamp(28px,4vw,40px);color:var(--deep);line-height:1.2;margin-bottom:1rem;}
+.uw-copy h2 em{color:var(--emerald);font-style:italic;}
+.uw-copy .uw-intro{font-size:16px;color:var(--text-muted);line-height:1.75;font-weight:300;margin-bottom:1.5rem;}
+.uw-list{list-style:none;margin-bottom:1.75rem;}
+.uw-list li{display:flex;gap:10px;align-items:flex-start;font-size:14px;color:var(--text);line-height:1.55;margin-bottom:10px;}
+.uw-list li svg{flex:0 0 18px;width:18px;height:18px;margin-top:2px;stroke:var(--emerald);fill:none;stroke-width:2.25;stroke-linecap:round;stroke-linejoin:round;}
+.uw-actions{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.uw-actions a{font-size:13px;color:var(--forest);font-weight:600;text-decoration:none;cursor:pointer;}
+.uw-actions a:hover{text-decoration:underline;}
+.uw-fine{margin-top:1.25rem;font-size:12px;color:var(--text-muted);line-height:1.6;}
+.uw-demo{background:white;border:1px solid var(--border);border-radius:18px;box-shadow:0 20px 50px rgba(13,46,30,0.08);overflow:hidden;}
+.uw-demo-head{background:var(--deep);padding:14px 18px;display:flex;justify-content:space-between;align-items:center;}
+.uw-demo-head span{font-size:12px;font-weight:600;color:white;letter-spacing:0.02em;}
+.uw-demo-head small{font-size:10px;color:var(--sage);letter-spacing:0.1em;text-transform:uppercase;}
+.uw-demo-body{padding:18px;}
+.uw-applicant{font-size:11px;font-weight:600;color:var(--slate);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:8px;}
+.uw-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;}
+.uw-tag{font-size:12px;background:var(--mist);color:var(--forest);padding:4px 10px;border-radius:14px;}
+.uw-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--border);}
+.uw-row-name{font-size:14px;font-weight:600;color:var(--deep);}
+.uw-row-why{font-size:12px;color:var(--text-muted);margin-top:2px;}
+.verdict{flex:0 0 auto;font-size:11px;font-weight:700;padding:5px 10px;border-radius:14px;white-space:nowrap;}
+.v-accept{background:#e6f5ee;color:#1a5c3a;border:1px solid #b8dfc8;}
+.v-review{background:#fff4dc;color:#8a5a00;border:1px solid #f0d9a6;}
+.v-decline{background:#fdecea;color:#b0322a;border:1px solid #f5c6c2;}
+@media(max-width:800px){.uw-inner{grid-template-columns:1fr;gap:2.5rem;}.uw-spot{padding:4rem 1rem;}}
 .section{padding:5rem 2rem;max-width:960px;margin:0 auto;}
 .section-label{font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--emerald);text-transform:uppercase;margin-bottom:0.75rem;}
 .section h2{font-family:'DM Serif Display',serif;font-size:clamp(28px,4vw,40px);color:var(--deep);line-height:1.2;margin-bottom:1rem;}
@@ -135,14 +168,47 @@ hr.section-divider{border:none;border-top:1px solid var(--border);}
 </div>
 
 <section class="hero">
-  <div class="hero-badge">Now accepting early access signups</div>
+  <a class="hero-badge" href="#uw-assistant"><span><strong>New:</strong> UW Assistant now available →</span></a>
   <h1>See the value <em>others miss.</em></h1>
-  <p class="hero-sub">BookValuePro helps Medicare Supplement agents and agencies know exactly which clients to call, when to call them, and how much commission is on the table.</p>
+  <p class="hero-sub">BookValuePro helps Medicare Supplement agents and agencies know exactly which clients to call, when to call them, and how much commission is on the table. Our Underwriting Assistant checks each applicant against carrier underwriting guidelines, so you can place every client with the right carrier.</p>
   <div class="hero-cta">
     <button class="btn-hero-primary" onclick="openModal('signup')">Get started free →</button>
     <button class="btn-hero-ghost" onclick="openModal('login')">Sign in</button>
   </div>
   <p class="hero-note">No credit card required · Free during beta</p>
+</section>
+
+<section class="uw-spot" id="uw-assistant">
+  <div class="uw-inner">
+    <div class="uw-copy">
+      <div class="uw-label"><div class="section-label">Introducing the UW Assistant</div></div>
+      <h2>Know where your applicant stands <em>before</em> you submit.</h2>
+      <p class="uw-intro">Enter your applicant's height, weight, health conditions and medications, choose the carriers you're considering, and get an instant Likely Accept, Needs Review or Likely Decline read on each one — before you spend time on a full application.</p>
+      <ul class="uw-list">
+        <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><span><strong>Build chart check</strong> against each carrier's height and weight limits</span></li>
+        <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><span><strong>Knockout conditions</strong> matched to the carrier's application questions, with lookback windows</span></li>
+        <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><span><strong>Medication screening</strong> across 5,700+ prescription drugs, flagging carrier-declinable meds</span></li>
+        <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><span><strong>Side-by-side verdicts</strong> for every carrier you pick, with the reasons behind each</span></li>
+      </ul>
+      <div class="uw-actions">
+        <a onclick="openModal('login')">Already a member? Sign in</a>
+      </div>
+      <p class="uw-fine">Humana underwriting data is live now, with more carriers being added. The UW Assistant gives field-underwriting guidance only — the final decision always rests with the carrier.</p>
+    </div>
+
+    <div class="uw-demo" aria-label="Example UW Assistant result">
+      <div class="uw-demo-head"><span>UW Assistant</span><small>Example result</small></div>
+      <div class="uw-demo-body">
+        <div class="uw-applicant">Applicant</div>
+        <div class="uw-tags">
+          <span class="uw-tag">Female</span><span class="uw-tag">5′6″ · 172 lb</span><span class="uw-tag">Type 2 diabetes</span><span class="uw-tag">Metformin</span>
+        </div>
+        <div class="uw-row"><div><div class="uw-row-name">Carrier A</div><div class="uw-row-why">Within build chart · no knockout conditions</div></div><span class="verdict v-accept">Likely Accept</span></div>
+        <div class="uw-row"><div><div class="uw-row-name">Carrier B</div><div class="uw-row-why">Diabetes reviewed case by case</div></div><span class="verdict v-review">Needs Review</span></div>
+        <div class="uw-row"><div><div class="uw-row-name">Carrier C</div><div class="uw-row-why">Condition is a knockout on the application</div></div><span class="verdict v-decline">Likely Decline</span></div>
+      </div>
+    </div>
+  </div>
 </section>
 
 <div style="background:white;">
@@ -188,7 +254,7 @@ hr.section-divider{border:none;border-top:1px solid var(--border);}
 
 <div class="cta-section">
   <h2>Ready to see what your book is really worth?</h2>
-  <p>Join agents already on the early access list. Free during beta.</p>
+  <p>Join agents already on the early access list — and be among the first to try the new UW Assistant. Free during beta.</p>
   <button class="btn-hero-primary" onclick="openModal('signup')" style="margin:0 auto;">Create your free account →</button>
 </div>
 
