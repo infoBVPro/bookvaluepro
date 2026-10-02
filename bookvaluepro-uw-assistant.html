@@ -331,7 +331,7 @@ body { padding-left: 64px; }
           <input class="uw-input" type="number" id="uw-weight" min="60" max="500" placeholder="e.g. 185">
         </div>
         <div class="uw-field">
-          <label for="uw-age">Age (optional)</label>
+          <label for="uw-age">Age on effective date (optional)</label>
           <input class="uw-input" type="number" id="uw-age" min="0" max="120" placeholder="e.g. 68">
         </div>
       </div>
@@ -394,7 +394,12 @@ async function renderCarrierChips() {
   await bvpLoadCarriers();
   const carrierGrid = document.getElementById('uw-carrier-grid');
   carrierGrid.innerHTML = '';
-  bvpCarrierList({ includeGeneric: false, uwOnly: true }).forEach(c => {
+  // Listed alphabetically by the name agents see (ignores the carriers
+  // table's sort_order, which still controls dropdowns elsewhere on the site).
+  bvpCarrierList({ includeGeneric: false, uwOnly: true })
+    .slice()
+    .sort((a, b) => (a.display_name || a.name).localeCompare(b.display_name || b.name, undefined, { sensitivity: 'base' }))
+    .forEach(c => {
     const chip = document.createElement('button');
     chip.type = 'button';
     chip.className = 'uw-carrier-chip';
@@ -566,8 +571,9 @@ async function runUWCheck() {
   const inch = +document.getElementById('uw-height-in').value;
   const heightIn = ft * 12 + inch;
   const weightLb = +document.getElementById('uw-weight').value || null;
+  const age = +document.getElementById('uw-age').value || null;
 
-  const profile = { gender: selectedSex, heightIn, weightLb };
+  const profile = { gender: selectedSex, heightIn, weightLb, age };
   const carriers = [...selectedCarriers];
 
   if (!uwData) uwData = await bvpLoadUWData();
