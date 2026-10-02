@@ -1072,6 +1072,7 @@ function _bvpUwLookbackSuffix(lookbackYears) {
 //   3. Declinable drug check
 function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
   const { gender, heightIn, weightLb } = profile || {};
+  const age = (profile && profile.age) ? +profile.age : null;
   conditions = conditions || [];
   drugs      = drugs || [];
 
@@ -1125,8 +1126,31 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
     // A given condition can match multiple rows for the same carrier (e.g.
     // one row per distinct application question), so every match is surfaced.
     conditions.forEach(cond => {
-      const matches = (data.knockouts || []).filter(r =>
+      let matches = (data.knockouts || []).filter(r =>
         r.carrier === carrier && _bvpUwNamesMatch(r.condition_name, cond));
+
+      // Age-gated rules (min_age, e.g. Physicians Mutual asks some questions
+      // only of applicants 69+ on the effective date). Skip them for younger
+      // applicants; with no age entered, show them as review instead.
+      const ageUnknown = [];
+      matches = matches.filter(m => {
+        if (m.min_age == null) return true;
+        if (age == null) { ageUnknown.push(m); return false; }
+        return age >= m.min_age;
+      });
+
+      // If any applicable rule declines, show only the decline(s) for this condition.
+      if (matches.some(m => m.decision === 'decline')) {
+        matches = matches.filter(m => m.decision === 'decline');
+      } else if (ageUnknown.length) {
+        const m = ageUnknown[0];
+        const quoted = m.question_text ? ` — application asks: "${m.question_text}"` : '';
+        flags.push({
+          text: `${cond} declines with ${carrierLabel} if the applicant is ${m.min_age} or older on the effective date — enter the applicant's age to check`,
+          notes: (m.notes || '') + quoted || null,
+        });
+      }
+
       matches.forEach(m => {
         const lookback = _bvpUwLookbackSuffix(m.lookback_years);
         const quoted = m.question_text ? ` — application asks: "${m.question_text}"` : '';
@@ -1155,19 +1179,29 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
       // name (e.g. Arava and Leflunomide), so several rows can match one drug.
       // Show one line per drug: the strongest decision wins, and the other
       // listed names are mentioned in the notes.
+      // Condition-specific rows (only_for_conditions, e.g. Aetna's "Eliquis when
+      // taken for AFib") apply only when the agent also entered one of those
+      // conditions; otherwise the drug's ordinary uses don't trigger anything.
       const rank = { decline: 2, case_by_case: 1 };
-      const relevant = matches.filter(m => rank[m.decision]);
+      const relevant = matches.filter(m => {
+        if (!rank[m.decision]) return false;
+        const only = m.only_for_conditions;
+        if (!only || !only.length) return true;
+        m._matchedConds = conditions.filter(c => only.some(o => _bvpUwNamesMatch(o, c)));
+        return m._matchedConds.length > 0;
+      });
       if (!relevant.length) return;
       const best = relevant.reduce((a, b) => (rank[b.decision] > rank[a.decision] ? b : a));
+      const forText = best._matchedConds && best._matchedConds.length ? ` when taken for ${best._matchedConds.join(', ')}` : '';
       const lookback = _bvpUwLookbackSuffix(best.lookback_years);
       const listedAs = [...new Set(relevant.map(m => m.drug_name))]
         .filter(n => _bvpUwNormDrug(n) !== _bvpUwNormDrug(drug));
       const notes = [best.notes, listedAs.length ? `Listed by ${carrierLabel} as ${listedAs.join(', ')}.` : null]
         .filter(Boolean).join(' ') || null;
       if (best.decision === 'decline') {
-        reasons.push({ text: `${drug} is a declinable medication for ${carrierLabel}${lookback}`, notes });
+        reasons.push({ text: `${drug} is a declinable medication for ${carrierLabel}${forText}${lookback}`, notes });
       } else {
-        flags.push({ text: `${drug} may require case-by-case review with ${carrierLabel}${lookback}`, notes });
+        flags.push({ text: `${drug} may require case-by-case review with ${carrierLabel}${forText}${lookback}`, notes });
       }
     });
 
