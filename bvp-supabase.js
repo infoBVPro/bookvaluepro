@@ -1149,14 +1149,24 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
       const matches = (data.declinableDrugs || []).filter(r =>
         r.carrier === carrier &&
         [..._bvpUwDrugKeys(r.drug_name, data.drugList)].some(k => drugKeys.has(k)));
-      matches.forEach(m => {
-        const lookback = _bvpUwLookbackSuffix(m.lookback_years);
-        if (m.decision === 'decline') {
-          reasons.push({ text: `${drug} is a declinable medication for ${carrierLabel}${lookback}`, notes: m.notes || null });
-        } else if (m.decision === 'case_by_case') {
-          flags.push({ text: `${drug} may require case-by-case review with ${carrierLabel}${lookback}`, notes: m.notes || null });
-        }
-      });
+      // A carrier often lists the same drug under both its brand and generic
+      // name (e.g. Arava and Leflunomide), so several rows can match one drug.
+      // Show one line per drug: the strongest decision wins, and the other
+      // listed names are mentioned in the notes.
+      const rank = { decline: 2, case_by_case: 1 };
+      const relevant = matches.filter(m => rank[m.decision]);
+      if (!relevant.length) return;
+      const best = relevant.reduce((a, b) => (rank[b.decision] > rank[a.decision] ? b : a));
+      const lookback = _bvpUwLookbackSuffix(best.lookback_years);
+      const listedAs = [...new Set(relevant.map(m => m.drug_name))]
+        .filter(n => _bvpUwNormDrug(n) !== _bvpUwNormDrug(drug));
+      const notes = [best.notes, listedAs.length ? `Listed by ${carrierLabel} as ${listedAs.join(', ')}.` : null]
+        .filter(Boolean).join(' ') || null;
+      if (best.decision === 'decline') {
+        reasons.push({ text: `${drug} is a declinable medication for ${carrierLabel}${lookback}`, notes });
+      } else {
+        flags.push({ text: `${drug} may require case-by-case review with ${carrierLabel}${lookback}`, notes });
+      }
     });
 
     let status = 'accept';
