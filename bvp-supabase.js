@@ -1132,7 +1132,9 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
         const quoted = m.question_text ? ` — application asks: "${m.question_text}"` : '';
         if (m.decision === 'decline') {
           reasons.push({ text: `${cond} is a declinable condition for ${carrierLabel}${lookback}`, notes: (m.notes || '') + quoted || null });
-        } else if (m.decision === 'case_by_case' || m.decision === 'accept_with_rating') {
+        } else if (m.decision === 'accept_with_rating') {
+          flags.push({ text: `${cond} is accepted at a higher rate class with ${carrierLabel}${lookback}, not declined`, notes: (m.notes || '') + quoted || null });
+        } else if (m.decision === 'case_by_case') {
           flags.push({ text: `${cond} may require case-by-case review or a rating with ${carrierLabel}${lookback}`, notes: (m.notes || '') + quoted || null });
         } else {
           // 'flag' — carrier has this on file as a knockout question but no fixed decision is known
