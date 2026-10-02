@@ -1018,6 +1018,41 @@ function _bvpUwNamesMatch(a, b) {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
+// Normalizes a drug name for comparison: lowercase, punctuation/"&"/"and"
+// treated as spaces ("Carbidopa & Levodopa" == "carbidopa-levodopa").
+function _bvpUwNormDrug(s) {
+  return (s || '').toLowerCase().replace(/&|\band\b/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+}
+
+// Every name a drug goes by: itself, plus the generic name and aliases of any
+// entry in the medications list with that name (cached per drug list).
+let _bvpUwDrugIndex = null, _bvpUwDrugIndexSrc = null;
+function _bvpUwDrugKeys(name, drugList) {
+  if (_bvpUwDrugIndexSrc !== drugList) {
+    _bvpUwDrugIndex = new Map();
+    (drugList || []).forEach(d => {
+      const keys = [d.name, d.generic_name, ...(d.aliases || [])].map(_bvpUwNormDrug).filter(Boolean);
+      keys.forEach(k => {
+        if (!_bvpUwDrugIndex.has(k)) _bvpUwDrugIndex.set(k, new Set());
+        // a brand's own name and aliases point to its generic, not to sibling brands
+      });
+      const own = _bvpUwNormDrug(d.name);
+      const set = _bvpUwDrugIndex.get(own) || new Set();
+      keys.forEach(k => set.add(k));
+      _bvpUwDrugIndex.set(own, set);
+      (d.aliases || []).map(_bvpUwNormDrug).filter(Boolean).forEach(a => {
+        const s = _bvpUwDrugIndex.get(a); keys.forEach(k => s.add(k));
+      });
+    });
+    _bvpUwDrugIndexSrc = drugList;
+  }
+  const n = _bvpUwNormDrug(name);
+  const keys = new Set([n]);
+  (_bvpUwDrugIndex.get(n) || []).forEach(k => keys.add(k));
+  return keys;
+}
+
 // Formats a lookback period onto a result message, e.g. " (within the last 2 years)".
 function _bvpUwLookbackSuffix(lookbackYears) {
   if (lookbackYears === null || lookbackYears === undefined) return '';
@@ -1045,18 +1080,44 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
     const reasons = [];
     const flags   = [];
 
-    // 1. Build check — only evaluated when we have a matching height/gender row
+    // 1. Build check — only evaluated when we have a matching height/gender row.
+    // Optional columns (default to the original behavior when absent):
+    //   outside_decision    — 'decline' (default) or 'review' when the weight is
+    //                         outside min/max (e.g. carrier has a Standard II/III class)
+    //   max_weight_selected — lower max for applicants with tobacco use, diabetes,
+    //                         or heart/vascular maintenance meds
     if (weightLb && heightIn) {
-      const rows = (data.buildCharts || []).filter(r =>
-        r.carrier === carrier && r.gender === gender && r.height_in === heightIn);
+      const carrierRows = (data.buildCharts || []).filter(r => r.carrier === carrier);
+      const rows = carrierRows.filter(r => r.gender === gender && r.height_in === heightIn);
       if (rows.length > 0) {
-        const inRange = rows.some(r => weightLb >= r.min_weight && weightLb <= r.max_weight);
-        if (!inRange) {
-          reasons.push({
-            text: `Weight (${weightLb} lbs) falls outside ${carrierLabel}'s acceptable build range for this height`,
-            notes: null,
-          });
+        const inRange = rows.filter(r => weightLb >= r.min_weight && weightLb <= r.max_weight);
+        if (!inRange.length) {
+          const reviewOnly = rows.every(r => r.outside_decision === 'review');
+          if (reviewOnly) {
+            flags.push({
+              text: `Weight (${weightLb} lbs) is outside ${carrierLabel}'s Preferred/Standard build range for this height — may still qualify for a higher-rated class where available`,
+              notes: `Acceptable range: ${rows[0].min_weight}–${rows[0].max_weight} lbs. Check the state's Outline of Coverage for Standard II/III availability.`,
+            });
+          } else {
+            reasons.push({
+              text: `Weight (${weightLb} lbs) falls outside ${carrierLabel}'s acceptable build range for this height`,
+              notes: null,
+            });
+          }
+        } else {
+          const sel = inRange.find(r => r.max_weight_selected != null && weightLb > r.max_weight_selected);
+          if (sel) {
+            flags.push({
+              text: `Weight (${weightLb} lbs) is above ${carrierLabel}'s ${sel.max_weight_selected}-lb limit for applicants with tobacco use, diabetes, or heart/vascular maintenance medications`,
+              notes: 'If none of those apply, the build is within the Preferred/Standard range. If any apply, the applicant may only qualify for a higher-rated class where available.',
+            });
+          }
         }
+      } else if (carrierRows.some(r => r.gender === gender)) {
+        flags.push({
+          text: `Height is not on ${carrierLabel}'s build chart — call ${carrierLabel} underwriting to confirm`,
+          notes: null,
+        });
       }
     }
 
@@ -1082,8 +1143,12 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
 
     // 3. Declinable drug check
     drugs.forEach(drug => {
+      // Match on brand OR generic: picking "Lantus" catches a carrier row for
+      // "Insulin glargine", and picking a generic catches a row listed by brand.
+      const drugKeys = _bvpUwDrugKeys(drug, data.drugList);
       const matches = (data.declinableDrugs || []).filter(r =>
-        r.carrier === carrier && _bvpUwNamesMatch(r.drug_name, drug));
+        r.carrier === carrier &&
+        [..._bvpUwDrugKeys(r.drug_name, data.drugList)].some(k => drugKeys.has(k)));
       matches.forEach(m => {
         const lookback = _bvpUwLookbackSuffix(m.lookback_years);
         if (m.decision === 'decline') {
