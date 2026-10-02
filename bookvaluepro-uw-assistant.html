@@ -389,16 +389,26 @@ const selectedDrugs      = []; // array of drug names (strings)
 // No state picker for now — UW criteria are treated as national per carrier
 // until we move to a carrier+state model (BVP_ALL_STATES stays defined in
 // bvp-supabase.js for when that lands).
-function initFormOptions() {
+// Carrier chips come from the Supabase `carriers` table (include_in_uw = true).
+async function renderCarrierChips() {
+  await bvpLoadCarriers();
   const carrierGrid = document.getElementById('uw-carrier-grid');
-  BVP_UW_CARRIERS.forEach(c => {
+  carrierGrid.innerHTML = '';
+  bvpCarrierList({ includeGeneric: false, uwOnly: true }).forEach(c => {
     const chip = document.createElement('button');
     chip.type = 'button';
     chip.className = 'uw-carrier-chip';
-    chip.textContent = c;
-    chip.onclick = () => toggleCarrier(c, chip);
+    chip.dataset.carrier = c.name;
+    chip.textContent = c.display_name || c.name;
+    chip.onclick = () => toggleCarrier(c.name, chip);
     carrierGrid.appendChild(chip);
   });
+  if (!carrierGrid.children.length) {
+    carrierGrid.innerHTML = '<span class="uw-run-hint">No carriers are set up for the UW Assistant yet.</span>';
+  }
+}
+
+function initFormOptions() {
 
   const ftSel = document.getElementById('uw-height-ft');
   for (let ft = 4; ft <= 7; ft++) {
@@ -432,7 +442,7 @@ function toggleCarrier(carrier, chipEl) {
 function selectAllCarriers(all) {
   selectedCarriers.clear();
   document.querySelectorAll('.uw-carrier-chip').forEach(chip => {
-    if (all) { selectedCarriers.add(chip.textContent); chip.classList.add('selected'); }
+    if (all) { selectedCarriers.add(chip.dataset.carrier); chip.classList.add('selected'); }
     else { chip.classList.remove('selected'); }
   });
   updateRunHint();
@@ -560,7 +570,7 @@ async function runUWCheck() {
   const profile = { gender: selectedSex, heightIn, weightLb };
   const carriers = [...selectedCarriers];
 
-  if (!uwData) uwData = await bvpLoadUWData(BVP_UW_CARRIERS);
+  if (!uwData) uwData = await bvpLoadUWData();
 
   const results = bvpEvaluateUW(profile, selectedConditions, selectedDrugs, carriers, uwData);
   renderResults(results, carriers);
@@ -597,12 +607,12 @@ function renderResults(results, carriers) {
     return `
       <div class="result-card ${r.status}">
         <div class="result-header">
-          <span class="result-carrier">${r.carrier}</span>
+          <span class="result-carrier">${bvpCarrierDisplay(r.carrier)}</span>
           <span class="result-badge ${r.status}">${badgeIcon[r.status]} ${badgeLabel[r.status]}</span>
         </div>
         <div class="result-body">
           ${items.length ? `<div class="result-list">${items.join('')}</div>` : `<div class="result-clean">No flags found based on what you entered.</div>`}
-          ${!hasData ? `<div class="result-nodata">No underwriting data has been loaded yet for ${r.carrier} — this result only reflects what's entered above, not ${r.carrier}'s actual rules.</div>` : ''}
+          ${!hasData ? `<div class="result-nodata">No underwriting data has been loaded yet for ${bvpCarrierDisplay(r.carrier)} — this result only reflects what's entered above, not ${bvpCarrierDisplay(r.carrier)}'s actual rules.</div>` : ''}
         </div>
       </div>`;
   }).join('');
@@ -622,7 +632,7 @@ async function initFromSupabase() {
   if (bnEl) bnEl.textContent = bvpBook ? (bvpBook.file_name + ' — ' + bvpBook.policy_count + ' policies') : 'No book uploaded';
 
   // Pre-load UW reference data in the background so the first check is instant.
-  uwData = await bvpLoadUWData(BVP_UW_CARRIERS);
+  uwData = await bvpLoadUWData();
 
   setupTagInput({
     inputId: 'uw-condition-input', boxId: 'uw-condition-box', suggestId: 'uw-condition-suggest',
@@ -637,6 +647,7 @@ async function initFromSupabase() {
 }
 
 initFormOptions();
+renderCarrierChips();
 initFromSupabase();
 </script>
 <script src="bvp-chat.js"></script>

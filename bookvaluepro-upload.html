@@ -920,7 +920,7 @@ body { padding-left: 64px; }
       </div>
 
       <div class="carrier-generic-note">
-        <strong>Don't see your carrier?</strong> Select <strong>Generic</strong> — your commission rates will use our standard schedule until your carrier is added to the platform.
+        <strong>Don't see your carrier?</strong> Select <strong id="generic-carrier-label">the standard schedule</strong> — your commission rates will use our standard schedule until your carrier is added to the platform.
       </div>
     </div>
 
@@ -1007,21 +1007,29 @@ const ALIASES = {
   PlanType:     ['plan type','plantype','plan_type','plan','med supp plan','medsupplan','policy plan','plan letter'],
 };
 
-// ── PARENT CARRIERS (loaded from Supabase commission_rates table) ──────────
-let PARENT_CARRIERS = ['CVS Group', 'HealthSpring', 'Humana', 'Mutual of Omaha', 'UnitedHealthCare'];
+// ── CARRIERS (loaded from the Supabase `carriers` table via bvp-supabase.js) ──
+// Resolves once BVP_CARRIERS is populated. Nothing is hard-coded here — add a
+// row to the carriers table and it appears in these dropdowns automatically.
+const carriersReady = bvpLoadCarriers().then(() => {
+  const g = BVP_CARRIERS.find(c => c.is_generic);
+  const lbl = document.getElementById('generic-carrier-label');
+  if (g && lbl) lbl.textContent = g.display_name || g.name;
+});
 
-// Returns a promise that resolves once the carrier list is ready
-const carriersReady = (async () => {
-  try {
-    const { data } = await bvp
-      .from('distinct_base_carriers')
-      .select('carrier');
-    if (data && data.length) {
-      const unique = data.map(r => r.carrier).filter(Boolean);
-      if (unique.length) PARENT_CARRIERS = unique;
-    }
-  } catch(e) { /* use fallback */ }
-})();
+// Appends one <option> per active carrier (generic last, labelled as the fallback).
+function appendCarrierOptions(sel) {
+  bvpCarrierList({ includeGeneric: false }).forEach(c => {
+    const o = document.createElement('option');
+    o.value = c.name; o.textContent = c.display_name || c.name;
+    sel.appendChild(o);
+  });
+  const g = BVP_CARRIERS.find(c => c.is_generic);
+  if (g) {
+    const o = document.createElement('option');
+    o.value = g.name; o.textContent = (g.display_name || g.name) + ' (use standard rates)';
+    sel.appendChild(o);
+  }
+}
 
 // ── STATE ──────────────────────────────────────────────────────────────────
 let state = {
@@ -1423,14 +1431,7 @@ async function buildCarrierMappingUI() {
 
     // Build options if not already built
     if (singleSel.options.length <= 1) {
-      PARENT_CARRIERS.forEach(c => {
-        const o = document.createElement('option');
-        o.value = c; o.textContent = c;
-        singleSel.appendChild(o);
-      });
-      const gen = document.createElement('option');
-      gen.value = 'Generic'; gen.textContent = 'Generic (use standard rates)';
-      singleSel.appendChild(gen);
+      appendCarrierOptions(singleSel);
     }
 
     // Restore saved value
@@ -1481,19 +1482,11 @@ async function buildCarrierMappingUI() {
       blank.value = ''; blank.textContent = '— select parent company —';
       sel.appendChild(blank);
 
-      PARENT_CARRIERS.forEach(p => {
-        const o = document.createElement('option');
-        o.value = p; o.textContent = p;
-        sel.appendChild(o);
-      });
-      const gen = document.createElement('option');
-      gen.value = 'Generic'; gen.textContent = 'Generic (use standard rates)';
-      sel.appendChild(gen);
+      appendCarrierOptions(sel);
 
-      // Auto-match if file carrier exactly matches a parent name (case-insensitive)
-      const autoMatch = PARENT_CARRIERS.find(p =>
-        p.toLowerCase() === fileCarrier.toLowerCase()
-      );
+      // Auto-match the file's carrier text against each carrier's name,
+      // display name and aliases (from the carriers table)
+      const autoMatch = bvpMatchCarrier(fileCarrier);
       const saved = state.carrierMappings[fileCarrier];
       if (saved && [...sel.options].some(o => o.value === saved)) {
         sel.value = saved;
@@ -1749,6 +1742,7 @@ async function _doUpload(mode, versionName) {
     // ── Load commission rates from Supabase once ──────────────────
     showParsing(true, 'Loading commission schedules…');
     const allComms = await bvpGetCommissionRates(bvpSession.user.id);
+    const GENERIC  = bvpGenericCarrier(); // fallback schedule from the carriers table
 
     // ── Build 11-slot rate array from commission_rates data ───────
     // Fallback chain: exact carrier+state+plan → carrier+plan → Generic+state+plan → Generic+plan
@@ -1759,9 +1753,9 @@ async function _doUpload(mode, versionName) {
         r => r.carrier === carrier  && r.issued_state === state && r.plan === plan,
         r => r.carrier === carrier  && r.plan === plan          && r.enrollment_type === enrollmentType,
         r => r.carrier === carrier  && r.plan === plan,
-        r => r.carrier === 'Generic' && r.issued_state === state && r.plan === plan && r.enrollment_type === enrollmentType,
-        r => r.carrier === 'Generic' && r.plan === plan          && r.enrollment_type === enrollmentType,
-        r => r.carrier === 'Generic' && r.plan === plan,
+        r => GENERIC && r.carrier === GENERIC && r.issued_state === state && r.plan === plan && r.enrollment_type === enrollmentType,
+        r => GENERIC && r.carrier === GENERIC && r.plan === plan          && r.enrollment_type === enrollmentType,
+        r => GENERIC && r.carrier === GENERIC && r.plan === plan,
       ];
       for (const match of attempts) {
         const rows = allComms.filter(match);
@@ -1791,10 +1785,10 @@ async function _doUpload(mode, versionName) {
       const hasCarrierCol = !!state.mappings['Company'];
       if (!hasCarrierCol) {
         // Single-carrier mode — use the one the agent selected
-        return state.carrierMappings['__single__'] || 'Generic';
+        return state.carrierMappings['__single__'] || GENERIC;
       }
       const fileCarrierName = (mapped(row, 'Company') || '').trim();
-      return state.carrierMappings[fileCarrierName] || 'Generic';
+      return state.carrierMappings[fileCarrierName] || GENERIC;
     };
 
     const policies = (state.rows || []).map((row, i) => {

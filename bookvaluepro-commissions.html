@@ -423,14 +423,7 @@ body { padding-left: 64px; }
       <label class="form-label">Carrier</label>
       <select class="form-select" id="add-carrier">
         <option value="">Select a carrier...</option>
-        <option>AARP/UHC</option>
-        <option>AETNA</option>
-        <option>Elevance</option>
-        <option>Humana</option>
-        <option>Mutual of Omaha</option>
-        <option>Blue Cross Blue Shield</option>
-        <option>HealthSpring</option>
-        <option>Generic</option>
+        <!-- populated from the Supabase carriers table -->
       </select>
     </div>
     <div class="form-group">
@@ -500,6 +493,10 @@ let editingCell   = null;
   // Load enrollment type display names from DB
   await bvpLoadEnrollmentTypes();
 
+  // Load the carrier master list (Supabase `carriers` table) and fill the Add modal
+  await bvpLoadCarriers();
+  populateAddCarrierOptions();
+
   // Get agent's book to know which carriers/states they have
   const book = await bvpGetActiveBook(bvpSession.user.id);
   if (book) {
@@ -546,7 +543,7 @@ function buildFilterOptions() {
 
   const cs = document.getElementById('filter-carrier');
   while (cs.options.length > 1) cs.remove(1);
-  carriers.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; cs.appendChild(o); });
+  carriers.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = bvpCarrierDisplay(c); cs.appendChild(o); });
 
   const ss = document.getElementById('filter-state');
   while (ss.options.length > 1) ss.remove(1);
@@ -591,8 +588,9 @@ function setPlanView(plan) {
 // Groups: state → carrier → plan → enrollment_type → duration rows
 // NOTE: allComms rows are mostly Generic carrier rows (universal fallback).
 // The carrier filter operates on the book's carriers (display carriers),
-// not r.carrier which is usually 'Generic'.
+// not r.carrier which is usually the generic (fallback) carrier.
 function groupedRows() {
+  const GENERIC = bvpGenericCarrier(); // fallback schedule from the carriers table
   const bookStates = [...new Set(bookCarriers.map(bc => bc.state))].sort();
 
   const stateCarriers = new Map();
@@ -625,7 +623,7 @@ function groupedRows() {
     const carrierMap = new Map();
 
     filteredRows.forEach(r => {
-      const isGeneric  = r.carrier === 'Generic';
+      const isGeneric  = !!GENERIC && r.carrier === GENERIC;
       const stateMatch = r.issued_state === state;
       if (!stateMatch) return;
       // Only process Generic rows (carrier-specific overrides would have r.carrier set)
@@ -722,7 +720,7 @@ function buildStateCard(group) {
     </div>
     <div style="display:flex;align-items:center;gap:10px;">
       <div class="carrier-badges">
-        ${carriers.map(c => `<span class="state-badge">${c}</span>`).join('')}
+        ${carriers.map(c => `<span class="state-badge">${bvpCarrierDisplay(c)}</span>`).join('')}
         ${hasOverrides ? '<span class="override-badge">✏️ Custom rates</span>' : ''}
       </div>
       <svg class="chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
@@ -738,7 +736,7 @@ function buildStateCard(group) {
     carrierDiv.innerHTML = `
       <div style="padding:10px 1.25rem;background:var(--light-bg);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;">
         <div style="width:28px;height:28px;border-radius:7px;background:var(--mist);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--forest);font-family:var(--mono);flex-shrink:0;">${carrier.substring(0,3).toUpperCase()}</div>
-        <span style="font-size:12px;font-weight:600;color:var(--deep);">${carrier}</span>
+        <span style="font-size:12px;font-weight:600;color:var(--deep);">${bvpCarrierDisplay(carrier)}</span>
       </div>`;
 
     // Plan sub-sections within carrier
@@ -1029,6 +1027,18 @@ async function confirmReset() {
 
 // ── ADD CARRIER/STATE ─────────────────────────────────────────────────
 function openAddModal() { document.getElementById('add-modal').classList.add('active'); }
+
+// Fills the Add carrier dropdown from the carriers table (generic last).
+function populateAddCarrierOptions() {
+  const sel = document.getElementById('add-carrier');
+  while (sel.options.length > 1) sel.remove(1);
+  const rows = [...bvpCarrierList({ includeGeneric: false }), ...BVP_CARRIERS.filter(c => c.is_generic)];
+  rows.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c.name; o.textContent = c.display_name || c.name;
+    sel.appendChild(o);
+  });
+}
 function closeAddModal() { document.getElementById('add-modal').classList.remove('active'); }
 
 async function addCarrierState() {
@@ -1037,18 +1047,20 @@ async function addCarrierState() {
   if (!carrier || !state) { showToast('⚠️ Please select both a carrier and state', true); return; }
 
   const exists = allComms.some(r => r.carrier === carrier && r.issued_state === state);
-  if (exists) { showToast(`${carrier} · ${state} is already in your list`); closeAddModal(); return; }
+  if (exists) { showToast(`${bvpCarrierDisplay(carrier)} · ${state} is already in your list`); closeAddModal(); return; }
 
   // Load system default rates for this carrier from commission_rates (agent_id IS NULL)
   const { data, error } = await bvp.from('commission_rates').select('*')
     .is('agent_id', null).eq('carrier', carrier);
 
   if (error || !data?.length) {
-    // Fall back to Generic defaults
-    const { data: generic, error: e2 } = await bvp.from('commission_rates').select('*')
-      .is('agent_id', null).eq('carrier', 'Generic');
+    // Fall back to the generic (standard) schedule from the carriers table
+    const genericName = bvpGenericCarrier();
+    const { data: generic, error: e2 } = genericName
+      ? await bvp.from('commission_rates').select('*').is('agent_id', null).eq('carrier', genericName)
+      : { data: null, error: null };
     if (e2 || !generic?.length) {
-      showToast('⚠️ No default rates found for ' + carrier, true);
+      showToast('⚠️ No default rates found for ' + bvpCarrierDisplay(carrier), true);
       return;
     }
     generic.forEach(r => allComms.push({ ...r, carrier, issued_state: state, id: null }));
@@ -1060,7 +1072,7 @@ async function addCarrierState() {
   closeAddModal();
   buildFilterOptions();
   renderAll();
-  showToast(`✓ Added ${carrier} · ${state}`);
+  showToast(`✓ Added ${bvpCarrierDisplay(carrier)} · ${state}`);
 }
 
 // ── VIEW TOGGLE ───────────────────────────────────────────────────────

@@ -963,6 +963,7 @@ let bvpBook = null;
     document.getElementById('book-name').textContent = bvpBook.file_name + ' — ' + bvpBook.policy_count + ' policies';
     const policies = await bvpGetPolicies(bvpBook.id);
     // Enrich with live NPV from Supabase commission rates
+    await bvpLoadCarriers(); // carrier master list (Supabase `carriers` table)
     const enriched = await bvpEnrichPolicies(bvpSession.user.id, policies);
     allClients = enriched.map(p => ({
       ...p,
@@ -985,7 +986,7 @@ function buildFilterOptions() {
   const planTypes = [...new Set(allClients.map(c => c.plan_type).filter(Boolean))].sort();
 
   const carrierSel = document.getElementById('filter-carrier');
-  carriers.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; carrierSel.appendChild(o); });
+  carriers.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = bvpCarrierDisplay(c); carrierSel.appendChild(o); });
 
   const stateSel = document.getElementById('filter-state');
   states.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; stateSel.appendChild(o); });
@@ -1074,7 +1075,7 @@ function renderTable() {
       <td><span class="policy-num">#${String(c.policy_idx).padStart(4,'0')}</span></td>
       <td><span class="${c.name ? 'client-name' : 'client-name unnamed'}">${c.name || 'Unnamed client'}</span></td>
       <td>${priorityBadge(c.priority, c.priority_override != null)}</td>
-      <td><span class="carrier-tag">${c.company || '—'}</span></td>
+      <td><span class="carrier-tag">${c.company ? bvpCarrierDisplay(c.company) : '—'}</span></td>
       <td>${c.issued_state || '—'}</td>
       <td>${c.plan_type ? `<span class="carrier-tag">${c.plan_type}</span>` : '—'}</td>
       <td>${c.dob ? formatDate(c.dob) : '—'}</td>
@@ -1152,6 +1153,16 @@ function contactCell(c) {
   if (c.phone) parts.push(`<a href="tel:${c.phone}" onclick="event.stopPropagation()">${c.phone}</a>`);
   if (c.email) parts.push(`<a href="mailto:${c.email}" onclick="event.stopPropagation()">${c.email}</a>`);
   return parts.join(' · ');
+}
+// Renewal carrier <option>s from the carriers table (generic last). Keeps a
+// previously saved value selectable even if that carrier is no longer active.
+function renewalCarrierOptions(current) {
+  const rows = [...bvpCarrierList({ includeGeneric: false }), ...BVP_CARRIERS.filter(r => r.is_generic)];
+  if (current && !rows.some(r => r.name === current)) rows.push({ name: current, display_name: current });
+  const esc = v => String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+  return rows.map(r =>
+    `<option value="${esc(r.name)}" ${current === r.name ? 'selected' : ''}>${esc(r.display_name || r.name)}</option>`
+  ).join('');
 }
 function fmt$(n) { return n != null ? '$' + Number(n).toFixed(2) : '—'; }
 function fmtNPV(n) { return n != null ? '$' + Math.round(n).toLocaleString() : '—'; }
@@ -1237,7 +1248,7 @@ function renderPanel() {
       <div class="field-grid">
         <div class="field-group">
           <div class="field-label">Carrier</div>
-          <div class="field-value">${c.company || '—'}</div>
+          <div class="field-value">${c.company ? bvpCarrierDisplay(c.company) : '—'}</div>
         </div>
         <div class="field-group">
           <div class="field-label">State</div>
@@ -1286,11 +1297,10 @@ function renderPanel() {
           ${editMode
             ? `<select class="ren-carrier-select" id="edit-ren_carrier">
                 <option value="">— Same / not set —</option>
-                ${['AARP/UHC','AETNA','HealthSpring','Humana','Blue Cross Blue Shield','Mutual of Omaha','Elevance','Generic']
-                  .map(car => `<option value="${car}" ${c.ren_carrier===car?'selected':''}>${car}</option>`).join('')}
+                ${renewalCarrierOptions(c.ren_carrier)}
               </select>`
             : `<div class="field-value">${c.ren_carrier
-                ? `${c.ren_carrier}<span class="badge-ren-carrier">Agent</span>`
+                ? `${bvpCarrierDisplay(c.ren_carrier)}<span class="badge-ren-carrier">Agent</span>`
                 : '<span style="color:var(--text-muted)">Using current carrier</span>'}</div>`}
         </div>
         <div class="field-group">

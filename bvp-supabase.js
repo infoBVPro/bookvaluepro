@@ -76,10 +76,79 @@ function bvpNormalizePlan(planType) {
   return 'G';
 }
 
-const BVP_CARRIERS = [
-  'AARP/UHC','AETNA','HealthSpring','Humana',
-  'Blue Cross Blue Shield','Mutual of Omaha','Elevance','Generic',
-];
+// ── CARRIERS ──────────────────────────────────────────────────
+// Single source of truth: the `carriers` table in Supabase (see
+// claude/carriers_table_migration.sql). No carrier names are hard-coded
+// anywhere on the site — to add a carrier, insert a row in `carriers`.
+//
+//   name          — internal key stored in policies.company, policies.ren_carrier,
+//                   commission_rates.carrier and every uw_* table's carrier column
+//   display_name  — what agents see in dropdowns
+//   aliases       — other spellings found in agents' upload files (used to
+//                   auto-match the carrier column on the Upload page)
+//   is_generic    — the fallback rate schedule (exactly one row)
+//   include_in_uw — shows as a chip on the UW Assistant page
+//
+// Call `await bvpLoadCarriers()` once before using the sync helpers below.
+let BVP_CARRIERS = [];          // active rows from the carriers table, in display order
+let _bvpCarriersPromise = null;
+
+async function bvpLoadCarriers(force = false) {
+  if (_bvpCarriersPromise && !force) return _bvpCarriersPromise;
+  _bvpCarriersPromise = (async () => {
+    const { data, error } = await bvp
+      .from('carriers')
+      .select('name, display_name, aliases, is_generic, include_in_uw, sort_order')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .order('display_name', { ascending: true });
+    if (error) {
+      console.error('bvpLoadCarriers: could not load the carriers table —', error);
+      _bvpCarriersPromise = null; // allow a retry on the next call
+      BVP_CARRIERS = [];
+      return BVP_CARRIERS;
+    }
+    BVP_CARRIERS = (data || []).map(c => ({ ...c, aliases: c.aliases || [] }));
+    return BVP_CARRIERS;
+  })();
+  return _bvpCarriersPromise;
+}
+
+// Internal name of the fallback ("generic") rate schedule, or null if none is configured.
+function bvpGenericCarrier() {
+  const g = BVP_CARRIERS.find(c => c.is_generic);
+  return g ? g.name : null;
+}
+
+// Carrier rows, optionally excluding the generic row and/or limited to UW carriers.
+function bvpCarrierList({ includeGeneric = true, uwOnly = false } = {}) {
+  return BVP_CARRIERS.filter(c =>
+    (includeGeneric || !c.is_generic) && (!uwOnly || (c.include_in_uw && !c.is_generic)));
+}
+
+// Internal names of the carriers shown on the UW Assistant.
+function bvpUWCarriers() {
+  return bvpCarrierList({ includeGeneric: false, uwOnly: true }).map(c => c.name);
+}
+
+// Display name for an internal carrier key (falls back to the key itself).
+function bvpCarrierDisplay(name) {
+  if (!name) return name;
+  const c = BVP_CARRIERS.find(r => r.name === name);
+  return (c && c.display_name) || name;
+}
+
+// Matches a free-text carrier string (e.g. from an upload file) to a carrier's
+// internal name using name, display_name and aliases. Case/punctuation-insensitive.
+// Returns null when nothing matches.
+function bvpMatchCarrier(raw) {
+  const norm = v => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const target = norm(raw);
+  if (!target) return null;
+  const hit = BVP_CARRIERS.find(c =>
+    [c.name, c.display_name, ...(c.aliases || [])].some(v => norm(v) === target));
+  return hit ? hit.name : null;
+}
 
 // ── AUTH ──────────────────────────────────────────────────────
 const BVP_IDLE_TIMEOUT_MS = 4 * 60 * 60 * 1000; // 4 hours
@@ -274,6 +343,11 @@ async function bvpGetCommissionRates(agentId, states = null, carriers = null) {
     return allRows;
   }
 
+  await bvpLoadCarriers();
+  const generic = bvpGenericCarrier();
+  const genericOr = generic ? `,carrier.eq."${generic}"` : '';
+  const withGeneric = list => generic ? [...list, generic] : list;
+
   // System defaults: agent_id IS NULL
   // When scoping by state, we use an OR filter so that Generic carrier rows
   // (which provide universal fallback rates) are always included alongside
@@ -283,10 +357,10 @@ async function bvpGetCommissionRates(agentId, states = null, carriers = null) {
     .order('carrier').order('issued_state').order('plan').order('enrollment_type').order('duration_yr');
   if (states && states.length) {
     // Fetch rows where issued_state is in the book's states OR carrier is Generic
-    defaultQ = defaultQ.or(`issued_state.in.(${states.join(',')}),carrier.eq.Generic`);
+    defaultQ = defaultQ.or(`issued_state.in.(${states.join(',')})${genericOr}`);
   }
   if (carriers && carriers.length) {
-    defaultQ = defaultQ.in('carrier', [...carriers, 'Generic']);
+    defaultQ = defaultQ.in('carrier', withGeneric(carriers));
   }
 
   // Agent overrides: rows belonging to this agent
@@ -294,10 +368,10 @@ async function bvpGetCommissionRates(agentId, states = null, carriers = null) {
     .eq('agent_id', agentId)
     .order('carrier').order('issued_state').order('plan').order('enrollment_type').order('duration_yr');
   if (states && states.length) {
-    overrideQ = overrideQ.or(`issued_state.in.(${states.join(',')}),carrier.eq.Generic`);
+    overrideQ = overrideQ.or(`issued_state.in.(${states.join(',')})${genericOr}`);
   }
   if (carriers && carriers.length) {
-    overrideQ = overrideQ.in('carrier', [...carriers, 'Generic']);
+    overrideQ = overrideQ.in('carrier', withGeneric(carriers));
   }
 
   const [defaults, overrides] = await Promise.all([fetchAll(defaultQ), fetchAll(overrideQ)]);
@@ -403,6 +477,7 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
   const carriers = [...new Set(policies.map(p => p.company).filter(Boolean))];
 
   const comms = await bvpGetCommissionRates(agentId, states, carriers);
+  const generic = bvpGenericCarrier(); // carriers table is loaded by bvpGetCommissionRates
 
   // Rate lookup: carrier + state + plan + enrollment_type → 11-element rate array
   // Fallback chain: exact carrier+state → carrier+any state → Generic+state → Generic+any
@@ -413,9 +488,9 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
       r => r.carrier === carrier  && r.issued_state === state && r.plan === plan,
       r => r.carrier === carrier  && r.plan === plan          && r.enrollment_type === enrollmentType,
       r => r.carrier === carrier  && r.plan === plan,
-      r => r.carrier === 'Generic' && r.issued_state === state && r.plan === plan && r.enrollment_type === enrollmentType,
-      r => r.carrier === 'Generic' && r.plan === plan          && r.enrollment_type === enrollmentType,
-      r => r.carrier === 'Generic' && r.plan === plan,
+      r => generic && r.carrier === generic && r.issued_state === state && r.plan === plan && r.enrollment_type === enrollmentType,
+      r => generic && r.carrier === generic && r.plan === plan          && r.enrollment_type === enrollmentType,
+      r => generic && r.carrier === generic && r.plan === plan,
     ];
     for (const match of attempts) {
       const rows = comms.filter(match);
@@ -436,7 +511,7 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
   const VALUATION_MONTH = new Date().getMonth() + 1;
 
   return policies.map(p => {
-    const carrier      = p.company      || 'Generic';
+    const carrier      = p.company      || generic;
     const state        = p.issued_state || null;
     const durYr        = p.duration_yr  || 1;
     const effMonth     = p.eff_month    || null;
@@ -769,9 +844,8 @@ function bvpLeadStaleDays(lead) {
 // "relation does not exist") so the page keeps working even before the
 // migration runs, or before Josh has loaded data into a given table.
 
-// Carriers relevant to UW purposes — "Generic" has no real underwriting
-// rules to attach, so it's excluded from this picker specifically.
-const BVP_UW_CARRIERS = BVP_CARRIERS.filter(c => c !== 'Generic');
+// Carriers relevant to UW purposes come from the carriers table
+// (include_in_uw = true, never the generic row) — see bvpUWCarriers().
 
 // All 50 states + DC, matching the two-letter codes used in IssuedState.
 const BVP_ALL_STATES = [
@@ -913,11 +987,15 @@ async function bvpGetUWDeclinableDrugs(carriers = null) {
 
 // Loads everything the UW Assistant page needs in one call. `carriers`
 // scopes the carrier-specific tables (build charts, knockouts, declinable
-// drugs) to just the carriers the agent might check — pass BVP_UW_CARRIERS
-// for "all of them". The condition master list falls back to the small
+// drugs) to just the carriers the agent might check — omit it (or pass
+// null) for every UW carrier in the carriers table. The condition master list falls back to the small
 // built-in taxonomy above until real data exists; the drug master list
 // does the same until Josh's own list is loaded.
-async function bvpLoadUWData(carriers = BVP_UW_CARRIERS) {
+async function bvpLoadUWData(carriers = null) {
+  if (!carriers) {
+    await bvpLoadCarriers();
+    carriers = bvpUWCarriers();
+  }
   const [conditionsDb, drugsDb, buildCharts, knockouts, declinableDrugs] = await Promise.all([
     bvpGetUWConditionList(),
     bvpGetUWDrugList(),
@@ -963,6 +1041,7 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
   drugs      = drugs || [];
 
   return (carriers || []).map(carrier => {
+    const carrierLabel = bvpCarrierDisplay(carrier);
     const reasons = [];
     const flags   = [];
 
@@ -974,7 +1053,7 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
         const inRange = rows.some(r => weightLb >= r.min_weight && weightLb <= r.max_weight);
         if (!inRange) {
           reasons.push({
-            text: `Weight (${weightLb} lbs) falls outside ${carrier}'s acceptable build range for this height`,
+            text: `Weight (${weightLb} lbs) falls outside ${carrierLabel}'s acceptable build range for this height`,
             notes: null,
           });
         }
@@ -991,12 +1070,12 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
         const lookback = _bvpUwLookbackSuffix(m.lookback_years);
         const quoted = m.question_text ? ` — application asks: "${m.question_text}"` : '';
         if (m.decision === 'decline') {
-          reasons.push({ text: `${cond} is a declinable condition for ${carrier}${lookback}`, notes: (m.notes || '') + quoted || null });
+          reasons.push({ text: `${cond} is a declinable condition for ${carrierLabel}${lookback}`, notes: (m.notes || '') + quoted || null });
         } else if (m.decision === 'case_by_case' || m.decision === 'accept_with_rating') {
-          flags.push({ text: `${cond} may require case-by-case review or a rating with ${carrier}${lookback}`, notes: (m.notes || '') + quoted || null });
+          flags.push({ text: `${cond} may require case-by-case review or a rating with ${carrierLabel}${lookback}`, notes: (m.notes || '') + quoted || null });
         } else {
           // 'flag' — carrier has this on file as a knockout question but no fixed decision is known
-          flags.push({ text: `${cond} appears on ${carrier}'s application knockout questions${lookback}`, notes: (m.notes || '') + quoted || null });
+          flags.push({ text: `${cond} appears on ${carrierLabel}'s application knockout questions${lookback}`, notes: (m.notes || '') + quoted || null });
         }
       });
     });
@@ -1008,9 +1087,9 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
       matches.forEach(m => {
         const lookback = _bvpUwLookbackSuffix(m.lookback_years);
         if (m.decision === 'decline') {
-          reasons.push({ text: `${drug} is a declinable medication for ${carrier}${lookback}`, notes: m.notes || null });
+          reasons.push({ text: `${drug} is a declinable medication for ${carrierLabel}${lookback}`, notes: m.notes || null });
         } else if (m.decision === 'case_by_case') {
-          flags.push({ text: `${drug} may require case-by-case review with ${carrier}${lookback}`, notes: m.notes || null });
+          flags.push({ text: `${drug} may require case-by-case review with ${carrierLabel}${lookback}`, notes: m.notes || null });
         }
       });
     });
