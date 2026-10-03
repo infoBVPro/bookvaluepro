@@ -1087,10 +1087,14 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
     //                         outside min/max (e.g. carrier has a Standard II/III class)
     //   max_weight_selected — lower max for applicants with tobacco use, diabetes,
     //                         or heart/vascular maintenance meds
-    if (weightLb && heightIn) {
+    // The height-only part (below the chart's minimum height) runs even when
+    // no weight is entered; the weight range check needs both.
+    if (heightIn) {
       const carrierRows = (data.buildCharts || []).filter(r => r.carrier === carrier);
       const rows = carrierRows.filter(r => r.gender === gender && r.height_in === heightIn);
-      if (rows.length > 0) {
+      if (rows.length > 0 && !weightLb) {
+        // Height is on the chart but no weight entered: nothing to check yet.
+      } else if (rows.length > 0) {
         const inRange = rows.filter(r => weightLb >= r.min_weight && weightLb <= r.max_weight);
         if (!inRange.length) {
           const reviewOnly = rows.every(r => r.outside_decision === 'review');
