@@ -199,6 +199,7 @@ body { font-family: var(--sans); color: var(--text); background: var(--light-bg)
 }
 .result-item.reason { background: var(--decline-bg); color: #7a1f1f; }
 .result-item.flag    { background: var(--review-bg); color: #6b4a05; }
+.result-item.info    { background: var(--accept-bg); color: var(--accept); }
 .result-item .ri-icon { flex-shrink: 0; font-size: 13px; margin-top: 1px; }
 .result-item .ri-notes { display: block; color: var(--text-muted); font-size: 11.5px; margin-top: 2px; }
 .result-clean {
@@ -609,6 +610,7 @@ function renderResults(results, carriers) {
     const items = [
       ...r.reasons.map(x => `<div class="result-item reason"><span class="ri-icon">✕</span><span>${x.text}${x.notes ? `<span class="ri-notes">${x.notes}</span>` : ''}</span></div>`),
       ...r.flags.map(x => `<div class="result-item flag"><span class="ri-icon">!</span><span>${x.text}${x.notes ? `<span class="ri-notes">${x.notes}</span>` : ''}</span></div>`),
+      ...(r.infos || []).map(x => `<div class="result-item info"><span class="ri-icon">ℹ</span><span>${x.text}${x.notes ? `<span class="ri-notes">${x.notes}</span>` : ''}</span></div>`),
     ];
     return `
       <div class="result-card ${r.status}">
@@ -617,7 +619,8 @@ function renderResults(results, carriers) {
           <span class="result-badge ${r.status}">${badgeIcon[r.status]} ${badgeLabel[r.status]}</span>
         </div>
         <div class="result-body">
-          ${items.length ? `<div class="result-list">${items.join('')}</div>` : `<div class="result-clean">No flags found based on what you entered.</div>`}
+          ${(r.reasons.length + r.flags.length) ? '' : `<div class="result-clean">No flags found based on what you entered.</div>`}
+          ${items.length ? `<div class="result-list">${items.join('')}</div>` : ''}
           ${!hasData ? `<div class="result-nodata">No underwriting data has been loaded yet for ${bvpCarrierDisplay(r.carrier)} — this result only reflects what's entered above, not ${bvpCarrierDisplay(r.carrier)}'s actual rules.</div>` : ''}
         </div>
       </div>`;
