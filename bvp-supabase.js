@@ -1122,7 +1122,7 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
             const isStd = /standard|preferred/i.test(band.label);
             infos.push({
               text: `${band.label} Rate — weight (${weightLb} lbs) is in ${carrierLabel}'s ${band.label} range for this height${isStd ? '' : ' (rate adjustment)'}`,
-              notes: banded.rate_bands.map(b => `${b.label} ${b.min}–${b.max}`).join(' · ') + ' lbs.',
+              notes: (band.note ? band.note + ' ' : '') + banded.rate_bands.map(b => `${b.label} ${b.min}–${b.max}`).join(' · ') + ' lbs.',
             });
           }
           if (pr) {
