@@ -158,6 +158,14 @@ header {
 }
 .btn-clear:hover { border-color: var(--slate); color: var(--text); }
 
+/* ── STATE GI RIGHT ── */
+.gi-yes { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600;
+  padding:3px 9px; border-radius:20px; background:#fff4e0; color:#a5620a; border:1px solid #f1d29c; white-space:nowrap; }
+.gi-yes.gi-open { background:#fdecea; color:#b02a2a; border-color:#f5c6c2; }
+.gi-no  { font-size:12px; color:var(--text-muted); }
+.gi-sub { display:block; font-size:11px; color:var(--text-muted); margin-top:3px; white-space:nowrap; font-family:var(--mono); }
+.gi-panel-note { font-size:12px; color:var(--text-muted); line-height:1.5; margin-top:4px; }
+
 /* ── TABLE ── */
 .table-wrap {
   background: var(--white); border: 1px solid var(--border);
@@ -644,6 +652,11 @@ body { padding-left: 64px; }
     <select class="filter-select" id="filter-plan-type">
       <option value="">All plan types</option>
     </select>
+    <select class="filter-select" id="filter-gi">
+      <option value="">All GI rights</option>
+      <option value="Yes">Has state GI right</option>
+      <option value="No">No state GI right</option>
+    </select>
     <div class="toolbar-right">
       <button class="btn-clear" onclick="clearFilters()">Clear filters</button>
       <button class="btn-export" onclick="openExportModal()">
@@ -728,6 +741,22 @@ body { padding-left: 64px; }
               </svg>
             </span></span></th>
           <th onclick="sortBy('issued_state')" id="th-issued_state"><span class="th-inner">State<span class="sort-icon">
+              <svg class="icon-bars" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="0" y="0"  width="10" height="2.2" rx="1" fill="currentColor" opacity="0.9"/>
+                <rect x="0" y="3.6" width="7.5" height="2.2" rx="1" fill="currentColor" opacity="0.7"/>
+                <rect x="0" y="7.2" width="5"   height="2.2" rx="1" fill="currentColor" opacity="0.5"/>
+                <rect x="0" y="10.8" width="2.5" height="2.2" rx="1" fill="currentColor" opacity="0.3"/>
+              </svg>
+              <svg class="icon-asc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 1L9 6H1L5 1Z" fill="currentColor"/>
+                <rect x="4" y="6" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+              <svg class="icon-desc" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 12L1 7H9L5 12Z" fill="currentColor"/>
+                <rect x="4" y="1" width="2" height="6" rx="1" fill="currentColor"/>
+              </svg>
+            </span></span></th>
+          <th onclick="sortBy('gi_sort')" id="th-gi_sort" title="State guaranteed-issue right (birthday, anniversary or year-round). Sort = soonest window first."><span class="th-inner">State GI Right<span class="sort-icon">
               <svg class="icon-bars" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <rect x="0" y="0"  width="10" height="2.2" rx="1" fill="currentColor" opacity="0.9"/>
                 <rect x="0" y="3.6" width="7.5" height="2.2" rx="1" fill="currentColor" opacity="0.7"/>
@@ -985,6 +1014,9 @@ let bvpBook = null;
     allClients = enriched.map(p => ({
       ...p,
       name: [p.first_name, p.last_name].filter(Boolean).join(' ') || null,
+      // Sort: year-round first, then soonest window, then no right
+      gi_sort: !p.gi || !p.gi.hasRight ? 99999 : (p.gi.yearRound ? -1 : (p.gi.windowOpen ? p.gi.daysUntilOpen : 9999)),
+      gi_right: p.gi && p.gi.hasRight ? 'Yes' : 'No',
     }));
     buildFilterOptions();
     applyFilters();
@@ -1019,12 +1051,14 @@ function applyFilters() {
   const priority = document.getElementById('filter-priority').value;
   const state    = document.getElementById('filter-state').value;
   const planType = document.getElementById('filter-plan-type').value;
+  const giRight  = document.getElementById('filter-gi').value;
 
   filtered = allClients.filter(c => {
     if (carrier  && c.company      !== carrier)           return false;
     if (priority && String(c.priority) !== priority)      return false;
     if (state    && c.issued_state  !== state)            return false;
     if (planType && c.plan_type     !== planType)         return false;
+    if (giRight  && c.gi_right      !== giRight)          return false;
     if (search) {
       const nameMatch   = c.name && c.name.toLowerCase().includes(search);
       const policyMatch = String(c.policy_idx).includes(search);
@@ -1064,6 +1098,7 @@ function clearFilters() {
   document.getElementById('filter-priority').value = '';
   document.getElementById('filter-state').value = '';
   document.getElementById('filter-plan-type').value = '';
+  document.getElementById('filter-gi').value = '';
   applyFilters();
 }
 
@@ -1094,6 +1129,7 @@ function renderTable() {
       <td>${priorityBadge(c.priority, c.priority_override != null)}</td>
       <td><span class="carrier-tag">${c.company ? bvpCarrierDisplay(c.company) : '—'}</span></td>
       <td>${c.issued_state || '—'}</td>
+      <td>${giCell(c.gi)}</td>
       <td>${c.plan_type ? `<span class="carrier-tag">${c.plan_type}</span>` : '—'}</td>
       <td>${c.dob ? formatDate(c.dob) : '—'}</td>
       <td>${c.eff_month ? monthName(outreachMonth(c.eff_month)) : '—'}</td>
@@ -1171,6 +1207,36 @@ function priorityBadge(p, isOverride) {
 function formatDate(d) { return d ? d.substring(0, 10) : '—'; }
 // Outreach month: eff_month shifted back by lead months (default 3), same logic as outreach page
 const BVP_LEAD_MONTHS = +(localStorage.getItem('bvp_lead_months') || 3);
+// Client panel: State GI Right details
+function giPanelSection(c) {
+  const gi = c.gi;
+  if (!gi || !gi.hasRight) {
+    return `<div class="panel-section"><div class="panel-section-title">State GI Right</div>
+      <div class="field-value">No${gi && gi.reason ? ` <span style="color:var(--text-muted)">— ${gi.reason}</span>` : ''}</div></div>`;
+  }
+  const dated = !gi.yearRound && gi.windowOpen;
+  return `<div class="panel-section">
+    <div class="panel-section-title">State GI Right</div>
+    <div class="field-grid">
+      <div class="field-group"><div class="field-label">Rule</div><div class="field-value">${gi.state} — ${gi.ruleName}</div></div>
+      <div class="field-group"><div class="field-label">GI Window</div><div class="field-value mono">${bvpGIWindowLabel(gi)}</div></div>
+      ${dated ? `<div class="field-group"><div class="field-label">Underwrite By</div><div class="field-value mono">${bvpGIFmtDate(gi.underwriteBy)}</div></div>` : ''}
+      <div class="field-group"><div class="field-label">GI-only Renewal LTV</div><div class="field-value mono">${fmtNPV(c.gi_ren_npv)}</div></div>
+      <div class="field-group"><div class="field-label">Plans</div><div class="field-value">${gi.planNote}</div></div>
+      <div class="field-group"><div class="field-label">Carriers</div><div class="field-value">${gi.scopeNote}</div></div>
+    </div>
+    <div class="gi-panel-note">${bvpGIStatusText(gi)}${gi.requirements.length ? '<br>Requirements: ' + gi.requirements.join(' · ') : ''}${gi.approximate ? '<br>Window estimated from the effective month (day not on file).' : ''}</div>
+  </div>`;
+}
+
+// State GI Right cell: Yes badge + window, or No
+function giCell(gi) {
+  if (!gi || !gi.hasRight) return '<span class="gi-no">No</span>';
+  const open = gi.status === 'open';
+  return `<span class="gi-yes${open ? ' gi-open' : ''}" title="${bvpGIStatusText(gi).replace(/"/g,'&quot;')}">Yes${open ? ' · open' : ''}</span>`
+       + `<span class="gi-sub">${bvpGIWindowLabel(gi)}</span>`;
+}
+
 function outreachMonth(effMonth) {
   if (!effMonth) return null;
   return ((effMonth - BVP_LEAD_MONTHS - 1 + 120) % 12) + 1;
@@ -1310,6 +1376,8 @@ function renderPanel() {
         </div>
       </div>
     </div>
+
+    ${giPanelSection(c)}
 
     <div class="panel-section">
       <div class="panel-section-title">Financial</div>
@@ -1521,6 +1589,7 @@ function runExport() {
       'Eff. Month', 'Duration Year',
       'Current Premium', 'Comm. Premium',
       'Current LTV', 'Renewal LTV',
+      'State GI Right', 'GI Window', 'Underwrite By', 'GI-only Renewal LTV',
       'Email', 'Phone'
     ];
     ws_data.push(headers);
@@ -1547,6 +1616,10 @@ function runExport() {
         c.comm_prem != null ? Number(c.comm_prem)  : '',
         c.curr_npv  != null ? Math.round(c.curr_npv) : '',
         c.ren_npv   != null ? Math.round(c.ren_npv)  : '',
+        c.gi_right || 'No',
+        c.gi ? bvpGIWindowLabel(c.gi) : '',
+        c.gi && c.gi.underwriteBy ? bvpGIFmtDate(c.gi.underwriteBy) : '',
+        c.gi_ren_npv != null ? Math.round(c.gi_ren_npv) : '',
         c.email || '',
         c.phone || '',
       ]);
@@ -1673,6 +1746,7 @@ document.getElementById('filter-carrier').addEventListener('change', applyFilter
 document.getElementById('filter-priority').addEventListener('change', applyFilters);
 document.getElementById('filter-state').addEventListener('change', applyFilters);
 document.getElementById('filter-plan-type').addEventListener('change', applyFilters);
+document.getElementById('filter-gi').addEventListener('change', applyFilters);
 
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {

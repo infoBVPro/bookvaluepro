@@ -241,7 +241,7 @@
       if (book) {
         const policies = await bvpGetPolicies(book.id);
         const enriched = await bvpEnrichPolicies(agentId, policies);
-        bookContext = buildBookContext(book, enriched);
+        bookContext = buildBookContext(book, enriched) + '\n\n' + buildGIContext(enriched);
       }
 
       const systemPrompt = `You are BVP Assistant, a specialized AI for senior health insurance agents using BookValuePro.
@@ -262,13 +262,16 @@ You have access to two sources of information:
 --- AGENT'S BOOK OF BUSINESS ---
 ${bookContext}
 
+TODAY'S DATE: ${new Date().toDateString()}
+
 --- KNOWLEDGE BASE (regulations, rate increases, carrier updates) ---
 ${buildKnowledgeContext(knowledgeDocs)}
 
 Response guidelines:
 - Be concise and specific — agents are busy professionals
 - Use dollar amounts, policy counts, and percentages when relevant
-- Flag urgent items (Priority 1 clients, imminent rate increases, upcoming renewals)
+- Flag urgent items (Priority 1 clients, imminent rate increases, upcoming renewals, GI underwrite-by deadlines)
+- State GI rights: once a client's GI window is open the carrier must write the switch as guaranteed issue (usually 0% commission) and cannot underwrite. To keep full commission the agent should get an underwritten app done by the "underwrite by" date (30 days before the window opens). If the client is declined, the GI window is the fallback.
 - If a question is within scope but not answerable, say so clearly
 - Format lists cleanly when comparing clients or policies
 - Never mention, cite, or refer to your source materials, the knowledge base, the book of business data, or any internal context — just answer naturally as if you know the information`;
@@ -363,6 +366,41 @@ Priority 1: ${p1.length} | Priority 2: ${p2.length} | Priority 3: ${p3.length}
 Renewing next month (month ${nextMonth}): ${renewingNext.length} policies
 Carrier Breakdown:\n${carrierLines}
 Top Priority 1 Clients (up to 10):\n${top10 || '  None'}`;
+  }
+
+  // State GI rights summary — only states present in the agent's book.
+  // p.gi is attached by bvpEnrichPolicies (see bvpGIStatus in bvp-supabase.js).
+  function buildGIContext(policies) {
+    const withRight = (policies || []).filter(p => p.gi && p.gi.hasRight);
+    if (!withRight.length) return 'STATE GI RIGHTS: No clients in a state with a state guaranteed-issue right.';
+    const byState = {};
+    withRight.forEach(p => {
+      const s = p.gi.state;
+      if (!byState[s]) byState[s] = { gi: p.gi, count: 0, gi_npv: 0, ren_npv: 0 };
+      byState[s].count++;
+      byState[s].ren_npv += p.ren_npv || 0;
+      byState[s].gi_npv  += p.gi_ren_npv || 0;
+    });
+    const stateLines = Object.entries(byState).sort((a, b) => b[1].count - a[1].count).map(([s, v]) => {
+      const r = v.gi.rule || {};
+      const extra = [v.gi.planNote, v.gi.scopeNote].concat(v.gi.requirements || []).join('; ');
+      return `  - ${s}: ${v.count} clients | ${v.gi.ruleName} | ${extra}${r.notes ? ' | ' + r.notes : ''} | Renewal LTV $${Math.round(v.ren_npv).toLocaleString()} underwritten vs $${Math.round(v.gi_npv).toLocaleString()} if written as GI`;
+    }).join('\n');
+    const name = p => [p.first_name, p.last_name].filter(Boolean).join(' ') || ('Policy #' + p.policy_idx);
+    const fmt  = d => d ? d.toDateString().slice(4) : 'N/A';
+    const upcoming = withRight
+      .filter(p => p.gi.windowOpen && !p.gi.yearRound && p.gi.daysUntilOpen <= 120 && p.gi.status !== 'open')
+      .sort((a, b) => a.gi.daysUntilOpen - b.gi.daysUntilOpen).slice(0, 25)
+      .map(p => `  - ${name(p)} | ${p.issued_state} | ${p.company} | window ${fmt(p.gi.windowOpen)} – ${fmt(p.gi.windowClose)} | underwrite by ${fmt(p.gi.underwriteBy)}${p.gi.status === 'uw_passed' ? ' (PASSED)' : ''}`)
+      .join('\n');
+    const openNow = withRight.filter(p => p.gi.status === 'open')
+      .map(p => `  - ${name(p)} | ${p.issued_state} | closes ${fmt(p.gi.windowClose)}`).slice(0, 25).join('\n');
+    return `STATE GI RIGHTS (${withRight.length} clients):
+${stateLines}
+GI windows opening in the next 120 days (soonest first):
+${upcoming || '  None'}
+GI windows open now (switch must be written as GI):
+${openNow || '  None'}`;
   }
 
   function buildKnowledgeContext(docs) {

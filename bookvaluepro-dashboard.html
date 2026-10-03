@@ -517,6 +517,24 @@ tfoot td {
 
 tfoot td.num { text-align: right; }
 
+/* ── STATE GI WINDOWS ── */
+.gi-card { background: var(--white); border: 1px solid var(--cream-2); border-radius: var(--radius);
+  padding: 22px 24px; box-shadow: var(--shadow); }
+.gi-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+.gi-stat { border: 1px solid var(--cream-2); border-top: 3px solid var(--gold); border-radius: 10px; padding: 14px 16px; }
+.gi-stat.urgent { border-top-color: var(--coral); }
+.gi-stat-val { font-family: var(--serif); font-size: 28px; color: var(--ink); line-height: 1.1; }
+.gi-stat-lbl { font-size: 12px; color: var(--ink-3); margin-top: 4px; }
+.gi-list { width: 100%; border-collapse: collapse; font-size: 13px; }
+.gi-list th { text-align: left; font-size: 11px; font-weight: 600; color: var(--ink-3); letter-spacing: .06em;
+  text-transform: uppercase; padding: 8px 10px; border-bottom: 1px solid var(--cream-2); white-space: nowrap; }
+.gi-list td { padding: 9px 10px; border-bottom: 1px solid var(--cream-2); white-space: nowrap; }
+.gi-list td.mono { font-family: var(--mono); font-size: 12px; }
+.gi-due { color: var(--coral); font-weight: 600; }
+.gi-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 12px; color: var(--ink-3); flex-wrap: wrap; gap: 8px; }
+.gi-foot a { color: var(--accent); text-decoration: none; font-weight: 500; }
+@media (max-width: 768px) { .gi-stats { grid-template-columns: repeat(2, 1fr); } .gi-card { overflow-x: auto; } }
+
 /* ── PART 3: CHART ── */
 .chart-card {
   background: var(--white);
@@ -710,6 +728,13 @@ body { padding-left: 64px; }
   <div class="npv-grid" id="npv-grid">
     <!-- populated by JS -->
   </div>
+
+  <!-- ── STATE GI WINDOWS ── -->
+  <div class="section-header" style="margin-top:44px;">
+    <span class="section-title">State GI Windows</span>
+    <span class="section-sub">Guaranteed-issue windows opening in the next 90 days · underwrite 30 days before a window opens to keep full commission</span>
+  </div>
+  <div class="gi-card" id="gi-card"><!-- populated by renderGI --></div>
 
   <!-- ── PART 2: CARRIER SUMMARY ── -->
   <div class="section-header" style="margin-top:44px;">
@@ -1268,7 +1293,54 @@ function positionTooltip(e, tt) {
 }
 
 // ── RENDER ALL ────────────────────────────────────────────────────────
+// ── STATE GI WINDOWS ──────────────────────────────────────────────────
+function renderGI() {
+  const el = document.getElementById('gi-card');
+  if (!el) return;
+  const withRight = POLICIES.filter(p => p.gi && p.gi.hasRight);
+  const dated     = withRight.filter(p => p.gi.windowOpen && !p.gi.yearRound);
+  const opening90 = dated.filter(p => p.gi.status !== 'open' && p.gi.daysUntilOpen >= 0 && p.gi.daysUntilOpen <= 90)
+                         .sort((a, b) => a.gi.daysUntilOpen - b.gi.daysUntilOpen);
+  const uwDue90   = dated.filter(p => p.gi.status === 'upcoming' && p.gi.daysUntilUnderwriteBy <= 90);
+  const openNow   = dated.filter(p => p.gi.status === 'open');
+  const yearRound = withRight.filter(p => p.gi.yearRound);
+  const atRisk    = opening90.reduce((s, p) => s + Math.max(0, (p.ren_npv || 0) - (p.gi_ren_npv || 0)), 0);
+  const fmtD = d => bvpGIFmtDate(d);
+
+  if (!withRight.length) {
+    el.innerHTML = '<div style="color:var(--ink-3);font-size:13px">No clients in a state with a guaranteed-issue right.</div>';
+    return;
+  }
+  const rows = opening90.slice(0, 10).map(p => {
+    const due = p.gi.status === 'uw_passed';
+    return `<tr>
+      <td>${p.nm || 'Unnamed client'}</td>
+      <td>${p.st || '—'}</td>
+      <td>${p.co ? bvpCarrierDisplay(p.co) : '—'}</td>
+      <td class="mono">${bvpGIWindowLabel(p.gi)}</td>
+      <td class="mono ${due ? 'gi-due' : ''}">${fmtD(p.gi.underwriteBy)}${due ? ' (passed)' : ''}</td>
+      <td class="mono">${fmt$(Math.max(0, (p.ren_npv || 0) - (p.gi_ren_npv || 0)))}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="gi-stats">
+      <div class="gi-stat"><div class="gi-stat-val">${opening90.length}</div><div class="gi-stat-lbl">GI windows opening in 90 days</div></div>
+      <div class="gi-stat urgent"><div class="gi-stat-val">${uwDue90.length}</div><div class="gi-stat-lbl">Underwrite-by dates in 90 days</div></div>
+      <div class="gi-stat"><div class="gi-stat-val">${openNow.length}</div><div class="gi-stat-lbl">Windows open now (GI only)</div></div>
+      <div class="gi-stat"><div class="gi-stat-val">${fmtK(atRisk)}</div><div class="gi-stat-lbl">LTV at risk if written as GI (next 90 days)</div></div>
+    </div>
+    ${opening90.length ? `<div style="overflow-x:auto"><table class="gi-list">
+      <thead><tr><th>Client</th><th>State</th><th>Carrier</th><th>GI window</th><th>Underwrite by</th><th>LTV at risk</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`
+      : '<div style="color:var(--ink-3);font-size:13px">No GI windows open in the next 90 days.</div>'}
+    <div class="gi-foot">
+      <span>${withRight.length} clients have a state GI right${yearRound.length ? ` · ${yearRound.length} year-round (CT, NY, WA, ME)` : ''}${opening90.length > 10 ? ` · showing first 10 of ${opening90.length}` : ''}</span>
+      <a href="bookvaluepro-outreach.html">Open Renewal Outreach →</a>
+    </div>`;
+}
+
 function renderAll() {
+  renderGI();
   renderNPV();
   renderCarrierTable();
   renderChart();
@@ -1327,6 +1399,10 @@ async function initFromSupabase() {
           rr:       p._renRates  || [],
           curr_npv: p.curr_npv,
           ren_npv:  p.ren_npv,
+          nm:       [p.first_name, p.last_name].filter(Boolean).join(' ') || null,
+          st:       p.issued_state,
+          gi:       p.gi,
+          gi_ren_npv: p.gi_ren_npv,
         });
       });
       const bnEl = document.getElementById('book-name');
@@ -1437,6 +1513,10 @@ async function startRealtimeListener(agentId) {
                 rr:       p._renRates  || [],
                 curr_npv: p.curr_npv,
                 ren_npv:  p.ren_npv,
+                nm:       [p.first_name, p.last_name].filter(Boolean).join(' ') || null,
+                st:       p.issued_state,
+                gi:       p.gi,
+                gi_ren_npv: p.gi_ren_npv,
               });
             });
           }

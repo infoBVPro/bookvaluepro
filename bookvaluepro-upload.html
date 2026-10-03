@@ -1749,6 +1749,28 @@ async function _doUpload(mode, versionName) {
     // Fallback chain: exact carrier+state+plan → carrier+plan → Generic+state+plan → Generic+plan
     // NPV uses years 1-11 only; data has 20 years but we cap at index 10.
     function buildRateArray(carrier, state, plan, enrollmentType) {
+      // GI enrollment types only use GI schedules; a 0% GI schedule is kept
+      // as 0% (not replaced by full open-enrollment rates). None found → 0%.
+      if (BVP_GI_TYPES.includes(enrollmentType)) {
+        const giAttempts = [
+          r => r.carrier === carrier && r.issued_state === state && r.plan === plan && r.enrollment_type === enrollmentType,
+          r => r.carrier === carrier && r.plan === plan && r.enrollment_type === enrollmentType,
+          r => GENERIC && r.carrier === GENERIC && r.issued_state === state && r.plan === plan && r.enrollment_type === enrollmentType,
+          r => GENERIC && r.carrier === GENERIC && r.plan === plan && r.enrollment_type === enrollmentType,
+        ];
+        for (const match of giAttempts) {
+          const rows = allComms.filter(match);
+          if (rows.length > 0) {
+            const rates = Array(11).fill(0);
+            rows.forEach(r => {
+              const idx = (r.duration_yr || 1) - 1;
+              if (idx >= 0 && idx < 11) rates[idx] = parseFloat(r.rate) || 0;
+            });
+            return rates;
+          }
+        }
+        return Array(11).fill(0);
+      }
       const attempts = [
         r => r.carrier === carrier  && r.issued_state === state && r.plan === plan && r.enrollment_type === enrollmentType,
         r => r.carrier === carrier  && r.issued_state === state && r.plan === plan,
