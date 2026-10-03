@@ -1115,10 +1115,26 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
           }
         }
       } else if (carrierRows.some(r => r.gender === gender)) {
-        flags.push({
-          text: `Height is not on ${carrierLabel}'s build chart — call ${carrierLabel} underwriting to confirm`,
-          notes: null,
-        });
+        // Height is off the chart. Shorter than the shortest height listed is
+        // treated as outside the build range (a decline for carriers whose
+        // chart declines outside the range, e.g. Physicians Mutual's 4'10"
+        // minimum). Taller than the chart, or a gap in it, still needs a call.
+        const genderRows = carrierRows.filter(r => r.gender === gender);
+        const shortest = Math.min(...genderRows.map(r => r.height_in));
+        const fmt = h => `${Math.floor(h / 12)}'${h % 12}"`;
+        if (heightIn < shortest) {
+          const reviewOnly = genderRows.every(r => r.outside_decision === 'review');
+          const item = {
+            text: `Height (${fmt(heightIn)}) is below ${carrierLabel}'s minimum height of ${fmt(shortest)}`,
+            notes: reviewOnly ? 'May still qualify for a higher-rated class where available.' : null,
+          };
+          (reviewOnly ? flags : reasons).push(item);
+        } else {
+          flags.push({
+            text: `Height is not on ${carrierLabel}'s build chart — call ${carrierLabel} underwriting to confirm`,
+            notes: null,
+          });
+        }
       }
     }
 
