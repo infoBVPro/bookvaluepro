@@ -1061,7 +1061,7 @@ function _bvpUwLookbackSuffix(lookbackYears) {
 
 // Pure evaluation logic — no network calls, safe to run synchronously once
 // `data` (from bvpLoadUWData) is in hand. Returns one result object per
-// carrier: { carrier, status: 'accept'|'review'|'decline', reasons, flags }.
+// carrier: { carrier, status: 'accept'|'review'|'decline', reasons, flags, infos }.
 // `reasons` are hard-decline drivers; `flags` are case-by-case / informational.
 // Algorithm — see claude/uw-assistant-schema.md "Evaluation logic":
 //   1. Build chart check (gender + height + weight)
@@ -1080,6 +1080,7 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
     const carrierLabel = bvpCarrierDisplay(carrier);
     const reasons = [];
     const flags   = [];
+    const infos   = [];   // informational lines (e.g. rate class); don't change the status
 
     // 1. Build check — only evaluated when we have a matching height/gender row.
     // Optional columns (default to the original behavior when absent):
@@ -1110,6 +1111,16 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
             });
           }
         } else {
+          // Rate class by weight (max_weight_preferred, e.g. Nassau's Preferred
+          // vs Standard columns). Shown as info; doesn't change the status.
+          const pr = inRange.find(r => r.max_weight_preferred != null);
+          if (pr) {
+            infos.push(weightLb <= pr.max_weight_preferred
+              ? { text: `Preferred Rate — weight (${weightLb} lbs) is within ${carrierLabel}'s Preferred range for this height`,
+                  notes: `Preferred up to ${pr.max_weight_preferred} lbs; Standard up to ${pr.max_weight} lbs.` }
+              : { text: `Standard Rate — weight (${weightLb} lbs) is above ${carrierLabel}'s Preferred maximum for this height`,
+                  notes: `Preferred up to ${pr.max_weight_preferred} lbs; Standard up to ${pr.max_weight} lbs.` });
+          }
           const sel = inRange.find(r => r.max_weight_selected != null && weightLb > r.max_weight_selected);
           if (sel) {
             flags.push({
@@ -1229,6 +1240,6 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
     if (reasons.length > 0) status = 'decline';
     else if (flags.length > 0) status = 'review';
 
-    return { carrier, status, reasons, flags };
+    return { carrier, status, reasons, flags, infos };
   });
 }
