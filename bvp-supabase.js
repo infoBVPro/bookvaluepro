@@ -775,12 +775,11 @@ function bvpGIStatus(p, rules = BVP_GI_RULES, today = new Date()) {
   return { ...base, hasRight: false, status: 'not_eligible', reason: lastReason || 'No upcoming window' };
 }
 
-// Short date: "Jul 13" (adds the year when it isn't this year)
+// Short date: "7/13" — adds a 2-digit year when it isn't this year ("5/28/27")
 function bvpGIFmtDate(d) {
   if (!d) return '—';
-  const opts = { month: 'short', day: 'numeric' };
-  if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
-  return d.toLocaleDateString('en-US', opts);
+  const md = `${d.getMonth() + 1}/${d.getDate()}`;
+  return d.getFullYear() === new Date().getFullYear() ? md : `${md}/${String(d.getFullYear()).slice(-2)}`;
 }
 // "Jul 13 – Oct 10", "Year-round", or '' when there is no right
 function bvpGIWindowLabel(gi) {

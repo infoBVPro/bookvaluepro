@@ -587,11 +587,11 @@ function giRightCell(gi){
   return `<span class="gi-yes${open?' gi-open':''}" title="${bvpGIStatusText(gi).replace(/"/g,'&quot;')}">Yes${open?' · open':''}</span>`;
 }
 function giWindowCell(gi){
-  if (!gi || !gi.hasRight) return '<span class="gi-no">—</span>';
+  if (!gi || !gi.hasRight) return '';
   return `<span class="gi-date" title="${(gi.ruleName||'').replace(/"/g,'&quot;')}">${bvpGIWindowLabel(gi)}</span>`;
 }
 function giUnderwriteCell(gi){
-  if (!gi || !gi.hasRight) return '<span class="gi-no">—</span>';
+  if (!gi || !gi.hasRight) return '';
   if (gi.yearRound) return '<span class="gi-no" title="Year-round GI: no window to beat">n/a</span>';
   if (!gi.underwriteBy) return '<span class="gi-no">—</span>';
   if (gi.status === 'open') return '<span class="gi-no" title="Window is open — the switch must be written as GI">Window open</span>';
@@ -680,11 +680,13 @@ function buildTable(m){
   const thead=`<thead><tr>
     <th class="row-check"><input type="checkbox" title="Select all in month" onchange="toggleMonthSelect(${m},this.checked)"></th>
     <th>Client</th><th>Carrier</th><th>State</th>
-    <th title="State guaranteed-issue right">State GI Right</th><th>GI Window</th><th title="Last day to submit an underwritten app — 30 days before the GI window opens">Underwrite By</th>
+    <th title="State guaranteed-issue right">State GI Right</th>
     <th class="num">Age</th>
     <th class="num">Current premium</th><th class="num">Current LTV</th>
     <th class="num">Duration</th><th class="num">Est. mo. savings</th>
-    <th class="num">Opportunity LTV</th><th>Contact</th><th>Actions</th>
+    <th class="num">Opportunity LTV</th>
+    <th>GI Window</th><th title="Last day to submit an underwritten app — 30 days before the GI window opens">Underwrite By</th>
+    <th>Contact</th><th>Actions</th>
   </tr></thead>`;
   const rows=(policies,cls,label)=>{
     if(!policies.length)return'';
@@ -696,14 +698,14 @@ function buildTable(m){
       <td><span class="carrier-badge">${p.company}</span></td>
       <td><span class="carrier-badge">${p.state || '—'}</span></td>
       <td>${giRightCell(p.gi)}</td>
-      <td>${giWindowCell(p.gi)}</td>
-      <td>${giUnderwriteCell(p.gi)}</td>
       <td class="num"><span class="dur-badge">${p.age ?? '—'}</span></td>
       <td class="num">${fmt$(p.currPrem)}/mo</td>
       <td class="num">${fmt$(p.currNPV)}</td>
       <td class="num"><span class="dur-badge">Yr ${p.duration}</span></td>
       <td class="num"><span class="sav-val">${fmt$(liveMonSav(p))}/mo</span></td>
       <td class="num"><span class="opp-val">${fmt$(p.renNPV)}</span>${p.gi&&p.gi.hasRight&&p.giRenNPV!=null?`<span class="gi-only" title="Same switch written under the state GI right">GI only: ${fmt$(p.giRenNPV)}</span>`:''}</td>
+      <td>${giWindowCell(p.gi)}</td>
+      <td>${giUnderwriteCell(p.gi)}</td>
       <td>${p.phone?`<a class="contact-link" href="tel:${p.phone}">${p.phone}</a>`:''}${p.phone&&p.email?' · ':''}${p.email?`<a class="contact-link" href="mailto:${p.email}">${p.email}</a>`:''} ${!p.phone&&!p.email?'<span class="no-contact">—</span>':''}</td>
       <td><div class="row-actions">
         <button class="btn-row-action btn-email-row" onclick="openSingleEmail(${p.idx})">✉ Email</button>
