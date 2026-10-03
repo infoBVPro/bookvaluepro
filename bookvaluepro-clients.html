@@ -161,7 +161,10 @@ header {
 /* ── TABLE ── */
 .table-wrap {
   background: var(--white); border: 1px solid var(--border);
-  border-radius: 14px; overflow-x: auto; overflow-y: visible;
+  border-radius: 14px; overflow: auto;
+  /* Cap height to the visible screen (minus header + chat bar) so the
+     horizontal scrollbar is always on-screen, not at the end of the list. */
+  max-height: calc(100vh - 140px);
 }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 thead { background: var(--light-bg); border-bottom: 1px solid var(--border); }
@@ -171,7 +174,10 @@ th {
   letter-spacing: 0.07em; text-transform: uppercase;
   white-space: nowrap; cursor: pointer; user-select: none;
   transition: color 0.15s, background 0.15s;
-  position: relative;
+  /* Keep column headers visible while scrolling inside the table box */
+  position: sticky; top: 0; z-index: 2;
+  background: var(--light-bg);
+  box-shadow: inset 0 -1px 0 var(--border);
 }
 th .th-inner {
   display: inline-flex; align-items: center; gap: 5px;
@@ -184,8 +190,8 @@ th .sort-icon {
 th:hover .sort-icon        { opacity: 0.4; }
 th.sort-asc .sort-icon,
 th.sort-desc .sort-icon    { opacity: 1; }
-th.sort-asc  { color: var(--forest); background: rgba(61,162,114,0.06); }
-th.sort-desc { color: var(--forest); background: rgba(61,162,114,0.06); }
+th.sort-asc  { color: var(--forest); background: linear-gradient(rgba(61,162,114,0.06), rgba(61,162,114,0.06)), var(--light-bg); }
+th.sort-desc { color: var(--forest); background: linear-gradient(rgba(61,162,114,0.06), rgba(61,162,114,0.06)), var(--light-bg); }
 th:not(.sort-asc):not(.sort-desc):hover { color: var(--forest); }
 
 /* bars icon = unsorted/hover state */
