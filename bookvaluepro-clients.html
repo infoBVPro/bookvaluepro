@@ -115,7 +115,7 @@ header {
 }
 
 /* ── PAGE LAYOUT ── */
-.page { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+.page { max-width: 1400px; margin: 0 auto; padding: 2rem 2rem 0; }
 .page-header { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
 .page-title { font-family: var(--serif); font-size: 32px; color: var(--deep); line-height: 1; }
 .page-sub { font-size: 14px; color: var(--text-muted); margin-top: 4px; }
@@ -161,11 +161,19 @@ header {
 /* ── TABLE ── */
 .table-wrap {
   background: var(--white); border: 1px solid var(--border);
-  border-radius: 14px; overflow: auto;
-  /* Cap height to the visible screen (minus header + chat bar) so the
-     horizontal scrollbar is always on-screen, not at the end of the list. */
-  max-height: calc(100vh - 140px);
+  border-radius: 14px; overflow: hidden;
+  display: flex; flex-direction: column;
 }
+/* Inner scroll area. Its max-height is set by sizeTableToScreen() so the
+   bottom edge (and the left/right scrollbar) lands at the bottom of the
+   browser window instead of after the last row. */
+.table-scroll { overflow: auto; min-height: 0; }
+.table-scroll::-webkit-scrollbar { height: 12px; width: 12px; }
+.table-scroll::-webkit-scrollbar-track { background: var(--light-bg); }
+.table-scroll::-webkit-scrollbar-thumb {
+  background: #b9c9bf; border-radius: 6px; border: 2px solid var(--light-bg);
+}
+.table-scroll::-webkit-scrollbar-thumb:hover { background: #8fa898; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 thead { background: var(--light-bg); border-bottom: 1px solid var(--border); }
 th {
@@ -650,6 +658,7 @@ body { padding-left: 64px; }
       <div>⏳</div>
       <div>Loading your clients...</div>
     </div>
+    <div class="table-scroll" id="table-scroll">
     <table id="clients-table" style="display:none;">
       <thead>
         <tr>
@@ -866,6 +875,7 @@ body { padding-left: 64px; }
       </thead>
       <tbody id="clients-tbody"></tbody>
     </table>
+    </div>
     <div id="empty-state" class="empty-state" style="display:none;">
       <div>🔍</div>
       <div>No clients match your filters</div>
@@ -1098,6 +1108,20 @@ function renderTable() {
   renderPagination();
 }
 
+// Fit the table's scroll box to the window so its horizontal scrollbar is
+// always visible at the bottom of the screen.
+function sizeTableToScreen() {
+  const box = document.getElementById('table-scroll');
+  if (!box) return;
+  const topOnPage = box.getBoundingClientRect().top + window.scrollY;
+  const pag = document.getElementById('pagination');
+  const pagH = pag && pag.style.display !== 'none' ? pag.offsetHeight : 0;
+  const bottomGap = 24; // breathing room below the box
+  const avail = window.innerHeight - topOnPage - pagH - bottomGap;
+  box.style.maxHeight = Math.max(320, avail) + 'px';
+}
+window.addEventListener('resize', sizeTableToScreen);
+
 function renderPagination() {
   const total = filtered.length;
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -1105,6 +1129,7 @@ function renderPagination() {
   const end   = Math.min(currentPage * PAGE_SIZE, total);
   const pagination = document.getElementById('pagination');
   pagination.style.display = totalPages > 1 ? 'flex' : 'none';
+  requestAnimationFrame(sizeTableToScreen);
   document.getElementById('page-info').textContent = `Showing ${start}–${end} of ${total}`;
 
   const btns = document.getElementById('page-btns');
