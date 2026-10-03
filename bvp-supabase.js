@@ -1113,7 +1113,18 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
         } else {
           // Rate class by weight (max_weight_preferred, e.g. Nassau's Preferred
           // vs Standard columns). Shown as info; doesn't change the status.
-          const pr = inRange.find(r => r.max_weight_preferred != null);
+          // Multi-tier charts (rate_bands, e.g. Mutual of Omaha's Class I /
+          // Standard / Class I / Class II columns) take priority.
+          const banded = inRange.find(r => Array.isArray(r.rate_bands) && r.rate_bands.length);
+          const band = banded && banded.rate_bands.find(b => weightLb >= b.min && weightLb <= b.max);
+          const pr = banded ? null : inRange.find(r => r.max_weight_preferred != null);
+          if (band) {
+            const isStd = /standard|preferred/i.test(band.label);
+            infos.push({
+              text: `${band.label} Rate — weight (${weightLb} lbs) is in ${carrierLabel}'s ${band.label} range for this height${isStd ? '' : ' (rate adjustment)'}`,
+              notes: banded.rate_bands.map(b => `${b.label} ${b.min}–${b.max}`).join(' · ') + ' lbs.',
+            });
+          }
           if (pr) {
             infos.push(weightLb <= pr.max_weight_preferred
               ? { text: `Preferred Rate — weight (${weightLb} lbs) is within ${carrierLabel}'s Preferred range for this height`,
