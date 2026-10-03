@@ -63,7 +63,15 @@ html,body{background:var(--cream);color:var(--ink);font-family:var(--sans);font-
 .month-opp{font-family:var(--mono);font-size:13px;color:var(--accent);font-weight:500}
 .chevron{color:var(--ink-3);font-size:14px;transition:transform .2s}
 .month-card.open .chevron{transform:rotate(180deg)}
-.policy-table-wrap{display:none;overflow-x:auto}
+/* Each month's table scrolls inside its own box, capped to the screen height,
+   so the left/right scrollbar sits at the bottom of the visible box instead of
+   after the month's last row. Column headers stay pinned while scrolling. */
+.policy-table-wrap{display:none;overflow:auto;max-height:max(320px,calc(100vh - 210px))}
+.policy-table-wrap thead th{position:sticky;top:0;z-index:2;box-shadow:inset 0 -1px 0 var(--cream-2)}
+.policy-table-wrap::-webkit-scrollbar{height:12px;width:12px}
+.policy-table-wrap::-webkit-scrollbar-track{background:#fafaf8}
+.policy-table-wrap::-webkit-scrollbar-thumb{background:#c9c3b8;border-radius:6px;border:2px solid #fafaf8}
+.policy-table-wrap::-webkit-scrollbar-thumb:hover{background:#a8a195}
 .month-card.open .policy-table-wrap{display:block}
 .cohort-section-header{display:flex;align-items:center;gap:10px;padding:10px 24px 8px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;border-bottom:1px solid var(--cream-2)}
 .cohort-section-header.ss{background:#f4faf7;color:var(--accent)}.cohort-section-header.sb{background:#f0f4fc;color:var(--blue-2)}.cohort-section-header.lw{background:#fdf8f0;color:var(--gold-2)}
