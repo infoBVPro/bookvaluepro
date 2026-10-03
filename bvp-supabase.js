@@ -1232,7 +1232,22 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
         m._matchedConds = conditions.filter(c => only.some(o => _bvpUwNamesMatch(o, c)));
         return m._matchedConds.length > 0;
       });
-      if (!relevant.length) return;
+      if (!relevant.length) {
+        // The drug is on the carrier's list only for certain conditions, and
+        // none of them were entered. Say so as an info line (no status change)
+        // so the agent can add the condition if it applies.
+        const condOnly = matches.filter(m => rank[m.decision] && m.only_for_conditions && m.only_for_conditions.length);
+        if (condOnly.length) {
+          const worst = condOnly.reduce((a, b) => (rank[b.decision] > rank[a.decision] ? b : a));
+          const conds = [...new Set(condOnly.flatMap(m => m.only_for_conditions))];
+          const verb = worst.decision === 'decline' ? 'declines' : 'needs review';
+          infos.push({
+            text: `${drug} ${verb} with ${carrierLabel} only when taken for ${conds.join(', ')} — none of those were entered`,
+            notes: `If the applicant takes ${drug} for one of these, add the condition and run again. ${worst.notes || ''}`.trim(),
+          });
+        }
+        return;
+      }
       const best = relevant.reduce((a, b) => (rank[b.decision] > rank[a.decision] ? b : a));
       const forText = best._matchedConds && best._matchedConds.length ? ` when taken for ${best._matchedConds.join(', ')}` : '';
       const lookback = _bvpUwLookbackSuffix(best.lookback_years);
