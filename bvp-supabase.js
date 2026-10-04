@@ -476,41 +476,13 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
   const states   = [...new Set(policies.map(p => p.issued_state).filter(Boolean))];
   const carriers = [...new Set(policies.map(p => p.company).filter(Boolean))];
 
-  const [comms, giRules] = await Promise.all([
-    bvpGetCommissionRates(agentId, states, carriers),
-    bvpLoadGIRules(),
-  ]);
+  const comms = await bvpGetCommissionRates(agentId, states, carriers);
   const generic = bvpGenericCarrier(); // carriers table is loaded by bvpGetCommissionRates
 
   // Rate lookup: carrier + state + plan + enrollment_type → 11-element rate array
   // Fallback chain: exact carrier+state → carrier+any state → Generic+state → Generic+any
   // NPV calculations use only years 1-11 (indices 0-10); data goes to 20 but we cap at 11.
   function getRates(carrier, state, plan, enrollmentType) {
-    // GI enrollment types: only ever use GI schedules. A 0% GI schedule is a
-    // real answer (most carriers pay nothing on GI), so it is returned as-is
-    // instead of falling through to the full open-enrollment rates. If no GI
-    // schedule exists at all, assume 0%.
-    if (BVP_GI_TYPES.includes(enrollmentType)) {
-      const giAttempts = [
-        r => r.carrier === carrier && r.issued_state === state && r.plan === plan && r.enrollment_type === enrollmentType,
-        r => r.carrier === carrier && r.plan === plan && r.enrollment_type === enrollmentType,
-        r => generic && r.carrier === generic && r.issued_state === state && r.plan === plan && r.enrollment_type === enrollmentType,
-        r => generic && r.carrier === generic && r.plan === plan && r.enrollment_type === enrollmentType,
-      ];
-      for (const match of giAttempts) {
-        const rows = comms.filter(match);
-        if (rows.length > 0) {
-          const rates = Array(11).fill(0);
-          rows.forEach(r => {
-            const idx = (r.duration_yr || 1) - 1;
-            if (idx >= 0 && idx < 11) rates[idx] = parseFloat(r.rate) || 0;
-          });
-          return rates;
-        }
-      }
-      return Array(11).fill(0);
-    }
-
     const attempts = [
       r => r.carrier === carrier  && r.issued_state === state && r.plan === plan && r.enrollment_type === enrollmentType,
       r => r.carrier === carrier  && r.issued_state === state && r.plan === plan,
@@ -600,212 +572,13 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
       return renRatesForOffset[Math.min(i, 10)] || 0;
     });
 
-    // State GI right + what the same switch would pay if written as GI
-    // (StateGuaranteedIssue schedule; 0% in most states). Opportunity LTV
-    // (ren_npv) stays at full commission — gi_ren_npv is shown beside it.
-    const gi = bvpGIStatus(p, giRules);
-    let gi_ren_npv = null;
-    if (gi.hasRight) {
-      const giCarrier = p.ren_carrier || carrier;
-      const giRates   = getRates(giCarrier, state, plan, 'StateGuaranteedIssue');
-      gi_ren_npv = (p.ren_carrier && p.ren_prem != null)
-        ? bvpCalcRenewalNPV(p.ren_prem, 0, effMonth, giRates, discountPct)   // mirrors the ren_npv agent-renewal formula
-        : bvpCalcRenewalNPV(annualCurrPrem, savingsPct, effMonth, giRates, discountPct);
-    }
-
     // Expose annualized prems for dashboard/outreach calcs
-    return { ...p, curr_npv, ren_npv, gi, gi_ren_npv,
+    return { ...p, curr_npv, ren_npv,
       _annualCurrPrem: annualCurrPrem,
       _annualCommPrem: annualCommPrem,
       _currRates: offsetCurrRates,
       _renRates: offsetRenRates };
   });
-}
-
-// ── STATE GI RIGHTS ───────────────────────────────────────────
-// Rules live in the `state_gi_rules` table (claude/state_gi_rules_migration.sql).
-// bvpEnrichPolicies attaches `p.gi = bvpGIStatus(p, rules)` to every policy,
-// so every page that enriches policies gets GI info automatically.
-//
-// Key business rule (MoO guide p.9): once a client's GI window is OPEN the
-// carrier must process the switch as GI (usually 0% commission) and cannot
-// underwrite. To earn full commission the underwritten app must be in
-// BVP_GI_UW_LEAD_DAYS before the window opens ("Underwrite by").
-const BVP_GI_UW_LEAD_DAYS = 30;
-
-let BVP_GI_RULES = [];
-let _bvpGIRulesPromise = null;
-
-async function bvpLoadGIRules(force = false) {
-  if (_bvpGIRulesPromise && !force) return _bvpGIRulesPromise;
-  _bvpGIRulesPromise = (async () => {
-    const { data, error } = await bvp.from('state_gi_rules').select('*').eq('is_active', true);
-    if (error) {
-      console.warn('bvpLoadGIRules: could not load state_gi_rules —', error);
-      _bvpGIRulesPromise = null;
-      BVP_GI_RULES = [];
-      return BVP_GI_RULES;
-    }
-    BVP_GI_RULES = data || [];
-    return BVP_GI_RULES;
-  })();
-  return _bvpGIRulesPromise;
-}
-
-const BVP_GI_PLAN_LABELS = {
-  equal_or_lesser: 'Equal or lesser plan',
-  same_plan:       'Same plan letter only',
-  any_plan:        'Any plan',
-  plan_a_only:     'Plan A only',
-  crosswalk:       'Per state plan crosswalk',
-};
-const BVP_GI_SCOPE_LABELS = {
-  any_carrier:        'Any carrier in the state',
-  same_carrier_group: "Must stay within the current carrier's parent group",
-  same_carrier_group_then_any_fallback:
-    "Current carrier's parent group first; any carrier if the group doesn't offer the plan",
-};
-// When a state has several rules, the one that matters most for an existing
-// Med Supp client. plan_conversion (ME 1990→2010) is not used for flags.
-const BVP_GI_RULE_PRIORITY = ['continuous', 'birthday', 'anniversary', 'annual_month'];
-
-function _giDate(y, m0, d) {               // local date, clamps Feb 29 → Feb 28
-  const last = new Date(y, m0 + 1, 0).getDate();
-  return new Date(y, m0, Math.min(d, last));
-}
-function _giAddDays(dt, n) { const d = new Date(dt); d.setDate(d.getDate() + n); return d; }
-function _giParseISO(s) {
-  if (!s) return null;
-  const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
-  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
-}
-function _giStartOfDay(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
-
-// Returns everything the UI needs about one policy's state GI right.
-//   hasRight     — true if the policy's state has an applicable right
-//   yearRound    — continuous right (CT, NY, WA, ME): no window, no underwrite-by
-//   windowOpen / windowClose / underwriteBy — Date objects for the next (or current) window
-//   status       — 'none' | 'year_round' | 'upcoming' | 'uw_passed' | 'open' | 'missing_data' | 'not_eligible'
-//   approximate  — true when the day of month is assumed (anniversary rule; only eff_month stored)
-function bvpGIStatus(p, rules = BVP_GI_RULES, today = new Date()) {
-  const state = p.issued_state;
-  const none  = { hasRight: false, status: 'none', state };
-  if (!state || !rules || !rules.length) return none;
-
-  const stateRules = rules.filter(r => r.state === state && r.is_active !== false && r.rule_code !== 'plan_conversion');
-  if (!stateRules.length) return none;
-  stateRules.sort((a, b) => BVP_GI_RULE_PRIORITY.indexOf(a.rule_code) - BVP_GI_RULE_PRIORITY.indexOf(b.rule_code));
-  const rule = stateRules[0];
-
-  const reqs = [];
-  if (rule.min_age || rule.max_age) reqs.push(`Ages ${rule.min_age || '—'}–${rule.max_age || '—'} only`);
-  if (rule.min_continuous_coverage_months) reqs.push(`Current policy in force ${rule.min_continuous_coverage_months}+ months`);
-  if (rule.max_coverage_gap_days) reqs.push(`No coverage gap over ${rule.max_coverage_gap_days} days`);
-  if (rule.early_application_days) reqs.push(`Apps accepted ${rule.early_application_days} days before window`);
-
-  const base = {
-    hasRight: true, state, rule,
-    ruleCode: rule.rule_code,
-    ruleName: rule.rule_name,
-    planNote:  BVP_GI_PLAN_LABELS[rule.plan_eligibility] || rule.plan_eligibility,
-    scopeNote: BVP_GI_SCOPE_LABELS[rule.carrier_scope] || rule.carrier_scope,
-    requirements: reqs,
-    yearRound: false, approximate: false,
-    windowOpen: null, windowClose: null, underwriteBy: null,
-  };
-
-  if (rule.window_anchor === 'year_round') return { ...base, yearRound: true, status: 'year_round' };
-
-  const t0  = _giStartOfDay(today);
-  const dob = _giParseISO(p.dob);
-  const effMonth = p.eff_month || null;
-  const anchor = rule.window_anchor;
-
-  if ((anchor === 'birthday' || anchor === 'birth_month_start') && !dob) {
-    return { ...base, status: 'missing_data', missing: 'DOB' };
-  }
-  if (anchor === 'policy_anniversary' && !effMonth) {
-    return { ...base, status: 'missing_data', missing: 'Effective month' };
-  }
-
-  const ruleStart = _giParseISO(rule.rule_effective_date);
-  const ruleEnd   = _giParseISO(rule.rule_end_date);
-  let lastReason  = null;
-
-  for (let y = t0.getFullYear() - 1; y <= t0.getFullYear() + 3; y++) {
-    let anchorDate, eventDate;
-    if (anchor === 'birthday') {
-      anchorDate = eventDate = _giDate(y, dob.getMonth(), dob.getDate());
-    } else if (anchor === 'birth_month_start') {
-      anchorDate = new Date(y, dob.getMonth(), 1);
-      eventDate  = _giDate(y, dob.getMonth(), dob.getDate());
-    } else if (anchor === 'policy_anniversary') {
-      anchorDate = eventDate = new Date(y, effMonth - 1, 1);   // day unknown → 1st
-    } else if (anchor === 'fixed_month') {
-      anchorDate = eventDate = new Date(y, (rule.fixed_month || 1) - 1, 1);
-    } else {
-      return { ...base, status: 'not_eligible', reason: 'Unknown window type' };
-    }
-
-    const open  = _giAddDays(anchorDate, rule.window_start_offset_days || 0);
-    const len   = anchor === 'fixed_month'
-      ? new Date(y, rule.fixed_month, 0).getDate()               // whole month
-      : (rule.window_length_days || 1);
-    const close = _giAddDays(open, len - 1);
-    if (close < t0) continue;                                     // already over
-
-    if (ruleStart && eventDate < ruleStart) { lastReason = 'Rule not yet in effect for this birthday'; continue; }
-    if (ruleEnd && open > ruleEnd) break;
-    if (dob && (rule.min_age || rule.max_age)) {
-      const age = y - dob.getFullYear();                          // age on the birthday in year y
-      if (rule.min_age && age < rule.min_age) { lastReason = `Under age ${rule.min_age}`; continue; }
-      if (rule.max_age && age > rule.max_age) { lastReason = `Over age ${rule.max_age}`; break; }
-    }
-
-    const underwriteBy = _giAddDays(open, -BVP_GI_UW_LEAD_DAYS);
-    const status = t0 >= open ? 'open' : (t0 > underwriteBy ? 'uw_passed' : 'upcoming');
-    return {
-      ...base, status,
-      windowOpen: open, windowClose: close, underwriteBy,
-      daysUntilOpen: Math.round((open - t0) / 86400000),
-      daysUntilUnderwriteBy: Math.round((underwriteBy - t0) / 86400000),
-      approximate: anchor === 'policy_anniversary',
-    };
-  }
-  return { ...base, hasRight: false, status: 'not_eligible', reason: lastReason || 'No upcoming window' };
-}
-
-// Short date: "7/13" — adds a 2-digit year when it isn't this year ("5/28/27")
-function bvpGIFmtDate(d) {
-  if (!d) return '—';
-  const md = `${d.getMonth() + 1}/${d.getDate()}`;
-  return d.getFullYear() === new Date().getFullYear() ? md : `${md}/${String(d.getFullYear()).slice(-2)}`;
-}
-// "Jul 13 – Oct 10", "Year-round", or '' when there is no right
-function bvpGIWindowLabel(gi) {
-  if (!gi || !gi.hasRight) return '';
-  if (gi.yearRound) return 'Year-round';
-  if (gi.status === 'missing_data') return `Needs ${gi.missing}`;
-  return `${gi.approximate ? '~' : ''}${bvpGIFmtDate(gi.windowOpen)} – ${bvpGIFmtDate(gi.windowClose)}`;
-}
-// Human status line for tooltips / the AI assistant
-function bvpGIStatusText(gi) {
-  if (!gi || !gi.hasRight) return gi && gi.reason ? `No current GI right (${gi.reason})` : 'No state GI right';
-  switch (gi.status) {
-    case 'year_round':   return 'Year-round GI right — client can switch without underwriting any time';
-    case 'open':         return `GI window open now (closes ${bvpGIFmtDate(gi.windowClose)}) — switch must be written as GI`;
-    case 'uw_passed':    return `Underwrite-by date passed (${bvpGIFmtDate(gi.underwriteBy)}); GI window opens ${bvpGIFmtDate(gi.windowOpen)}`;
-    case 'upcoming':     return `Underwrite by ${bvpGIFmtDate(gi.underwriteBy)}; GI window opens ${bvpGIFmtDate(gi.windowOpen)}`;
-    case 'missing_data': return `GI state — needs ${gi.missing} to calculate the window`;
-    default:             return gi.ruleName || 'State GI right';
-  }
-}
-// Date to start the conversation: underwrite-by minus the agent's lead months
-function bvpGIContactDate(gi, leadMonths = 3) {
-  if (!gi || !gi.underwriteBy) return null;
-  const d = new Date(gi.underwriteBy);
-  d.setMonth(d.getMonth() - leadMonths);
-  return d;
 }
 
 // ── PRIORITY OVERRIDES ────────────────────────────────────────
@@ -1441,9 +1214,23 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
       // Match on brand OR generic: picking "Lantus" catches a carrier row for
       // "Insulin glargine", and picking a generic catches a row listed by brand.
       const drugKeys = _bvpUwDrugKeys(drug, data.drugList);
-      const matches = (data.declinableDrugs || []).filter(r =>
+      const allMatches = (data.declinableDrugs || []).filter(r =>
         r.carrier === carrier &&
         [..._bvpUwDrugKeys(r.drug_name, data.drugList)].some(k => drugKeys.has(k)));
+      // Age-limited drug rows (min_age, e.g. Physicians Mutual's 69+ list):
+      // skipped for younger applicants; with no age entered, shown as review.
+      const drugAgeUnknown = allMatches.filter(m => m.min_age != null && age == null &&
+        (!m.only_for_conditions || !m.only_for_conditions.length ||
+         conditions.some(c => m.only_for_conditions.some(o => _bvpUwNamesMatch(o, c)))));
+      const matches = allMatches.filter(m => m.min_age == null || (age != null && age >= m.min_age));
+      if (drugAgeUnknown.length && !matches.some(m => m.decision === 'decline' && !(m.only_for_conditions && m.only_for_conditions.length))) {
+        const m = drugAgeUnknown.find(x => x.decision === 'decline') || drugAgeUnknown[0];
+        const forC = m.only_for_conditions && m.only_for_conditions.length ? ` when taken for ${m.only_for_conditions.join(', ')}` : '';
+        flags.push({
+          text: `${drug} ${m.decision === 'decline' ? 'declines' : 'needs review'} with ${carrierLabel}${forC} if the applicant is ${m.min_age} or older on the effective date — enter the applicant's age to check`,
+          notes: m.notes || null,
+        });
+      }
       // A carrier often lists the same drug under both its brand and generic
       // name (e.g. Arava and Leflunomide), so several rows can match one drug.
       // Show one line per drug: the strongest decision wins, and the other
