@@ -1195,10 +1195,24 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
       // No rule for this exact condition: follow "counts as" links to the
       // broader conditions this carrier does ask about. A linked match is
       // always shown as Needs Review (agent confirms with the carrier).
+      // "Implies" links (link_type = 'implies', e.g. 4+ BP meds -> 3+ BP meds)
+      // are certain: the carrier's own rule applies with its real result.
+      if (!matches.length) {
+        const implied = [];
+        linkTargets(cond).filter(l => l.link_type === 'implies').forEach(l => {
+          (data.knockouts || []).forEach(r => {
+            if (r.carrier === carrier && r.decision !== 'info' && _bvpUwNamesMatch(r.condition_name, l.counts_as)) {
+              implied.push(Object.assign({}, r, { _via: l.counts_as }));
+            }
+          });
+        });
+        matches = implied;
+      }
+
       if (!matches.length) {
         const rankL = { decline: 3, case_by_case: 2, accept_with_rating: 1 };
         const linked = [];
-        linkTargets(cond).forEach(l => {
+        linkTargets(cond).filter(l => l.link_type !== 'implies').forEach(l => {
           (data.knockouts || []).forEach(r => {
             if (r.carrier !== carrier || !_bvpUwNamesMatch(r.condition_name, l.counts_as) || !rankL[r.decision]) return;
             if (r.min_age != null && age != null && age < r.min_age) return;
@@ -1243,12 +1257,13 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
       matches.forEach(m => {
         const lookback = _bvpUwLookbackSuffix(m.lookback_years);
         const quoted = m.question_text ? ` — application asks: "${m.question_text}"` : '';
+        const via = m._via ? ` (meets its rule for ${m._via})` : '';
         if (m.decision === 'decline') {
-          reasons.push({ text: `${cond} is a declinable condition for ${carrierLabel}${lookback}`, notes: (m.notes || '') + quoted || null });
+          reasons.push({ text: `${cond} is a declinable condition for ${carrierLabel}${via}${lookback}`, notes: (m.notes || '') + quoted || null });
         } else if (m.decision === 'accept_with_rating') {
-          flags.push({ text: `${cond} is accepted at a higher rate class with ${carrierLabel}${lookback}, not declined`, notes: (m.notes || '') + quoted || null });
+          flags.push({ text: `${cond} is accepted at a higher rate class with ${carrierLabel}${via}${lookback}, not declined`, notes: (m.notes || '') + quoted || null });
         } else if (m.decision === 'case_by_case') {
-          flags.push({ text: `${cond} may require case-by-case review or a rating with ${carrierLabel}${lookback}`, notes: (m.notes || '') + quoted || null });
+          flags.push({ text: `${cond} may require case-by-case review or a rating with ${carrierLabel}${via}${lookback}`, notes: (m.notes || '') + quoted || null });
         } else {
           // 'flag' — carrier has this on file as a knockout question but no fixed decision is known
           flags.push({ text: `${cond} appears on ${carrierLabel}'s application knockout questions${lookback}`, notes: (m.notes || '') + quoted || null });
