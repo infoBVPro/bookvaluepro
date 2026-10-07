@@ -1183,6 +1183,15 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
       let matches = (data.knockouts || []).filter(r =>
         r.carrier === carrier && _bvpUwNamesMatch(r.condition_name, cond));
 
+      // Informational rows (decision 'info'): "not a knockout by itself, but
+      // confirm ..." notes. Shown as a green info line; they don't change the
+      // status and don't count as a rule (links are still followed).
+      matches.filter(m => m.decision === 'info').forEach(m => infos.push({
+        text: `${cond} isn't a knockout by itself with ${carrierLabel} — confirm before submitting`,
+        notes: m.notes || null,
+      }));
+      matches = matches.filter(m => m.decision !== 'info');
+
       // No rule for this exact condition: follow "counts as" links to the
       // broader conditions this carrier does ask about. A linked match is
       // always shown as Needs Review (agent confirms with the carrier).
