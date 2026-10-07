@@ -991,17 +991,27 @@ async function bvpGetUWDeclinableDrugs(carriers = null) {
 // null) for every UW carrier in the carriers table. The condition master list falls back to the small
 // built-in taxonomy above until real data exists; the drug master list
 // does the same until Josh's own list is loaded.
+// "Counts as" links between conditions (uw_condition_links): a specific
+// condition (e.g. SVT) that falls under a broader one a carrier asks about
+// (e.g. Irregular Heartbeat). Fail-soft like the other getters.
+async function bvpGetUWConditionLinks() {
+  try {
+    return await _bvpFetchAllRows(() => bvp.from('uw_condition_links').select('*').order('condition_name'));
+  } catch (e) { console.warn('bvpGetUWConditionLinks:', e.message || e); return []; }
+}
+
 async function bvpLoadUWData(carriers = null) {
   if (!carriers) {
     await bvpLoadCarriers();
     carriers = bvpUWCarriers();
   }
-  const [conditionsDb, drugsDb, buildCharts, knockouts, declinableDrugs] = await Promise.all([
+  const [conditionsDb, drugsDb, buildCharts, knockouts, declinableDrugs, conditionLinks] = await Promise.all([
     bvpGetUWConditionList(),
     bvpGetUWDrugList(),
     bvpGetUWBuildCharts(carriers),
     bvpGetUWKnockoutQuestions(carriers),
     bvpGetUWDeclinableDrugs(carriers),
+    bvpGetUWConditionLinks(),
   ]);
 
   return {
@@ -1010,6 +1020,7 @@ async function bvpLoadUWData(carriers = null) {
     buildCharts:     buildCharts,
     knockouts:       knockouts,       // per-condition decline/case-by-case decisions + lookback live here now
     declinableDrugs: declinableDrugs,
+    conditionLinks:  conditionLinks,
   };
 }
 
@@ -1167,9 +1178,36 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
     // 2. Knockout question / condition check — matched by condition_name.
     // A given condition can match multiple rows for the same carrier (e.g.
     // one row per distinct application question), so every match is surfaced.
+    const linkTargets = c => (data.conditionLinks || []).filter(l => _bvpUwNamesMatch(l.condition_name, c));
     conditions.forEach(cond => {
       let matches = (data.knockouts || []).filter(r =>
         r.carrier === carrier && _bvpUwNamesMatch(r.condition_name, cond));
+
+      // No rule for this exact condition: follow "counts as" links to the
+      // broader conditions this carrier does ask about. A linked match is
+      // always shown as Needs Review (agent confirms with the carrier).
+      if (!matches.length) {
+        const rankL = { decline: 3, case_by_case: 2, accept_with_rating: 1 };
+        const linked = [];
+        linkTargets(cond).forEach(l => {
+          (data.knockouts || []).forEach(r => {
+            if (r.carrier !== carrier || !_bvpUwNamesMatch(r.condition_name, l.counts_as) || !rankL[r.decision]) return;
+            if (r.min_age != null && age != null && age < r.min_age) return;
+            linked.push({ r, l });
+          });
+        });
+        if (linked.length) {
+          const best = linked.reduce((a, b) => (rankL[b.r.decision] > rankL[a.r.decision] ? b : a));
+          const verb = { decline: 'declines', case_by_case: 'reviews', accept_with_rating: 'rates up' }[best.r.decision];
+          const ageNote = best.r.min_age != null ? ` (applies at age ${best.r.min_age}+)` : '';
+          const quoted = best.r.question_text ? ` Application asks: "${best.r.question_text}"` : '';
+          flags.push({
+            text: `${cond} may count as ${best.l.counts_as} with ${carrierLabel} — confirm with the carrier`,
+            notes: `${carrierLabel} ${verb} ${best.l.counts_as}${_bvpUwLookbackSuffix(best.r.lookback_years)}${ageNote}. ${best.l.note ? best.l.note + ' ' : ''}${best.r.notes ? best.r.notes : ''}${quoted}`.trim(),
+          });
+        }
+        return;
+      }
 
       // Age-gated rules (min_age, e.g. Physicians Mutual asks some questions
       // only of applicants 69+ on the effective date). Skip them for younger
@@ -1247,6 +1285,22 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
         return m._matchedConds.length > 0;
       });
       if (!relevant.length) {
+        // Condition-specific drug whose condition matches only through a
+        // "counts as" link (e.g. Eliquis "for AFib" + entered SVT) -> review.
+        const viaLink = matches.filter(m => rank[m.decision] && m.only_for_conditions && m.only_for_conditions.length)
+          .map(m => {
+            const hit = conditions.flatMap(c => linkTargets(c).map(l => ({ c, t: l.counts_as })))
+              .find(x => m.only_for_conditions.some(o => _bvpUwNamesMatch(o, x.t)));
+            return hit ? { m, hit } : null;
+          }).filter(Boolean);
+        if (viaLink.length) {
+          const { m, hit } = viaLink[0];
+          flags.push({
+            text: `${drug} may need review with ${carrierLabel} — ${hit.c} may count as ${hit.t}, and ${drug} ${m.decision === 'decline' ? 'declines' : 'needs review'} when taken for ${hit.t}`,
+            notes: m.notes || null,
+          });
+          return;
+        }
         // The drug is on the carrier's list only for certain conditions, and
         // none of them were entered. Say so as an info line (no status change)
         // so the agent can add the condition if it applies.
