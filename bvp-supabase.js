@@ -1057,9 +1057,30 @@ function _bvpUwSourceText(qt) {
   return ` Application asks: "${t}"`;
 }
 
+// Condition names that mean the same thing (uw_condition_links rows with
+// link_type = 'same', e.g. "HIV/AIDS" = Humana's "Human Immunodeficiency
+// Virus (HIV) infection") are treated as one name everywhere, in both
+// directions. Built from the links at the start of each evaluation.
+let _bvpUwCanon = new Map();
+function _bvpUwSetSameNames(links) {
+  const parent = new Map();
+  const key = n => (n || '').trim().toLowerCase();
+  const find = k => { while (parent.has(k) && parent.get(k) !== k) k = parent.get(k); return k; };
+  (links || []).filter(l => l.link_type === 'same').forEach(l => {
+    const a = key(l.condition_name), b = key(l.counts_as);
+    if (!parent.has(a)) parent.set(a, a);
+    if (!parent.has(b)) parent.set(b, b);
+    const ra = find(a), rb = find(b);
+    if (ra !== rb) parent.set(rb, ra);
+  });
+  _bvpUwCanon = new Map([...parent.keys()].map(k => [k, find(k)]));
+}
+
 function _bvpUwNamesMatch(a, b) {
   if (!a || !b) return false;
-  return a.trim().toLowerCase() === b.trim().toLowerCase();
+  const ka = a.trim().toLowerCase(), kb = b.trim().toLowerCase();
+  if (ka === kb) return true;
+  return (_bvpUwCanon.get(ka) || ka) === (_bvpUwCanon.get(kb) || kb);
 }
 
 // Normalizes a drug name for comparison: lowercase, punctuation/"&"/"and"
@@ -1133,7 +1154,7 @@ function _bvpUwCondOutcome(carrier, cond, data, age) {
       ko.filter(r => usable(r) && _bvpUwNamesMatch(r.condition_name, l.counts_as))
         .forEach(r => hits.push({ r, via: l.counts_as, certain: sure(r) })));
     if (!hits.length) {
-      links.filter(l => l.link_type !== 'implies').forEach(l =>
+      links.filter(l => l.link_type !== 'implies' && l.link_type !== 'same').forEach(l =>
         ko.filter(r => usable(r) && _bvpUwNamesMatch(r.condition_name, l.counts_as))
           .forEach(r => hits.push({ r, via: l.counts_as, certain: false })));
     }
@@ -1150,6 +1171,7 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
   const { gender, heightIn, weightLb } = profile || {};
   const age = (profile && profile.age) ? +profile.age : null;
   conditions = conditions || [];
+  _bvpUwSetSameNames(data && data.conditionLinks);
   drugs      = drugs || [];
 
   return (carriers || []).map(carrier => {
@@ -1243,7 +1265,7 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
     // 2. Knockout question / condition check — matched by condition_name.
     // A given condition can match multiple rows for the same carrier (e.g.
     // one row per distinct application question), so every match is surfaced.
-    const linkTargets = c => (data.conditionLinks || []).filter(l => _bvpUwNamesMatch(l.condition_name, c));
+    const linkTargets = c => (data.conditionLinks || []).filter(l => l.link_type !== 'same' && _bvpUwNamesMatch(l.condition_name, c));
 
     // Unrecognized conditions (free text not in the condition list) can never
     // pass silently: each one adds a Needs Review line for every carrier.
@@ -1289,7 +1311,7 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
       if (!matches.length) {
         const rankL = { decline: 3, case_by_case: 2, accept_with_rating: 1 };
         const linked = [];
-        linkTargets(cond).filter(l => l.link_type !== 'implies').forEach(l => {
+        linkTargets(cond).filter(l => l.link_type !== 'implies' && l.link_type !== 'same').forEach(l => {
           (data.knockouts || []).forEach(r => {
             if (r.carrier !== carrier || !_bvpUwNamesMatch(r.condition_name, l.counts_as) || !rankL[r.decision]) return;
             if (r.min_age != null && age != null && age < r.min_age) return;
@@ -1334,7 +1356,8 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
       matches.forEach(m => {
         const lookback = _bvpUwLookbackSuffix(m.lookback_years);
         const quoted = _bvpUwSourceText(m.question_text);
-        const via = m._via ? ` (meets its rule for ${m._via})` : '';
+        const via = m._via ? ` (meets its rule for ${m._via})`
+          : (m.condition_name.trim().toLowerCase() !== cond.trim().toLowerCase() ? ` (listed as ${m.condition_name.trim()})` : '');
         if (m.decision === 'decline') {
           reasons.push({ text: `${cond} is a declinable condition for ${carrierLabel}${via}${lookback}`, notes: (m.notes || '') + quoted || null });
         } else if (m.decision === 'accept_with_rating') {
