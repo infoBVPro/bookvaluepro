@@ -1417,21 +1417,14 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
         }
         return true;
       }
-      // 3. Possible. Needs Review only when the carrier has a rule for that
-      // condition itself (or a certain link to one). When the only connection
-      // is a judgment link (e.g. sertraline -> Depression, which "may count as"
-      // a carrier's Major Depressive Disorder or Bipolar question), two guesses
-      // in a row are too weak to change the result: show a green info line.
+      // 3. Possible: the drug has other common uses, so we can't say why the
+      // applicant takes it. Never changes the status: a green info line
+      // tells the agent which of the carrier's rules to check.
       const possible = items.filter(i => i.type === 'possible' && i.o);
-      const strong = possible.filter(i => i.o.certain || !i.o.via);
-      if (strong.length) {
-        const i = worst(strong);
-        flags.push({ text: `${drug} may be taken for ${i.cond}, which ${carrierLabel} ${verbOf[i.o.r.decision]}${lb(i)} — confirm why the applicant takes it`, notes: srcNote(i) });
-        return true;
-      }
       if (possible.length) {
         const i = worst(possible);
-        infos.push({ text: `${drug} may be taken for ${i.cond} — ${carrierLabel} ${verbOf[i.o.r.decision]} ${i.o.via}${lb(i)}, so check whether that's the applicant's diagnosis`,
+        const rule = i.o.via || i.cond;
+        infos.push({ text: `${drug} may be taken for ${i.cond} — ${carrierLabel} ${i.o.r.decision === 'case_by_case' ? `reviews ${rule} case by case` : `${verbOf[i.o.r.decision]} ${rule}`}${lb(i)}, so check whether that applies to the applicant`,
                      notes: `${i.o.r.notes ? i.o.r.notes : ''}${_bvpUwSourceText(i.o.r.question_text)}`.trim() || null });
         return true;
       }
