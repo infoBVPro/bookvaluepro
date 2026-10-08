@@ -1417,11 +1417,22 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
         }
         return true;
       }
-      // 3. Possible
+      // 3. Possible. Needs Review only when the carrier has a rule for that
+      // condition itself (or a certain link to one). When the only connection
+      // is a judgment link (e.g. sertraline -> Depression, which "may count as"
+      // a carrier's Major Depressive Disorder or Bipolar question), two guesses
+      // in a row are too weak to change the result: show a green info line.
       const possible = items.filter(i => i.type === 'possible' && i.o);
+      const strong = possible.filter(i => i.o.certain || !i.o.via);
+      if (strong.length) {
+        const i = worst(strong);
+        flags.push({ text: `${drug} may be taken for ${i.cond}, which ${carrierLabel} ${verbOf[i.o.r.decision]}${lb(i)} — confirm why the applicant takes it`, notes: srcNote(i) });
+        return true;
+      }
       if (possible.length) {
         const i = worst(possible);
-        flags.push({ text: `${drug} may be taken for ${i.cond}, which ${carrierLabel} ${verbOf[i.o.r.decision]}${lb(i)} — confirm why the applicant takes it`, notes: srcNote(i) });
+        infos.push({ text: `${drug} may be taken for ${i.cond} — ${carrierLabel} ${verbOf[i.o.r.decision]} ${i.o.via}${lb(i)}, so check whether that's the applicant's diagnosis`,
+                     notes: `${i.o.r.notes ? i.o.r.notes : ''}${_bvpUwSourceText(i.o.r.question_text)}`.trim() || null });
         return true;
       }
       return false;
