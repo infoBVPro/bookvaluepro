@@ -1395,10 +1395,10 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
         const i = worst(certain);
         const dec = i.o.r.decision;
         if (dec === 'decline' && i.o.certain) {
-          reasons.push({ text: `${drug} is usually taken for ${i.cond}, which ${carrierLabel} declines${lb(i)}`, notes: srcNote(i) });
+          reasons.push({ text: `${drug} is commonly taken for ${i.cond}, which ${carrierLabel} declines${lb(i)}`, notes: srcNote(i) });
         } else {
           const how = dec === 'decline' ? 'may decline' : verbOf[dec];
-          flags.push({ text: `${drug} is usually taken for ${i.cond}, which ${carrierLabel} ${how}${lb(i)} — confirm with the carrier`, notes: srcNote(i) });
+          flags.push({ text: `${drug} is commonly taken for ${i.cond}, which ${carrierLabel} ${how}${lb(i)} — confirm with the carrier`, notes: srcNote(i) });
         }
         return true;
       }
@@ -1411,9 +1411,9 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
         const allDecline = oneOf.every(i => i.o && i.o.r.decision === 'decline' && i.o.certain);
         const i = worst(oneOfHit);
         if (allDecline) {
-          reasons.push({ text: `${drug} is taken for ${list}, and ${carrierLabel} declines ${names.length > 2 ? 'all of them' : names.length === 2 ? 'both' : 'it'}${lb(i)}`, notes: srcNote(i) });
+          reasons.push({ text: `${drug} is commonly taken for ${list}, and ${carrierLabel} declines ${names.length > 2 ? 'all of them' : names.length === 2 ? 'both' : 'it'}${lb(i)}`, notes: srcNote(i) });
         } else {
-          flags.push({ text: `${drug} is taken for ${list} — ${carrierLabel} ${verbOf[i.o.r.decision]} ${i.cond}${lb(i)}; confirm why the applicant takes it`, notes: srcNote(i) });
+          flags.push({ text: `${drug} is commonly taken for ${list} — ${carrierLabel} ${verbOf[i.o.r.decision]} ${i.cond}${lb(i)}; confirm why the applicant takes it`, notes: srcNote(i) });
         }
         return true;
       }
@@ -1514,7 +1514,7 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
       if (best.implies_condition) {
         const ic = best.implies_condition;
         if (best.decision === 'decline') {
-          reasons.push({ text: `${drug} is usually taken for ${ic}, which ${carrierLabel} declines${lookback}`, notes: best.notes || null });
+          reasons.push({ text: `${drug} is commonly taken for ${ic}, which ${carrierLabel} declines${lookback}`, notes: best.notes || null });
         } else {
           flags.push({ text: `${drug} may be taken for ${ic}, which ${carrierLabel} declines${lookback} — confirm why the applicant takes it`, notes: best.notes || null });
         }
