@@ -1009,18 +1009,28 @@ async function bvpGetUWConditionLinks() {
   } catch (e) { console.warn('bvpGetUWConditionLinks:', e.message || e); return []; }
 }
 
+// What common medications are taken for (uw_drug_conditions): shared by all
+// carriers. Lets a drug that isn't on a carrier's drug list still trigger the
+// carrier's rule for the condition it treats. Fail-soft like the others.
+async function bvpGetUWDrugConditions() {
+  try {
+    return await _bvpFetchAllRows(() => bvp.from('uw_drug_conditions').select('*').order('drug_name'));
+  } catch (e) { console.warn('bvpGetUWDrugConditions:', e.message || e); return []; }
+}
+
 async function bvpLoadUWData(carriers = null) {
   if (!carriers) {
     await bvpLoadCarriers();
     carriers = bvpUWCarriers();
   }
-  const [conditionsDb, drugsDb, buildCharts, knockouts, declinableDrugs, conditionLinks] = await Promise.all([
+  const [conditionsDb, drugsDb, buildCharts, knockouts, declinableDrugs, conditionLinks, drugConditions] = await Promise.all([
     bvpGetUWConditionList(),
     bvpGetUWDrugList(),
     bvpGetUWBuildCharts(carriers),
     bvpGetUWKnockoutQuestions(carriers),
     bvpGetUWDeclinableDrugs(carriers),
     bvpGetUWConditionLinks(),
+    bvpGetUWDrugConditions(),
   ]);
 
   return {
@@ -1030,6 +1040,7 @@ async function bvpLoadUWData(carriers = null) {
     knockouts:       knockouts,       // per-condition decline/case-by-case decisions + lookback live here now
     declinableDrugs: declinableDrugs,
     conditionLinks:  conditionLinks,
+    drugConditions:  drugConditions,
   };
 }
 
@@ -1103,6 +1114,38 @@ function _bvpUwLookbackSuffix(lookbackYears) {
 //      + lookback period for each condition (these aren't separate concerns —
 //      the knockout question IS how a carrier decides the condition).
 //   3. Declinable drug check
+// A carrier's strongest rule for one condition, the way the condition check
+// finds it: the exact condition first (info rows don't count), then certain
+// "implies" links, then judgment "may_count" links. Returns
+// { r: knockout row, via: linked condition name or null, certain: bool } or null.
+// certain = false for judgment links and for age-limited rules with no age.
+function _bvpUwCondOutcome(carrier, cond, data, age) {
+  const rank = { decline: 4, case_by_case: 3, flag: 2, accept_with_rating: 1 };
+  const ko = data.knockouts || [];
+  const usable = r => r.carrier === carrier && rank[r.decision] &&
+    !(r.min_age != null && age != null && age < r.min_age);
+  const sure = r => !(r.min_age != null && age == null);
+  let hits = ko.filter(r => usable(r) && _bvpUwNamesMatch(r.condition_name, cond))
+    .map(r => ({ r, via: null, certain: sure(r) }));
+  if (!hits.length) {
+    const links = (data.conditionLinks || []).filter(l => _bvpUwNamesMatch(l.condition_name, cond));
+    links.filter(l => l.link_type === 'implies').forEach(l =>
+      ko.filter(r => usable(r) && _bvpUwNamesMatch(r.condition_name, l.counts_as))
+        .forEach(r => hits.push({ r, via: l.counts_as, certain: sure(r) })));
+    if (!hits.length) {
+      links.filter(l => l.link_type !== 'implies').forEach(l =>
+        ko.filter(r => usable(r) && _bvpUwNamesMatch(r.condition_name, l.counts_as))
+          .forEach(r => hits.push({ r, via: l.counts_as, certain: false })));
+    }
+  }
+  if (!hits.length) return null;
+  return hits.reduce((a, c) => {
+    const d = rank[c.r.decision] - rank[a.r.decision];
+    if (d) return d > 0 ? c : a;
+    return (!a.certain && c.certain) ? c : a;
+  });
+}
+
 function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
   const { gender, heightIn, weightLb } = profile || {};
   const age = (profile && profile.age) ? +profile.age : null;
@@ -1305,6 +1348,85 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
       });
     });
 
+    // Drug -> condition it's taken for -> this carrier's rule for that
+    // condition. Pushes one line and returns true, or returns false.
+    //   certain : the drug is taken for this condition -> carrier's real result
+    //   one_of  : taken for one of the drug's one_of conditions (complete list)
+    //             -> decline only if the carrier declines every one of them
+    //   possible: may be taken for it (other uses exist) -> Needs Review
+    // Skipped when an entered condition already hits the same rule.
+    const enteredRows = new Set();
+    conditions.forEach(c => {
+      const o = _bvpUwCondOutcome(carrier, c, data, age);
+      if (o) enteredRows.add(o.r);
+    });
+    const verbOf = { decline: 'declines', case_by_case: 'reviews case by case', flag: 'asks about', accept_with_rating: 'rates up' };
+    const _bvpUwDrugByCondition = (drug, drugKeys) => {
+      const maps = (data.drugConditions || []).filter(m =>
+        [..._bvpUwDrugKeys(m.drug_name, data.drugList)].some(k => drugKeys.has(k)));
+      if (!maps.length) return false;
+      const seen = new Set();
+      const items = [];
+      maps.forEach(m => {
+        const key = (m.condition_name || '').trim().toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        items.push({ m, cond: m.condition_name, type: m.link_type || 'possible',
+                     o: _bvpUwCondOutcome(carrier, m.condition_name, data, age) });
+      });
+      // Already covered by a condition the agent entered
+      if (items.some(i => conditions.some(c => _bvpUwNamesMatch(c, i.cond)) || (i.o && enteredRows.has(i.o.r)))) return false;
+
+      const srcNote = i => {
+        const via = i.o.via ? `${i.cond} ${i.o.certain ? 'meets' : 'may count as'} ${carrierLabel}'s rule for ${i.o.via}. ` : '';
+        return `${via}${i.o.r.notes ? i.o.r.notes : ''}${_bvpUwSourceText(i.o.r.question_text)}`.trim() || null;
+      };
+      const lb = i => _bvpUwLookbackSuffix(i.o.r.lookback_years);
+      const rank = { decline: 4, case_by_case: 3, flag: 2, accept_with_rating: 1 };
+      const worst = list => list.reduce((a, b) => {
+        const d = rank[b.o.r.decision] - rank[a.o.r.decision];
+        if (d) return d > 0 ? b : a;
+        return (!a.o.certain && b.o.certain) ? b : a;
+      });
+
+      // 1. Certain
+      const certain = items.filter(i => i.type === 'certain' && i.o);
+      if (certain.length) {
+        const i = worst(certain);
+        const dec = i.o.r.decision;
+        if (dec === 'decline' && i.o.certain) {
+          reasons.push({ text: `${drug} is usually taken for ${i.cond}, which ${carrierLabel} declines${lb(i)}`, notes: srcNote(i) });
+        } else {
+          const how = dec === 'decline' ? 'may decline' : verbOf[dec];
+          flags.push({ text: `${drug} is usually taken for ${i.cond}, which ${carrierLabel} ${how}${lb(i)} — confirm with the carrier`, notes: srcNote(i) });
+        }
+        return true;
+      }
+      // 2. One of a complete list
+      const oneOf = items.filter(i => i.type === 'one_of');
+      const oneOfHit = oneOf.filter(i => i.o);
+      if (oneOfHit.length) {
+        const names = oneOf.map(i => i.cond);
+        const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}` : names[0];
+        const allDecline = oneOf.every(i => i.o && i.o.r.decision === 'decline' && i.o.certain);
+        const i = worst(oneOfHit);
+        if (allDecline) {
+          reasons.push({ text: `${drug} is taken for ${list}, and ${carrierLabel} declines ${names.length > 2 ? 'all of them' : names.length === 2 ? 'both' : 'it'}${lb(i)}`, notes: srcNote(i) });
+        } else {
+          flags.push({ text: `${drug} is taken for ${list} — ${carrierLabel} ${verbOf[i.o.r.decision]} ${i.cond}${lb(i)}; confirm why the applicant takes it`, notes: srcNote(i) });
+        }
+        return true;
+      }
+      // 3. Possible
+      const possible = items.filter(i => i.type === 'possible' && i.o);
+      if (possible.length) {
+        const i = worst(possible);
+        flags.push({ text: `${drug} may be taken for ${i.cond}, which ${carrierLabel} ${verbOf[i.o.r.decision]}${lb(i)} — confirm why the applicant takes it`, notes: srcNote(i) });
+        return true;
+      }
+      return false;
+    };
+
     // 3. Declinable drug check
     drugs.forEach(drug => {
       // Match on brand OR generic: picking "Lantus" catches a carrier row for
@@ -1359,6 +1481,10 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
           });
           return;
         }
+        // Not on the carrier's drug list: check what the drug is taken for
+        // (uw_drug_conditions) against the carrier's condition rules.
+        if (_bvpUwDrugByCondition(drug, drugKeys)) return;
+
         // The drug is on the carrier's list only for certain conditions, and
         // none of them were entered. Say so as an info line (no status change)
         // so the agent can add the condition if it applies.
