@@ -1033,6 +1033,19 @@ async function bvpLoadUWData(carriers = null) {
   };
 }
 
+// Where a rule comes from, for the small print under a result. Rows taken
+// from an underwriting guide (question_text mentions "guide" or "appendix"
+// and isn't a question) read "Source: ..."; application questions read
+// 'Application asks: "..."'.
+function _bvpUwSourceText(qt) {
+  const t = (qt || '').trim();
+  if (!t) return '';
+  if (/\b(guide|appendix)\b/i.test(t) && !t.endsWith('?')) {
+    return ` Source: ${t.replace(/[.\s]+$/, '')}.`;
+  }
+  return ` Application asks: "${t}"`;
+}
+
 function _bvpUwNamesMatch(a, b) {
   if (!a || !b) return false;
   return a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -1244,7 +1257,7 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
           const best = linked.reduce((a, b) => (rankL[b.r.decision] > rankL[a.r.decision] ? b : a));
           const verb = { decline: 'declines', case_by_case: 'reviews', accept_with_rating: 'rates up' }[best.r.decision];
           const ageNote = best.r.min_age != null ? ` (applies at age ${best.r.min_age}+)` : '';
-          const quoted = best.r.question_text ? ` Application asks: "${best.r.question_text}"` : '';
+          const quoted = _bvpUwSourceText(best.r.question_text);
           flags.push({
             text: `${cond} may count as ${best.l.counts_as} with ${carrierLabel} — confirm with the carrier`,
             notes: `${carrierLabel} ${verb} ${best.l.counts_as}${_bvpUwLookbackSuffix(best.r.lookback_years)}${ageNote}. ${best.l.note ? best.l.note + ' ' : ''}${best.r.notes ? best.r.notes : ''}${quoted}`.trim(),
@@ -1268,7 +1281,7 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
         matches = matches.filter(m => m.decision === 'decline');
       } else if (ageUnknown.length) {
         const m = ageUnknown[0];
-        const quoted = m.question_text ? ` — application asks: "${m.question_text}"` : '';
+        const quoted = _bvpUwSourceText(m.question_text);
         flags.push({
           text: `${cond} declines with ${carrierLabel} if the applicant is ${m.min_age} or older on the effective date — enter the applicant's age to check`,
           notes: (m.notes || '') + quoted || null,
@@ -1277,7 +1290,7 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
 
       matches.forEach(m => {
         const lookback = _bvpUwLookbackSuffix(m.lookback_years);
-        const quoted = m.question_text ? ` — application asks: "${m.question_text}"` : '';
+        const quoted = _bvpUwSourceText(m.question_text);
         const via = m._via ? ` (meets its rule for ${m._via})` : '';
         if (m.decision === 'decline') {
           reasons.push({ text: `${cond} is a declinable condition for ${carrierLabel}${via}${lookback}`, notes: (m.notes || '') + quoted || null });
