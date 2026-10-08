@@ -134,6 +134,11 @@ body { font-family: var(--sans); color: var(--text); background: var(--light-bg)
   font-size: 13px; line-height: 1; padding: 2px; opacity: 0.6; border-radius: 50%;
 }
 .uw-chip button:hover { opacity: 1; background: rgba(26,92,58,0.12); }
+.uw-chip.unrec { background: #f1f2f4; color: #4b5563; border: 1px dashed #9aa1ab; }
+.uw-chip.unrec button { color: #4b5563; }
+.uw-chip.unrec .unrec-tag { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: #6b7280; }
+.uw-suggest-head { padding: 8px 14px 4px; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.uw-suggest-item.keep .sname { color: var(--text-muted); font-style: italic; }
 .uw-tag-box input {
   flex: 1; min-width: 140px; border: none; outline: none; background: transparent;
   font-size: 13.5px; font-family: var(--sans); color: var(--text); padding: 4px 2px;
@@ -379,6 +384,7 @@ body { padding-left: 64px; }
 <script>
 // ── STATE ─────────────────────────────────────────────────────────────
 let bvpSession = null;
+const unrecognizedConditions = new Set(); // lowercase free-typed conditions not in the list
 let bvpBook    = null;
 let uwData     = null; // { conditionList, drugList, buildCharts, knockouts, declinableConditions, declinableDrugs }
 let selectedSex = 'M';
@@ -473,19 +479,72 @@ function updateRunHint() {
 }
 
 // ── TAG / TYPEAHEAD INPUTS ────────────────────────────────────────────
-function setupTagInput({ inputId, boxId, suggestId, list, selectedArr, getLabel, getMeta }) {
+// Normalizes text for comparison: lowercase, letters/digits only.
+function _uwNorm(s) { return (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); }
+
+// Edit distance, used for "Did you mean" suggestions on free text.
+function _uwLev(a, b) {
+  if (a === b) return 0;
+  const m = a.length, n = b.length;
+  if (!m) return n; if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[n];
+}
+
+function setupTagInput({ inputId, boxId, suggestId, list, selectedArr, getLabel, getMeta, freeTextMode, unrecognized, onUnrecognized }) {
+  // freeTextMode 'flag' (conditions): typed text that isn't in the list is offered
+  // close matches first; if kept, it's added as an UNRECOGNIZED chip (gray, dashed),
+  // tracked in the `unrecognized` Set and reported via onUnrecognized().
   const input   = document.getElementById(inputId);
   const box     = document.getElementById(boxId);
   const suggest = document.getElementById(suggestId);
   let activeIdx = -1;
+  const flagMode = freeTextMode === 'flag';
+
+  // Exact match on name or alias (ignoring case/punctuation) -> canonical name.
+  function exactItem(text) {
+    const t = _uwNorm(text);
+    if (!t) return null;
+    return list.find(item => _uwNorm(getLabel(item)) === t ||
+      (item.aliases || []).some(a => _uwNorm(a) === t) ||
+      _uwNorm(item.generic_name) === t) || null;
+  }
+
+  // Up to 3 close matches for a typo or near-miss.
+  function closeMatches(text) {
+    const t = _uwNorm(text);
+    if (t.length < 3) return [];
+    const scored = list.map(item => {
+      const keys = [getLabel(item), ...(item.aliases || [])].map(_uwNorm).filter(Boolean);
+      let best = 0;
+      keys.forEach(k => {
+        best = Math.max(best, 1 - _uwLev(t, k) / Math.max(t.length, k.length));
+        if (t.length >= 4) best = Math.max(best, 1 - _uwLev(t, k.slice(0, t.length + 1)) / (t.length + 1));
+      });
+      return { item, score: best };
+    }).filter(x => x.score >= 0.6 && !selectedArr.includes(getLabel(x.item)));
+    return scored.sort((a, b) => b.score - a.score).slice(0, 3).map(x => x.item);
+  }
 
   function renderChips() {
     box.querySelectorAll('.uw-chip').forEach(c => c.remove());
     selectedArr.forEach((name, i) => {
       const chip = document.createElement('span');
-      chip.className = 'uw-chip';
-      chip.innerHTML = `${name} <button type="button" aria-label="Remove">✕</button>`;
+      const isUnrec = flagMode && unrecognized && unrecognized.has(name.toLowerCase());
+      chip.className = isUnrec ? 'uw-chip unrec' : 'uw-chip';
+      if (isUnrec) chip.title = 'Not a recognized condition: every carrier will show Needs Review for it.';
+      chip.innerHTML = isUnrec
+        ? `${name} <span class="unrec-tag">unrecognized</span> <button type="button" aria-label="Remove">✕</button>`
+        : `${name} <button type="button" aria-label="Remove">✕</button>`;
       chip.querySelector('button').onclick = () => {
+        if (unrecognized) unrecognized.delete(selectedArr[i].toLowerCase());
         selectedArr.splice(i, 1);
         renderChips();
       };
@@ -510,7 +569,9 @@ function setupTagInput({ inputId, boxId, suggestId, list, selectedArr, getLabel,
     activeIdx = -1;
     if (!q.trim()) { suggest.classList.remove('open'); suggest.innerHTML = ''; return; }
     if (results.length === 0) {
-      suggest.innerHTML = `<div class="uw-suggest-empty">No matches — you can still type a full name and press Enter to add it as free text.</div>`;
+      suggest.innerHTML = flagMode
+        ? `<div class="uw-suggest-empty">No matches — press Enter to see close matches, or to add it as an unrecognized condition.</div>`
+        : `<div class="uw-suggest-empty">No matches — you can still type a full name and press Enter to add it as free text.</div>`;
       suggest.classList.add('open');
       return;
     }
@@ -525,17 +586,49 @@ function setupTagInput({ inputId, boxId, suggestId, list, selectedArr, getLabel,
     suggest.classList.add('open');
   }
 
-  function addItem(name) {
+  function addItem(name, asUnrecognized) {
     const trimmed = (name || '').trim();
     if (!trimmed) return;
     if (!selectedArr.some(s => s.toLowerCase() === trimmed.toLowerCase())) {
       selectedArr.push(trimmed);
+      if (asUnrecognized && unrecognized) {
+        unrecognized.add(trimmed.toLowerCase());
+        if (onUnrecognized) onUnrecognized(trimmed);
+      }
     }
     input.value = '';
     renderChips();
     suggest.classList.remove('open');
     suggest.innerHTML = '';
     input.focus();
+  }
+
+  // Free text (Enter with nothing highlighted): exact name/alias -> canonical
+  // item; otherwise offer close matches plus "keep as typed".
+  function addFreeText(text) {
+    const typed = text.trim();
+    const hit = exactItem(typed);
+    if (hit) { addItem(getLabel(hit)); return; }
+    if (!flagMode) { addItem(typed); return; }
+    const close = closeMatches(typed);
+    if (!close.length) { addItem(typed, true); return; }
+    activeIdx = -1;
+    const esc = typed.replace(/</g, '&lt;');
+    suggest.innerHTML = `<div class="uw-suggest-head">Did you mean</div>` +
+      close.map((item, i) => `
+        <div class="uw-suggest-item" data-idx="${i}">
+          <span class="sname">${getLabel(item)}</span>
+          ${getMeta ? `<span class="smeta">${getMeta(item) || ''}</span>` : ''}
+        </div>`).join('') +
+      `<div class="uw-suggest-item keep" data-idx="${close.length}">
+         <span class="sname">Keep "${esc}" as typed</span>
+         <span class="smeta">Unrecognized — every carrier will show Needs Review</span>
+       </div>`;
+    const els = suggest.querySelectorAll('.uw-suggest-item');
+    els.forEach((el, i) => {
+      el.onclick = () => (i < close.length ? addItem(getLabel(close[i])) : addItem(typed, true));
+    });
+    suggest.classList.add('open');
   }
 
   input.addEventListener('input', () => renderSuggest(input.value));
@@ -546,7 +639,7 @@ function setupTagInput({ inputId, boxId, suggestId, list, selectedArr, getLabel,
     else if (e.key === 'Enter') {
       e.preventDefault();
       if (activeIdx >= 0 && items[activeIdx]) items[activeIdx].click();
-      else if (input.value.trim()) addItem(input.value);
+      else if (input.value.trim()) addFreeText(input.value);
     } else if (e.key === 'Backspace' && !input.value && selectedArr.length) {
       selectedArr.pop();
       renderChips();
@@ -647,6 +740,8 @@ async function initFromSupabase() {
     inputId: 'uw-condition-input', boxId: 'uw-condition-box', suggestId: 'uw-condition-suggest',
     list: uwData.conditionList, selectedArr: selectedConditions,
     getLabel: item => item.name, getMeta: item => item.description || item.category || '',
+    freeTextMode: 'flag', unrecognized: unrecognizedConditions,
+    onUnrecognized: term => bvpLogUnrecognizedTerm(term, 'condition'),
   });
   setupTagInput({
     inputId: 'uw-drug-input', boxId: 'uw-drug-box', suggestId: 'uw-drug-suggest',

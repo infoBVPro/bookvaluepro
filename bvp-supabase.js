@@ -991,6 +991,15 @@ async function bvpGetUWDeclinableDrugs(carriers = null) {
 // null) for every UW carrier in the carriers table. The condition master list falls back to the small
 // built-in taxonomy above until real data exists; the drug master list
 // does the same until Josh's own list is loaded.
+// Logs a free-typed term the picker didn't recognize (uw_unrecognized_terms),
+// so the condition list and aliases can be extended. Fire-and-forget.
+async function bvpLogUnrecognizedTerm(term, kind = 'condition') {
+  try {
+    const { error } = await bvp.from('uw_unrecognized_terms').insert({ term: (term || '').trim().slice(0, 200), kind });
+    if (error) console.warn('bvpLogUnrecognizedTerm:', error.message || error);
+  } catch (e) { console.warn('bvpLogUnrecognizedTerm:', e.message || e); }
+}
+
 // "Counts as" links between conditions (uw_condition_links): a specific
 // condition (e.g. SVT) that falls under a broader one a carrier asks about
 // (e.g. Irregular Heartbeat). Fail-soft like the other getters.
@@ -1179,6 +1188,18 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
     // A given condition can match multiple rows for the same carrier (e.g.
     // one row per distinct application question), so every match is surfaced.
     const linkTargets = c => (data.conditionLinks || []).filter(l => _bvpUwNamesMatch(l.condition_name, c));
+
+    // Unrecognized conditions (free text not in the condition list) can never
+    // pass silently: each one adds a Needs Review line for every carrier.
+    const knownConds = new Set((data.conditionList || []).map(c => (c.name || '').trim().toLowerCase()));
+    conditions.forEach(cond => {
+      if (knownConds.size && !knownConds.has(cond.trim().toLowerCase())) {
+        flags.push({
+          text: `"${cond}" isn't a recognized condition — this result doesn't account for it`,
+          notes: `Check ${carrierLabel}'s application or underwriting guide for this condition, or pick the closest condition from the list.`,
+        });
+      }
+    });
     conditions.forEach(cond => {
       let matches = (data.knockouts || []).filter(r =>
         r.carrier === carrier && _bvpUwNamesMatch(r.condition_name, cond));
