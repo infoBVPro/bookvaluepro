@@ -1374,10 +1374,28 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
         }
         return;
       }
-      const best = relevant.reduce((a, b) => (rank[b.decision] > rank[a.decision] ? b : a));
+      // Strongest decision wins; at equal strength, a drug the carrier actually
+      // lists beats one added because of the condition it treats.
+      const best = relevant.reduce((a, b) => {
+        if (rank[b.decision] !== rank[a.decision]) return rank[b.decision] > rank[a.decision] ? b : a;
+        return (a.implies_condition && !b.implies_condition) ? b : a;
+      });
       const forText = best._matchedConds && best._matchedConds.length ? ` when taken for ${best._matchedConds.join(', ')}` : '';
       const lookback = _bvpUwLookbackSuffix(best.lookback_years);
-      const listedAs = [...new Set(relevant.map(m => m.drug_name))]
+
+      // Drug isn't on the carrier's drug list; it's here because the condition
+      // it's taken for (implies_condition, e.g. high blood pressure) declines.
+      if (best.implies_condition) {
+        const ic = best.implies_condition;
+        if (best.decision === 'decline') {
+          reasons.push({ text: `${drug} is usually taken for ${ic}, which ${carrierLabel} declines${lookback}`, notes: best.notes || null });
+        } else {
+          flags.push({ text: `${drug} may be taken for ${ic}, which ${carrierLabel} declines${lookback} — confirm why the applicant takes it`, notes: best.notes || null });
+        }
+        return;
+      }
+
+      const listedAs = [...new Set(relevant.filter(m => !m.implies_condition).map(m => m.drug_name))]
         .filter(n => _bvpUwNormDrug(n) !== _bvpUwNormDrug(drug));
       const notes = [best.notes, listedAs.length ? `Listed by ${carrierLabel} as ${listedAs.join(', ')}.` : null]
         .filter(Boolean).join(' ') || null;
