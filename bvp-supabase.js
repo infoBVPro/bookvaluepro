@@ -1353,6 +1353,25 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
         });
       }
 
+      // One line per rule: when the same condition matches several of the
+      // carrier's rows with the same decision (e.g. Mutual of Omaha's "AIDS
+      // Related Complex (ARC)" and "HIV/AIDS", linked as the same condition),
+      // keep the row named exactly as entered and drop the others, and drop
+      // rows that repeat the same application question.
+      {
+        const exact = m => m.condition_name.trim().toLowerCase() === cond.trim().toLowerCase();
+        const kept = [];
+        matches
+          .slice()
+          .sort((a, b) => (exact(b) ? 1 : 0) - (exact(a) ? 1 : 0))
+          .forEach(m => {
+            const dup = kept.some(k => k.decision === m.decision &&
+              ((exact(k) && !exact(m)) || (k.question_text || '') === (m.question_text || '')));
+            if (!dup) kept.push(m);
+          });
+        matches = kept;
+      }
+
       matches.forEach(m => {
         const lookback = _bvpUwLookbackSuffix(m.lookback_years);
         const quoted = _bvpUwSourceText(m.question_text);
