@@ -1135,6 +1135,42 @@ function _bvpUwLookbackSuffix(lookbackYears) {
 //      + lookback period for each condition (these aren't separate concerns —
 //      the knockout question IS how a carrier decides the condition).
 //   3. Declinable drug check
+// "Counts as" links followed in a chain: certain 'implies' links are followed
+// step after step (Other Hepatitis -> Chronic Hepatitis -> Liver Disease), and a
+// judgment 'may_count' link may end the chain. Returns link-like objects
+// { counts_as, link_type, note } with link_type 'implies' only when every step
+// was certain. 'same' links are handled by name matching, not here.
+function _bvpUwLinkChain(cond, links) {
+  const key = n => (n || '').trim().toLowerCase();
+  const usable = (links || []).filter(l => l.link_type !== 'same');
+  const out = [];
+  const seen = new Set([key(cond)]);
+  let frontier = [cond];
+  while (frontier.length) {
+    const next = [];
+    frontier.forEach(c => usable.filter(l => _bvpUwNamesMatch(l.condition_name, c)).forEach(l => {
+      if (l.link_type === 'implies') {
+        if (seen.has(key(l.counts_as))) return;
+        seen.add(key(l.counts_as));
+        out.push({ counts_as: l.counts_as, link_type: 'implies', note: l.note });
+        next.push(l.counts_as);
+      } else {
+        out.push({ counts_as: l.counts_as, link_type: 'may_count', note: l.note });
+      }
+    }));
+    frontier = next;
+  }
+  // A target reached for certain doesn't also need a judgment entry
+  const sure = new Set(out.filter(o => o.link_type === 'implies').map(o => key(o.counts_as)));
+  const done = new Set();
+  return out.filter(o => {
+    if (o.link_type !== 'implies' && sure.has(key(o.counts_as))) return false;
+    const k = o.link_type + '|' + key(o.counts_as);
+    if (done.has(k)) return false;
+    done.add(k); return true;
+  });
+}
+
 // A carrier's strongest rule for one condition, the way the condition check
 // finds it: the exact condition first (info rows don't count), then certain
 // "implies" links, then judgment "may_count" links. Returns
@@ -1149,7 +1185,7 @@ function _bvpUwCondOutcome(carrier, cond, data, age) {
   let hits = ko.filter(r => usable(r) && _bvpUwNamesMatch(r.condition_name, cond))
     .map(r => ({ r, via: null, certain: sure(r) }));
   if (!hits.length) {
-    const links = (data.conditionLinks || []).filter(l => _bvpUwNamesMatch(l.condition_name, cond));
+    const links = _bvpUwLinkChain(cond, data.conditionLinks);
     links.filter(l => l.link_type === 'implies').forEach(l =>
       ko.filter(r => usable(r) && _bvpUwNamesMatch(r.condition_name, l.counts_as))
         .forEach(r => hits.push({ r, via: l.counts_as, certain: sure(r) })));
@@ -1265,7 +1301,7 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
     // 2. Knockout question / condition check — matched by condition_name.
     // A given condition can match multiple rows for the same carrier (e.g.
     // one row per distinct application question), so every match is surfaced.
-    const linkTargets = c => (data.conditionLinks || []).filter(l => l.link_type !== 'same' && _bvpUwNamesMatch(l.condition_name, c));
+    const linkTargets = c => _bvpUwLinkChain(c, data.conditionLinks);
 
     // Unrecognized conditions (free text not in the condition list) can never
     // pass silently: each one adds a Needs Review line for every carrier.
