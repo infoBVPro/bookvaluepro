@@ -210,6 +210,10 @@ body { font-family: var(--sans); color: var(--text); background: var(--light-bg)
 .result-clean {
   font-size: 13px; color: var(--text-muted); padding: 6px 2px; font-style: italic;
 }
+.result-source {
+  font-size: 11.5px; color: var(--text-muted); margin-top: 10px; padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
 .result-nodata {
   font-size: 12px; color: var(--text-muted); padding: 8px 12px; background: var(--light-bg);
   border-radius: 8px; margin-top: 4px;
@@ -319,6 +323,12 @@ body { padding-left: 64px; }
       <div class="uw-section-label">Applicant profile</div>
       <div class="uw-grid">
         <div class="uw-field">
+          <label for="uw-state">State</label>
+          <select class="uw-select" id="uw-state" onchange="onStateChange()">
+            <option value="">National rules</option>
+          </select>
+        </div>
+        <div class="uw-field">
           <label>Sex</label>
           <div class="uw-toggle-row">
             <button type="button" class="uw-toggle-btn selected" id="uw-sex-m" onclick="setSex('M')">Male</button>
@@ -393,9 +403,41 @@ const selectedConditions = []; // array of condition names (strings)
 const selectedDrugs      = []; // array of drug names (strings)
 
 // ── INIT STATIC FORM OPTIONS ────────────────────────────────────────────
-// No state picker for now — UW criteria are treated as national per carrier
-// until we move to a carrier+state model (BVP_ALL_STATES stays defined in
-// bvp-supabase.js for when that lands).
+// State picker: carriers with state-specific rules loaded for the chosen
+// state use them; every other carrier uses its national rules (see
+// bvpScopeUWDataToState in bvp-supabase.js). The last choice is remembered.
+const UW_STATE_NAMES = {
+  AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',CO:'Colorado',
+  CT:'Connecticut',DE:'Delaware',FL:'Florida',GA:'Georgia',HI:'Hawaii',ID:'Idaho',
+  IL:'Illinois',IN:'Indiana',IA:'Iowa',KS:'Kansas',KY:'Kentucky',LA:'Louisiana',
+  ME:'Maine',MD:'Maryland',MA:'Massachusetts',MI:'Michigan',MN:'Minnesota',MS:'Mississippi',
+  MO:'Missouri',MT:'Montana',NE:'Nebraska',NV:'Nevada',NH:'New Hampshire',NJ:'New Jersey',
+  NM:'New Mexico',NY:'New York',NC:'North Carolina',ND:'North Dakota',OH:'Ohio',OK:'Oklahoma',
+  OR:'Oregon',PA:'Pennsylvania',RI:'Rhode Island',SC:'South Carolina',SD:'South Dakota',
+  TN:'Tennessee',TX:'Texas',UT:'Utah',VT:'Vermont',VA:'Virginia',WA:'Washington',
+  WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming',DC:'Washington D.C.'
+};
+
+function initStateOptions() {
+  const sel = document.getElementById('uw-state');
+  BVP_ALL_STATES.slice()
+    .sort((a, b) => (UW_STATE_NAMES[a] || a).localeCompare(UW_STATE_NAMES[b] || b))
+    .forEach(s => {
+      const o = document.createElement('option');
+      o.value = s; o.textContent = `${UW_STATE_NAMES[s] || s} (${s})`;
+      sel.appendChild(o);
+    });
+  try {
+    const saved = localStorage.getItem('bvp_uw_state');
+    if (saved && BVP_ALL_STATES.includes(saved)) sel.value = saved;
+  } catch (e) { /* storage unavailable — default to national */ }
+}
+
+function onStateChange() {
+  const v = document.getElementById('uw-state').value;
+  try { localStorage.setItem('bvp_uw_state', v); } catch (e) {}
+}
+
 // Carrier chips come from the Supabase `carriers` table (include_in_uw = true).
 async function renderCarrierChips() {
   await bvpLoadCarriers();
@@ -667,7 +709,9 @@ async function runUWCheck() {
   const weightLb = +document.getElementById('uw-weight').value || null;
   const age = +document.getElementById('uw-age').value || null;
 
-  const profile = { gender: selectedSex, heightIn, weightLb, age };
+  const state = document.getElementById('uw-state').value || null;
+
+  const profile = { gender: selectedSex, heightIn, weightLb, age, state };
   const carriers = [...selectedCarriers];
 
   if (!uwData) uwData = await bvpLoadUWData();
@@ -684,6 +728,18 @@ function carrierHasAnyData(carrier) {
   return (uwData.buildCharts || []).some(r => r.carrier === carrier)
     || (uwData.knockouts || []).some(r => r.carrier === carrier)
     || (uwData.declinableDrugs || []).some(r => r.carrier === carrier);
+}
+
+// One line under each result saying which rules were applied.
+function ruleSourceText(r) {
+  const name = bvpCarrierDisplay(r.carrier);
+  const stName = r.ruleState ? (UW_STATE_NAMES[r.ruleState] || r.ruleState) : null;
+  if (r.ruleSource === 'state') {
+    return `Based on ${name}'s ${stName} ${r.stateRules.join(', ')}.`;
+  }
+  return stName
+    ? `Based on ${name}'s national rules — no ${stName}-specific rules are loaded for ${name}.`
+    : `Based on ${name}'s national rules.`;
 }
 
 function renderResults(results, carriers) {
@@ -714,6 +770,7 @@ function renderResults(results, carriers) {
         <div class="result-body">
           ${(r.reasons.length + r.flags.length) ? '' : `<div class="result-clean">No flags found based on what you entered.</div>`}
           ${items.length ? `<div class="result-list">${items.join('')}</div>` : ''}
+          ${hasData ? `<div class="result-source">${ruleSourceText(r)}</div>` : ''}
           ${!hasData ? `<div class="result-nodata">No underwriting data has been loaded yet for ${bvpCarrierDisplay(r.carrier)} — this result only reflects what's entered above, not ${bvpCarrierDisplay(r.carrier)}'s actual rules.</div>` : ''}
         </div>
       </div>`;
@@ -751,6 +808,7 @@ async function initFromSupabase() {
 }
 
 initFormOptions();
+initStateOptions();
 renderCarrierChips();
 initFromSupabase();
 </script>

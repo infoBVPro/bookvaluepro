@@ -1203,7 +1203,55 @@ function _bvpUwCondOutcome(carrier, cond, data, age) {
   });
 }
 
+// ── STATE-SPECIFIC UW RULES ────────────────────────────────────────
+// uw_knockout_questions, uw_declinable_drugs and uw_build_charts each have an
+// optional `state` column (two-letter code). A row with no state is a
+// national rule. For each carrier and each table, separately:
+//   - a state is selected AND the carrier has rows for that state
+//       -> use only that state's rows (the state's application replaces the
+//          national one; national rows for that carrier are ignored)
+//   - otherwise -> use the carrier's national rows (state is empty)
+// Carriers without state data loaded keep working on national rules, and the
+// page keeps working before the `state` column exists (r.state is undefined).
+function _bvpUwRowState(r) {
+  const s = (r && r.state != null) ? String(r.state).trim().toUpperCase() : '';
+  return s || null;
+}
+
+function _bvpUwScopeRowsToState(rows, state) {
+  const st = state ? String(state).trim().toUpperCase() : null;
+  const hasState = new Set(); // carriers with at least one row for the chosen state
+  if (st) (rows || []).forEach(r => { if (_bvpUwRowState(r) === st) hasState.add(r.carrier); });
+  return (rows || []).filter(r => {
+    const rs = _bvpUwRowState(r);
+    return hasState.has(r.carrier) ? rs === st : rs === null;
+  });
+}
+
+// Returns a copy of `data` with the carrier-specific tables scoped to `state`,
+// plus `stateRulesFor`: carrier -> list of tables using state-specific rows.
+function bvpScopeUWDataToState(data, state) {
+  const st = state ? String(state).trim().toUpperCase() : null;
+  const tables = { knockouts: 'knockout questions', declinableDrugs: 'medication rules', buildCharts: 'build chart' };
+  const stateRulesFor = {};
+  const scoped = Object.assign({}, data);
+  Object.keys(tables).forEach(key => {
+    const rows = (data && data[key]) || [];
+    scoped[key] = _bvpUwScopeRowsToState(rows, st);
+    if (st) rows.forEach(r => {
+      if (_bvpUwRowState(r) !== st) return;
+      stateRulesFor[r.carrier] = stateRulesFor[r.carrier] || [];
+      if (!stateRulesFor[r.carrier].includes(tables[key])) stateRulesFor[r.carrier].push(tables[key]);
+    });
+  });
+  scoped.stateRulesFor = stateRulesFor;
+  scoped.scopedState = st;
+  return scoped;
+}
+
 function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
+  // Scope carrier rules to the applicant's state (national rules when none).
+  data = bvpScopeUWDataToState(data, profile && profile.state);
   const { gender, heightIn, weightLb } = profile || {};
   const age = (profile && profile.age) ? +profile.age : null;
   conditions = conditions || [];
@@ -1618,6 +1666,10 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
     if (reasons.length > 0) status = 'decline';
     else if (flags.length > 0) status = 'review';
 
-    return { carrier, status, reasons, flags, infos };
+    // Which rule set was used: the state's own rules, or national rules.
+    const stateRules = (data.stateRulesFor || {})[carrier] || [];
+    const ruleSource = stateRules.length ? 'state' : 'national';
+
+    return { carrier, status, reasons, flags, infos, ruleSource, ruleState: data.scopedState || null, stateRules };
   });
 }
