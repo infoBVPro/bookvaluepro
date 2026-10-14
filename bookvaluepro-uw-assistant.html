@@ -736,7 +736,9 @@ function ruleSourceText(r) {
   const name = bvpCarrierDisplay(r.carrier);
   const stName = r.ruleState ? (UW_STATE_NAMES[r.ruleState] || r.ruleState) : null;
   if (r.ruleSource === 'state') {
-    return `Based on ${name}'s ${stName} ${r.stateRules.join(', ')}.`;
+    // Name the underwriting company from the state's application when it's on file.
+    const who = r.ruleUnderwriter || name;
+    return `Based on ${who}'s ${stName} ${r.stateRules.join(', ')}.`;
   }
   return stName
     ? `Based on ${name}'s national rules — no ${stName}-specific rules are loaded for ${name}.`

@@ -1245,6 +1245,15 @@ function bvpScopeUWDataToState(data, state) {
     });
   });
   scoped.stateRulesFor = stateRulesFor;
+  // Underwriting company named on the state's application (optional
+  // `underwriter` column on uw_knockout_questions), per carrier.
+  const stateUnderwriter = {};
+  if (st) (scoped.knockouts || []).forEach(r => {
+    if (_bvpUwRowState(r) === st && r.underwriter && !stateUnderwriter[r.carrier]) {
+      stateUnderwriter[r.carrier] = String(r.underwriter).trim();
+    }
+  });
+  scoped.stateUnderwriter = stateUnderwriter;
   scoped.scopedState = st;
   return scoped;
 }
@@ -1670,6 +1679,7 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
     const stateRules = (data.stateRulesFor || {})[carrier] || [];
     const ruleSource = stateRules.length ? 'state' : 'national';
 
-    return { carrier, status, reasons, flags, infos, ruleSource, ruleState: data.scopedState || null, stateRules };
+    return { carrier, status, reasons, flags, infos, ruleSource, ruleState: data.scopedState || null, stateRules,
+             ruleUnderwriter: ruleSource === 'state' ? ((data.stateUnderwriter || {})[carrier] || null) : null };
   });
 }
