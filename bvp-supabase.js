@@ -1254,6 +1254,15 @@ function bvpScopeUWDataToState(data, state) {
     }
   });
   scoped.stateUnderwriter = stateUnderwriter;
+  // Application form number printed bottom-left on the state's PDF
+  // (optional `form_number` column on uw_knockout_questions), per carrier.
+  const stateFormNumber = {};
+  if (st) (scoped.knockouts || []).forEach(r => {
+    if (_bvpUwRowState(r) === st && r.form_number && !stateFormNumber[r.carrier]) {
+      stateFormNumber[r.carrier] = String(r.form_number).trim();
+    }
+  });
+  scoped.stateFormNumber = stateFormNumber;
   scoped.scopedState = st;
   return scoped;
 }
@@ -1680,6 +1689,7 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
     const ruleSource = stateRules.length ? 'state' : 'national';
 
     return { carrier, status, reasons, flags, infos, ruleSource, ruleState: data.scopedState || null, stateRules,
-             ruleUnderwriter: ruleSource === 'state' ? ((data.stateUnderwriter || {})[carrier] || null) : null };
+             ruleUnderwriter: ruleSource === 'state' ? ((data.stateUnderwriter || {})[carrier] || null) : null,
+             ruleFormNumber: ruleSource === 'state' ? ((data.stateFormNumber || {})[carrier] || null) : null };
   });
 }
