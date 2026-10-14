@@ -1281,6 +1281,13 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
     const reasons = [];
     const flags   = [];
     const infos   = [];   // informational lines (e.g. rate class); don't change the status
+    // Which sources produced findings, for the "Based on ..." line:
+    //   app   — the carrier's application knockout questions (conditions)
+    //   drug  — the carrier's declinable medication list (underwriting guide)
+    //   build — the carrier's build chart (underwriting guide)
+    const _cnt = () => reasons.length + flags.length + infos.length;
+    const basis = { app: false, drug: false, build: false };
+    let _n0 = _cnt();
 
     // 1. Build check — only evaluated when we have a matching height/gender row.
     // Optional columns (default to the original behavior when absent):
@@ -1363,6 +1370,9 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
         }
       }
     }
+
+    if (_cnt() > _n0) basis.build = true;
+    _n0 = _cnt();
 
     // 2. Knockout question / condition check — matched by condition_name.
     // A given condition can match multiple rows for the same carrier (e.g.
@@ -1492,6 +1502,8 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
       });
     });
 
+    if (_cnt() > _n0) basis.app = true;
+
     // Drug -> condition it's taken for -> this carrier's rule for that
     // condition. Pushes one line and returns true, or returns false.
     //   certain : the drug is taken for this condition -> carrier's real result
@@ -1576,7 +1588,8 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
     };
 
     // 3. Declinable drug check
-    drugs.forEach(drug => {
+    let drugViaApp = false;
+    const _checkDrug = drug => {
       // Match on brand OR generic: picking "Lantus" catches a carrier row for
       // "Insulin glargine", and picking a generic catches a row listed by brand.
       const drugKeys = _bvpUwDrugKeys(drug, data.drugList);
@@ -1631,7 +1644,7 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
         }
         // Not on the carrier's drug list: check what the drug is taken for
         // (uw_drug_conditions) against the carrier's condition rules.
-        if (_bvpUwDrugByCondition(drug, drugKeys)) return;
+        if (_bvpUwDrugByCondition(drug, drugKeys)) { drugViaApp = true; return; }
 
         // The drug is on the carrier's list only for certain conditions, and
         // none of them were entered. Say so as an info line (no status change)
@@ -1678,6 +1691,12 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
       } else {
         flags.push({ text: `${drug} may require case-by-case review with ${carrierLabel}${forText}${lookback}`, notes });
       }
+    };
+    drugs.forEach(drug => {
+      const n = _cnt();
+      drugViaApp = false;
+      _checkDrug(drug);
+      if (_cnt() > n) { if (drugViaApp) basis.app = true; else basis.drug = true; }
     });
 
     let status = 'accept';
@@ -1688,7 +1707,7 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
     const stateRules = (data.stateRulesFor || {})[carrier] || [];
     const ruleSource = stateRules.length ? 'state' : 'national';
 
-    return { carrier, status, reasons, flags, infos, ruleSource, ruleState: data.scopedState || null, stateRules,
+    return { carrier, status, reasons, flags, infos, ruleSource, ruleState: data.scopedState || null, stateRules, basis,
              ruleUnderwriter: ruleSource === 'state' ? ((data.stateUnderwriter || {})[carrier] || null) : null,
              ruleFormNumber: ruleSource === 'state' ? ((data.stateFormNumber || {})[carrier] || null) : null };
   });

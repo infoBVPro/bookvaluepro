@@ -745,15 +745,27 @@ function carrierHasAnyData(carrier) {
     || (uwData.declinableDrugs || []).some(r => r.carrier === carrier);
 }
 
-// One line under each result saying which rules were applied.
+// One line under each result saying which rules were applied. With state
+// rules, condition findings come from the state's application (named by its
+// underwriting company and form number), while medication and height/weight
+// findings come from the carrier's underwriting guide — so the line names
+// only the sources that produced this result's findings.
 function ruleSourceText(r) {
   const name = bvpCarrierDisplay(r.carrier);
   const stName = r.ruleState ? (UW_STATE_NAMES[r.ruleState] || r.ruleState) : null;
   if (r.ruleSource === 'state') {
-    // Name the underwriting company from the state's application when it's on file.
     const who = r.ruleUnderwriter || name;
     const form = r.ruleFormNumber ? ` (${r.ruleFormNumber})` : '';
-    return `Based on ${who}'s ${stName} ${r.stateRules.join(', ')}${form}.`;
+    const appText = `${who}'s ${stName} ${r.stateRules.join(', ')}${form}`;
+    const b = r.basis || {};
+    const guideParts = [b.drug && 'medications', b.build && 'height/weight'].filter(Boolean);
+    const guideText = `${name}'s underwriting guide`;
+    if (guideParts.length && !b.app) return `Based on ${guideText}.`;
+    if (guideParts.length && b.app) {
+      const g = guideParts.join(' and ');
+      return `Conditions based on ${appText}; ${g} based on ${guideText}.`;
+    }
+    return `Based on ${appText}.`;
   }
   return stName
     ? `Based on ${name}'s national rules — no ${stName}-specific rules are loaded for ${name}.`
