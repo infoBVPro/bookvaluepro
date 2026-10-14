@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BookValuePro — Account</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="bvp-supabase.js"></script>
+<style>
+:root{--forest:#1a5c3a;--emerald:#3da272;--deep:#0d2e1e;--slate:#5a6472;--mist:#e6f5ee;--sage:#7abf9a;--light-bg:#f7faf8;--border:#dde8e2;--text:#1a1a1a;--text-muted:#556b5e;--danger:#c0392b;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;color:var(--text);background:var(--light-bg);min-height:100vh;}
+
+.bvp-header{background:#0d2e1e;min-height:64px;display:flex;align-items:center;justify-content:flex-end;padding:0 2rem;border-bottom:1px solid rgba(61,162,114,0.15);position:sticky;top:0;z-index:100;gap:16px;}
+.bvp-agent-email{font-size:12px;color:#7abf9a;white-space:nowrap;}
+.bvp-signout{font-size:12px;color:#7abf9a;background:transparent;border:1px solid rgba(122,191,154,0.3);padding:6px 14px;border-radius:6px;cursor:pointer;font-family:inherit;}
+.bvp-signout:hover{border-color:#3da272;color:white;}
+
+.page{max-width:760px;margin:0 auto;padding:40px 32px 80px;}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--emerald);text-transform:uppercase;margin-bottom:0.5rem;}
+h1{font-family:'DM Serif Display',serif;font-size:36px;color:var(--deep);margin-bottom:1.75rem;}
+
+.banner{font-size:14px;padding:12px 16px;border-radius:10px;line-height:1.55;margin-bottom:1.25rem;display:none;}
+.banner.show{display:block;}
+.banner.info{background:var(--mist);color:var(--forest);border:1px solid #b8dfc8;}
+.banner.warn{background:#fff4dc;color:#7a5200;border:1px solid #f0d9a6;}
+.banner.error{background:#fdecea;color:var(--danger);border:1px solid #f5c6c2;}
+
+.card{background:white;border:1px solid var(--border);border-radius:16px;padding:1.75rem;margin-bottom:16px;}
+.card-label{font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--slate);margin-bottom:1rem;}
+.plan-title{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:0.4rem;}
+.plan-title h2{font-family:'DM Serif Display',serif;font-size:26px;color:var(--deep);font-weight:400;}
+.chip{font-size:11px;font-weight:700;padding:4px 10px;border-radius:12px;white-space:nowrap;}
+.chip.green{background:#e6f5ee;color:#1a5c3a;border:1px solid #b8dfc8;}
+.chip.amber{background:#fff4dc;color:#8a5a00;border:1px solid #f0d9a6;}
+.chip.red{background:#fdecea;color:#b0322a;border:1px solid #f5c6c2;}
+.chip.grey{background:#eef1ef;color:var(--slate);border:1px solid var(--border);}
+.plan-sub{font-size:14px;color:var(--text-muted);line-height:1.6;margin-bottom:1.25rem;}
+
+.rows{border-top:1px solid var(--border);}
+.row{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--border);font-size:14px;}
+.row:last-child{border-bottom:none;}
+.row dt{color:var(--text-muted);}
+.row dd{color:var(--deep);font-weight:500;text-align:right;}
+
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:1.25rem;}
+.btn{border:none;padding:11px 20px;border-radius:10px;font-size:14px;font-family:inherit;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:8px;transition:background .2s;}
+.btn-primary{background:var(--forest);color:white;}
+.btn-primary:hover:not(:disabled){background:var(--emerald);}
+.btn-outline{background:white;color:var(--forest);border:1.5px solid var(--border);}
+.btn-outline:hover:not(:disabled){border-color:var(--emerald);}
+.btn:disabled{opacity:0.6;cursor:wait;}
+.muted-note{font-size:13px;color:var(--text-muted);margin-top:12px;line-height:1.55;}
+.err{font-size:13px;color:var(--danger);margin-top:10px;display:none;}
+.err.show{display:block;}
+.loading{color:var(--text-muted);font-size:14px;}
+
+.spinner{width:16px;height:16px;border:2px solid #b8dfc8;border-top-color:var(--forest);border-radius:50%;display:inline-block;animation:spin .8s linear infinite;vertical-align:-3px;margin-right:8px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.hidden{display:none !important;}
+
+/* ── SIDE NAVIGATION (canonical — same across all pages) ── */
+.bvp-sidenav {
+  position: fixed; top: 0; left: 0; bottom: 0; width: 64px;
+  background: #0d2e1e; border-right: 1px solid rgba(61,162,114,0.15);
+  display: flex; flex-direction: column; z-index: 500;
+  overflow: hidden; transition: width .18s ease;
+  font-family: 'DM Sans', sans-serif;
+}
+.bvp-sidenav:hover, .bvp-sidenav.expanded { width: 218px; box-shadow: 6px 0 28px rgba(0,0,0,.18); }
+.bvp-sidenav-logo {
+  display: flex; align-items: center; gap: 10px; text-decoration: none;
+  height: 64px; padding: 0 15px; flex-shrink: 0;
+  border-bottom: 1px solid rgba(61,162,114,0.12);
+}
+.bvp-sidenav-mark {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+  background: #1a5c3a; border: 1.5px solid #3da272;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; color: white; font-family: 'DM Sans', sans-serif;
+}
+.bvp-sidenav-word {
+  font-family: 'DM Serif Display', serif; font-size: 16px; color: white;
+  white-space: nowrap; opacity: 0; transition: opacity .12s;
+}
+.bvp-sidenav-word em { color: #3da272; font-style: normal; }
+.bvp-sidenav:hover .bvp-sidenav-word, .bvp-sidenav.expanded .bvp-sidenav-word { opacity: 1; transition-delay: .06s; }
+.bvp-sidenav-steps { position: relative; padding: 14px 0; }
+
+.bvp-sidenav-item {
+  position: relative; display: flex; align-items: center; gap: 14px;
+  height: 44px; padding: 0 21px; color: #7abf9a; text-decoration: none;
+  white-space: nowrap; cursor: pointer; transition: color .15s, background .15s;
+}
+.bvp-sidenav-item:hover { color: white; background: rgba(61,162,114,0.08); }
+.bvp-sidenav-item.active { color: white; font-weight: 500; background: rgba(61,162,114,0.14); cursor: default; }
+.bvp-sidenav-item.locked { color: rgba(122,191,154,0.3); cursor: not-allowed; pointer-events: none; }
+.bvp-sidenav-node {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center;
+  position: relative; z-index: 1;
+}
+.bvp-sidenav-node svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.bvp-sidenav-item.active .bvp-sidenav-node { background: #3da272; color: white; }
+.bvp-sidenav-item.done .bvp-sidenav-node { background: #1a5c3a; color: #3da272; }
+.bvp-sidenav-item.locked .bvp-sidenav-node { background: rgba(255,255,255,0.05); color: rgba(122,191,154,0.3); }
+.bvp-sidenav-label { font-size: 13px; opacity: 0; transition: opacity .12s; }
+.bvp-sidenav:hover .bvp-sidenav-label, .bvp-sidenav.expanded .bvp-sidenav-label { opacity: 1; transition-delay: .06s; }
+.bvp-sidenav-bottom { border-top: 1px solid rgba(61,162,114,0.12); padding: 10px 0; flex-shrink: 0; }
+#bvp-sidenav-admin { display: none; }
+body { padding-left: 64px; }
+@media (max-width: 640px) {
+  .bvp-sidenav.expanded { width: 200px; }
+}
+
+.bvp-sidenav.no-access .bvp-sidenav-steps{visibility:hidden;}
+
+@media (max-width:640px){
+  .page{padding:28px 16px 60px;}
+  .bvp-header{padding:10px 1rem;}
+  .bvp-agent-email{display:none;}
+  .row{flex-direction:column;gap:2px;}
+  .row dd{text-align:left;}
+}
+</style>
+</head>
+<body>
+<nav class="bvp-sidenav" id="bvp-sidenav">
+  <a href="bookvaluepro-dashboard.html" class="bvp-sidenav-logo">
+    <div class="bvp-sidenav-mark">BV</div>
+    <span class="bvp-sidenav-word">Book<em>Value</em>Pro</span>
+  </a>
+  <div class="bvp-sidenav-steps">
+    <a href="bookvaluepro-upload.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M12 16V4M12 4l-5 5M12 4l5 5"/><path d="M4 16v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg></span><span class="bvp-sidenav-label">Upload</span></a>
+    <a href="bookvaluepro-dashboard.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.3"/><rect x="14" y="3" width="7" height="7" rx="1.3"/><rect x="3" y="14" width="7" height="7" rx="1.3"/><rect x="14" y="14" width="7" height="7" rx="1.3"/></svg></span><span class="bvp-sidenav-label">Dashboard</span></a>
+    <a href="bookvaluepro-clients.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"/><circle cx="17" cy="8.5" r="2.4"/><path d="M15.5 14.7c2.6.3 4.5 2.3 4.5 5.3"/></svg></span><span class="bvp-sidenav-label">Clients</span></a>
+    <a href="bookvaluepro-outreach.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 00-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0014.3 4.9L20 16"/><path d="M20 21v-5h-5"/></svg></span><span class="bvp-sidenav-label">Renewal Outreach</span></a>
+    <a href="bookvaluepro-leads.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="3.5"/><path d="M3 20c0-3.6 2.7-6 6-6s6 2.4 6 6"/><path d="M18 8v6M21 11h-6"/></svg></span><span class="bvp-sidenav-label">Leads</span></a>
+    <a href="bookvaluepro-lead-outreach.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4 18-7z"/></svg></span><span class="bvp-sidenav-label">Lead Outreach</span></a>
+    <a href="bookvaluepro-commissions.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6.5v11M15 9.2c0-1.4-1.3-2.2-3-2.2s-3 .9-3 2.2c0 1.4 1.3 1.8 3 2.2 1.7.4 3 1 3 2.4 0 1.3-1.3 2.2-3 2.2s-3-.8-3-2.2"/></svg></span><span class="bvp-sidenav-label">Commissions</span></a>
+    <a href="bookvaluepro-uw-assistant.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg></span><span class="bvp-sidenav-label">Underwriting Assistant</span></a>
+  </div>
+  <div class="bvp-sidenav-bottom">
+    <div class="bvp-sidenav-item active" id="bvp-sidenav-account"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.2 3.6-7 8-7s8 2.8 8 7"/></svg></span><span class="bvp-sidenav-label">Account</span></div>
+    <a href="bookvaluepro-admin.html" class="bvp-sidenav-item" id="bvp-sidenav-admin"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg></span><span class="bvp-sidenav-label">Admin</span></a>
+  </div>
+</nav>
+
+<header class="bvp-header">
+  <span class="bvp-agent-email" id="agent-email"></span>
+  <button class="bvp-signout" onclick="bvpSignOut()">Sign out</button>
+</header>
+
+<main class="page">
+  <div class="eyebrow">Your account</div>
+  <h1>Account</h1>
+
+  <div class="banner" id="banner"></div>
+
+  <section class="card" id="plan-card">
+    <div class="card-label">Plan</div>
+    <div id="plan-body"><div class="loading"><span class="spinner"></span>Loading your plan…</div></div>
+    <div class="err" id="plan-err"></div>
+  </section>
+
+  <section class="card hidden" id="agency-card">
+    <div class="card-label">Agency</div>
+    <div id="agency-body"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-label">Sign-in</div>
+    <dl class="rows">
+      <div class="row"><dt>Email</dt><dd id="profile-email">—</dd></div>
+    </dl>
+    <div class="actions"><button class="btn btn-outline" onclick="bvpSignOut()">Sign out</button></div>
+  </section>
+</main>
+
+<script>
+const PLAN_NAMES = {
+  individual_monthly: 'Individual — Monthly',
+  individual_annual:  'Individual — Annual',
+  agency:             'Agency',
+};
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+function fmtMoney(n) {
+  return '$' + (Number.isInteger(n) ? n.toLocaleString('en-US') : n.toFixed(2));
+}
+function showBanner(kind, html) {
+  const b = document.getElementById('banner');
+  b.className = 'banner show ' + kind;
+  b.innerHTML = html;
+}
+function row(label, value) {
+  return `<div class="row"><dt>${esc(label)}</dt><dd>${value}</dd></div>`;
+}
+
+async function manageBilling(btn) {
+  const err = document.getElementById('plan-err');
+  err.classList.remove('show');
+  btn.disabled = true;
+  const label = btn.textContent;
+  btn.textContent = 'Opening billing…';
+  try {
+    await bvpOpenBillingPortal();
+  } catch (e) {
+    err.textContent = e.message;
+    err.classList.add('show');
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
+
+function statusChip(sub) {
+  if (sub.cancel_at_period_end) return '<span class="chip amber">Cancels at end of period</span>';
+  switch (sub.status) {
+    case 'trialing': return '<span class="chip green">Free trial</span>';
+    case 'active':   return '<span class="chip green">Active</span>';
+    case 'past_due': return '<span class="chip red">Payment problem</span>';
+    default:         return `<span class="chip grey">${esc(sub.status)}</span>`;
+  }
+}
+
+// Builds the plan card for a paying individual or an agency owner.
+function renderPaidPlan(sub, agency) {
+  const isAgency = sub.plan === 'agency';
+  const price = isAgency ? bvpAgencyMonthly(sub.quantity) : BVP_PRICING[sub.plan].amount;
+  const per = (!isAgency && sub.plan === 'individual_annual') ? 'year' : 'month';
+  const endDate = sub.status === 'trialing' ? sub.trial_ends_at : sub.current_period_end;
+
+  let sub_line = '';
+  if (sub.cancel_at_period_end) {
+    sub_line = `Your plan is cancelled. You'll keep full access until <strong>${fmtDate(endDate)}</strong>, and you won't be charged again.`;
+  } else if (sub.status === 'trialing') {
+    sub_line = `Your free trial ends on <strong>${fmtDate(sub.trial_ends_at)}</strong>. Your first charge of ${fmtMoney(price)} is on that day.`;
+  } else if (sub.status === 'past_due') {
+    sub_line = 'Your last payment didn\'t go through. Please update your card to keep access.';
+  } else {
+    sub_line = `Renews on <strong>${fmtDate(sub.current_period_end)}</strong>.`;
+  }
+
+  let rows = row('Price', `${fmtMoney(price)} / ${per}`);
+  if (sub.status === 'trialing') rows += row('Trial ends', fmtDate(sub.trial_ends_at));
+  if (!sub.cancel_at_period_end) rows += row(sub.status === 'trialing' ? 'First charge' : 'Next charge', `${fmtMoney(price)} on ${fmtDate(endDate)}`);
+  else rows += row('Access until', fmtDate(endDate));
+
+  document.getElementById('plan-body').innerHTML = `
+    <div class="plan-title"><h2>${esc(PLAN_NAMES[sub.plan] || sub.plan)}</h2>${statusChip(sub)}</div>
+    <p class="plan-sub">${sub_line}</p>
+    <dl class="rows">${rows}</dl>
+    <div class="actions">
+      <button class="btn btn-primary" onclick="manageBilling(this)">Manage billing</button>
+    </div>
+    <p class="muted-note">Update your card, view invoices${isAgency ? '' : ', switch between monthly and annual'}, or cancel. Opens Stripe's secure billing page.</p>`;
+
+  if (isAgency) {
+    const included = BVP_PRICING.agency.includedLicenses;
+    const used = sub.quantity || 1;
+    document.getElementById('agency-body').innerHTML = `
+      <div class="plan-title" style="margin-bottom:1rem;"><h2>${esc(agency?.name || 'Your agency')}</h2></div>
+      <dl class="rows">
+        ${row('Licenses in use', used > included ? `${used} (${included} included + ${used - included} extra)` : `${used} of ${included} included`)}
+        ${row('Extra licenses', `${fmtMoney(BVP_PRICING.agency.extraLicense)} / month each beyond ${included}`)}
+      </dl>
+      <p class="muted-note">Inviting agents and managing your team will be added to the Agency section soon.</p>`;
+    document.getElementById('agency-card').classList.remove('hidden');
+  }
+}
+
+function renderSimple(title, chipHtml, text, actionsHtml = '') {
+  document.getElementById('plan-body').innerHTML = `
+    <div class="plan-title"><h2>${title}</h2>${chipHtml}</div>
+    <p class="plan-sub">${text}</p>
+    ${actionsHtml ? `<div class="actions">${actionsHtml}</div>` : ''}`;
+}
+
+async function loadSubscription(access, userId) {
+  let q = bvp.from('subscriptions').select('*').order('updated_at', { ascending: false }).limit(1);
+  q = access.reason === 'agency_owner' ? q.eq('agency_id', access.agency_id) : q.eq('user_id', userId).is('agency_id', null);
+  const { data, error } = await q;
+  if (error) { console.error('loadSubscription:', error); return null; }
+  return (data && data[0]) || null;
+}
+
+async function render(session) {
+  const access = await bvpGetAccess(true);
+  document.getElementById('bvp-sidenav').classList.toggle('no-access', !access.has_access);
+  if (access.has_access) bvpSetAdminNavVisible(session.user.email);
+
+  switch (access.reason) {
+    case 'admin':
+      renderSimple('Administrator', '<span class="chip green">Full access</span>', 'Your account has full access as a site administrator.');
+      return access;
+    case 'beta':
+      renderSimple('Beta tester', '<span class="chip green">Free access</span>',
+        access.beta_ends_on
+          ? `Thanks for testing BookValuePro. Your free access runs through <strong>${fmtDate(access.beta_ends_on)}</strong>.`
+          : 'Thanks for testing BookValuePro. You have free access to every tool, with no card needed.');
+      return access;
+    case 'agency_member': {
+      const { data: agency } = await bvp.from('agencies').select('name').eq('id', access.agency_id).maybeSingle();
+      renderSimple(esc(agency?.name || 'Agency plan'), '<span class="chip green">Agency license</span>',
+        'You have a license on your agency\'s plan. Billing is handled by your agency owner.');
+      return access;
+    }
+    case 'individual':
+    case 'agency_owner': {
+      const sub = await loadSubscription(access, session.user.id);
+      let agency = null;
+      if (access.reason === 'agency_owner') {
+        ({ data: agency } = await bvp.from('agencies').select('name').eq('id', access.agency_id).maybeSingle());
+      }
+      if (sub) renderPaidPlan(sub, agency);
+      else renderSimple('Active plan', '<span class="chip green">Active</span>', 'Your plan is active.',
+        '<button class="btn btn-primary" onclick="manageBilling(this)">Manage billing</button>');
+      return access;
+    }
+    case 'agency_inactive':
+      renderSimple('No active plan', '<span class="chip amber">Inactive</span>',
+        access.role === 'owner'
+          ? "Your agency's subscription has ended. Restart it to give your team access again."
+          : "Your agency's subscription isn't active. Please contact your agency owner.",
+        `<a class="btn btn-primary" href="${BVP_PLANS_PAGE}">${access.role === 'owner' ? 'Restart agency plan' : 'See plans'}</a>`);
+      return access;
+    case 'unknown':
+      renderSimple('Plan details unavailable', '', "We couldn't load your plan details right now. Please refresh the page in a moment.");
+      return access;
+    default:
+      renderSimple('No active plan', '<span class="chip grey">None</span>',
+        `Choose a plan to start your ${BVP_TRIAL_MONTHS}-month free trial.`,
+        `<a class="btn btn-primary" href="${BVP_PLANS_PAGE}">Choose a plan</a>`);
+      return access;
+  }
+}
+
+(async () => {
+  const session = await bvpRequireLogin();
+  if (!session) return;
+  document.getElementById('agent-email').textContent = session.user.email;
+  document.getElementById('profile-email').textContent = session.user.email;
+
+  const params = new URLSearchParams(location.search);
+  const justPaid = params.get('checkout') === 'success';
+  if (justPaid) history.replaceState(null, '', location.pathname);
+
+  let access = await render(session);
+
+  // Right after checkout, Stripe's confirmation can take a few seconds to arrive.
+  if (justPaid) {
+    const done = a => ['individual', 'agency_owner'].includes(a.reason);
+    if (!done(access)) {
+      showBanner('info', '<span class="spinner"></span>Finishing setting up your plan…');
+      for (let i = 0; i < 15 && !done(access); i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        access = await render(session);
+      }
+    }
+    if (done(access)) {
+      showBanner('info', `You're all set. Your ${BVP_TRIAL_MONTHS}-month free trial has started. <a href="bookvaluepro-upload.html" style="color:inherit;font-weight:600;">Upload your book →</a>`);
+    } else {
+      showBanner('warn', 'Your payment details were received, but your plan is still being set up. Please refresh this page in a minute.');
+    }
+  }
+})();
+
+(function () {
+  var nav = document.getElementById('bvp-sidenav');
+  if (!nav) return;
+  if (!window.matchMedia('(hover: hover)').matches) {
+    nav.addEventListener('click', function (e) {
+      if (!nav.classList.contains('expanded')) {
+        var link = e.target.closest('a');
+        if (link) { e.preventDefault(); nav.classList.add('expanded'); }
+      }
+    });
+    document.addEventListener('click', function (e) {
+      if (!nav.contains(e.target)) nav.classList.remove('expanded');
+    });
+  }
+})();
+</script>
+</body>
+</html>

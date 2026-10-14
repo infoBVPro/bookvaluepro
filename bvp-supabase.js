@@ -181,7 +181,9 @@ function bvpStartIdleTimer() {
   }, 5 * 60 * 1000);
 }
 
-async function bvpRequireAuth() {
+// Signed-in check only (no plan check). Used by the Plans and Account pages,
+// which people without an active plan still need to reach.
+async function bvpRequireLogin() {
   if (bvpIsSessionExpired()) {
     await bvp.auth.signOut();
     localStorage.removeItem(BVP_LAST_ACTIVE_KEY);
@@ -195,6 +197,121 @@ async function bvpRequireAuth() {
   return session;
 }
 
+// Signed in AND has access (beta tester, admin, active/trial plan, or a seat
+// on a paying agency). Everyone else is sent to the Plans page.
+// Every tool page calls this.
+async function bvpRequireAuth() {
+  const session = await bvpRequireLogin();
+  if (!session) return null;
+  const access = await bvpGetAccess();
+  if (!access.has_access) { window.location.href = BVP_PLANS_PAGE; return null; }
+  bvpAddAccountNav();
+  return session;
+}
+
+// ── ACCESS & BILLING ─────────────────────────────────────────
+const BVP_PLANS_PAGE   = 'bookvaluepro-plans.html';
+const BVP_ACCOUNT_PAGE = 'bookvaluepro-account.html';
+
+// Display prices — must match the prices set up in Stripe.
+const BVP_PRICING = {
+  individual_monthly: { label: 'Individual — Monthly', amount: 44.99, interval: 'month' },
+  individual_annual:  { label: 'Individual — Annual',  amount: 499,   interval: 'year'  },
+  agency:             { label: 'Agency',               amount: 400,   interval: 'month', includedLicenses: 10, extraLicense: 40 },
+};
+const BVP_TRIAL_MONTHS = 3;
+
+// Monthly agency price for a given number of licenses in use.
+function bvpAgencyMonthly(licenses) {
+  const p = BVP_PRICING.agency;
+  return p.amount + Math.max(0, (licenses || 1) - p.includedLicenses) * p.extraLicense;
+}
+
+let _bvpAccessCache = null;
+
+// Returns { has_access, reason, plan, status, trial_ends_at, current_period_end,
+//           cancel_at_period_end, agency_id, role, beta_ends_on }
+// reason: admin | beta | individual | agency_owner | agency_member
+//         | agency_inactive | no_plan | signed_out
+async function bvpGetAccess(force = false) {
+  if (_bvpAccessCache && !force) return _bvpAccessCache;
+  const { data, error } = await bvp.rpc('bvp_my_access');
+  if (error) {
+    // If the check itself can't run, don't lock people out of the page —
+    // the database rules (migration 2) still block unpaid access to data.
+    console.warn('bvpGetAccess:', error.message);
+    return { has_access: true, reason: 'unknown', error: error.message };
+  }
+  _bvpAccessCache = data || { has_access: false, reason: 'no_plan' };
+  return _bvpAccessCache;
+}
+
+// Calls one of our Supabase Edge Functions and returns its JSON.
+// Throws an Error with a readable message on failure.
+async function bvpCallFunction(name, body = {}) {
+  const { data, error } = await bvp.functions.invoke(name, { body });
+  if (error) {
+    let msg = error.message || 'Request failed';
+    try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch (_) {}
+    throw new Error(msg);
+  }
+  return data;
+}
+
+// The folder this site is served from (so Stripe can send people back here).
+function bvpSiteBase() {
+  return new URL('.', window.location.href).href;
+}
+
+async function bvpStartCheckout(plan, agencyName = '') {
+  const { url } = await bvpCallFunction('create-checkout-session', { plan, agencyName, returnBase: bvpSiteBase() });
+  window.location.href = url;
+}
+
+async function bvpOpenBillingPortal() {
+  const { url } = await bvpCallFunction('customer-portal', { returnBase: bvpSiteBase() });
+  window.location.href = url;
+}
+
+// Adds the "Account" link to the bottom of the side nav on every tool page.
+function bvpAddAccountNav() {
+  const bottom = document.querySelector('.bvp-sidenav-bottom');
+  if (!bottom || document.getElementById('bvp-sidenav-account')) return;
+  const a = document.createElement('a');
+  a.href = BVP_ACCOUNT_PAGE;
+  a.className = 'bvp-sidenav-item';
+  a.id = 'bvp-sidenav-account';
+  a.innerHTML = '<span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.2 3.6-7 8-7s8 2.8 8 7"/></svg></span><span class="bvp-sidenav-label">Account</span>';
+  bottom.insertBefore(a, bottom.firstChild);
+}
+
+// ── BETA TESTERS (admin only) ─────────────────────────────────
+async function bvpGetBetaTesters() {
+  const { data, error } = await bvp.from('beta_testers').select('*').order('created_at', { ascending: false });
+  if (error) { console.error('bvpGetBetaTesters:', error); return null; }
+  return data || [];
+}
+
+async function bvpAddBetaTester(email, note = null, endsOn = null, addedBy = null) {
+  const { error } = await bvp.from('beta_testers').insert({
+    email: email.trim().toLowerCase(), note: note || null, ends_on: endsOn || null, added_by: addedBy || null,
+  });
+  if (error) { console.error('bvpAddBetaTester:', error); return error.code === '23505' ? 'That email is already on the list.' : error.message; }
+  return null;
+}
+
+async function bvpUpdateBetaTester(email, fields) {
+  const { error } = await bvp.from('beta_testers').update(fields).eq('email', email);
+  if (error) { console.error('bvpUpdateBetaTester:', error); return error.message; }
+  return null;
+}
+
+async function bvpRemoveBetaTester(email) {
+  const { error } = await bvp.from('beta_testers').delete().eq('email', email);
+  if (error) { console.error('bvpRemoveBetaTester:', error); return error.message; }
+  return null;
+}
+
 async function bvpSignOut() {
   clearInterval(_bvpIdleTimer);
   localStorage.removeItem(BVP_LAST_ACTIVE_KEY);
@@ -202,8 +319,10 @@ async function bvpSignOut() {
   window.location.href = 'index.html';
 }
 
-// Smart redirect — dashboard if book exists, upload if not
+// Smart redirect — plans page if no access, else dashboard if book exists, upload if not
 async function bvpSmartRedirect(agentId) {
+  const access = await bvpGetAccess(true);
+  if (!access.has_access) { window.location.href = BVP_PLANS_PAGE; return; }
   const book = await bvpGetActiveBook(agentId);
   if (book && book.policy_count > 0) {
     window.location.href = 'bookvaluepro-dashboard.html';
