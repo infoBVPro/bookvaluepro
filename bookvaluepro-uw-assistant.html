@@ -419,6 +419,10 @@ const UW_STATE_NAMES = {
   WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming',DC:'Washington D.C.'
 };
 
+// Year-round guaranteed issue for Medicare Supplement: applications have no
+// health questions, so no carrier can decline for health. Add states here.
+const UW_GUARANTEED_ISSUE_STATES = ['CT', 'NY', 'MA'];
+
 function initStateOptions() {
   const sel = document.getElementById('uw-state');
   BVP_ALL_STATES.slice()
@@ -715,6 +719,16 @@ async function runUWCheck() {
   const profile = { gender: selectedSex, heightIn, weightLb, age, state };
   const carriers = [...selectedCarriers];
 
+  if (state && UW_GUARANTEED_ISSUE_STATES.includes(state)) {
+    renderResults(carriers.map(carrier => ({
+      carrier, status: 'accept', guaranteedIssue: true, ruleState: state,
+      reasons: [], flags: [], infos: []
+    })), carriers);
+    btn.disabled = false;
+    btn.textContent = 'Check eligibility →';
+    return;
+  }
+
   if (!uwData) uwData = await bvpLoadUWData();
 
   const results = bvpEvaluateUW(profile, selectedConditions, selectedDrugs, carriers, uwData);
@@ -758,6 +772,20 @@ function renderResults(results, carriers) {
   const sorted = [...results].sort((a, b) => order[a.status] - order[b.status]);
 
   wrap.innerHTML = sorted.map(r => {
+    if (r.guaranteedIssue) {
+      const stName = UW_STATE_NAMES[r.ruleState] || r.ruleState;
+      return `
+      <div class="result-card accept">
+        <div class="result-header">
+          <span class="result-carrier">${bvpCarrierDisplay(r.carrier)}</span>
+          <span class="result-badge accept">✓ Guaranteed Issue</span>
+        </div>
+        <div class="result-body">
+          <div class="result-clean">Guaranteed issue in ${stName} — no health questions. The client can't be declined for health reasons.</div>
+          <div class="result-source">${stName} has year-round guaranteed issue for Medicare Supplement, so the conditions and medications entered above don't affect eligibility.</div>
+        </div>
+      </div>`;
+    }
     const hasData = carrierHasAnyData(r.carrier);
     const items = [
       ...r.reasons.map(x => `<div class="result-item reason"><span class="ri-icon">✕</span><span>${x.text}${x.notes ? `<span class="ri-notes">${x.notes}</span>` : ''}</span></div>`),
