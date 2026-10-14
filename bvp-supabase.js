@@ -1286,7 +1286,12 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
     //   drug  — the carrier's declinable medication list (underwriting guide)
     //   build — the carrier's build chart (underwriting guide)
     const _cnt = () => reasons.length + flags.length + infos.length;
-    const basis = { app: false, drug: false, build: false };
+    //   guide — condition rows sourced from the carrier's underwriting guide
+    //           (question_text names a guide, e.g. Humana's ineligible-conditions appendix)
+    const basis = { app: false, drug: false, build: false, guide: false };
+    const _isGuideRow = r => { const t = (r && r.question_text || '').trim();
+      return /\b(guide|appendix)\b/i.test(t) && !t.endsWith('?'); };
+    let _condApp = false, _condGuide = false;
     let _n0 = _cnt();
 
     // 1. Build check — only evaluated when we have a matching height/gender row.
@@ -1485,6 +1490,7 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
       }
 
       matches.forEach(m => {
+        if (_isGuideRow(m)) _condGuide = true; else _condApp = true;
         const lookback = _bvpUwLookbackSuffix(m.lookback_years);
         const quoted = _bvpUwSourceText(m.question_text);
         const via = m._via ? ` (meets its rule for ${m._via})`
@@ -1502,7 +1508,10 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
       });
     });
 
-    if (_cnt() > _n0) basis.app = true;
+    if (_cnt() > _n0) {
+      if (_condGuide) basis.guide = true;
+      if (_condApp || !_condGuide) basis.app = true;
+    }
 
     // Drug -> condition it's taken for -> this carrier's rule for that
     // condition. Pushes one line and returns true, or returns false.

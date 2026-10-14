@@ -758,11 +758,13 @@ function ruleSourceText(r) {
     const form = r.ruleFormNumber ? ` (${r.ruleFormNumber})` : '';
     const appText = `${who}'s ${stName} ${r.stateRules.join(', ')}${form}`;
     const b = r.basis || {};
-    const guideParts = [b.drug && 'medications', b.build && 'height/weight'].filter(Boolean);
+    const guideParts = [b.guide && (b.app ? 'other conditions' : 'conditions'), b.drug && 'medications', b.build && 'height/weight'].filter(Boolean);
     const guideText = `${name}'s underwriting guide`;
     if (guideParts.length && !b.app) return `Based on ${guideText}.`;
     if (guideParts.length && b.app) {
-      const g = guideParts.join(' and ');
+      const g = guideParts.length > 1
+        ? `${guideParts.slice(0, -1).join(', ')} and ${guideParts[guideParts.length - 1]}`
+        : guideParts[0];
       return `Conditions based on ${appText}; ${g} based on ${guideText}.`;
     }
     return `Based on ${appText}.`;
