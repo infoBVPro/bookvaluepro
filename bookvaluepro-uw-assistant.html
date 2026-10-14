@@ -195,6 +195,8 @@ body { font-family: var(--sans); color: var(--text); background: var(--light-bg)
 .result-badge.accept  { background: var(--accept-bg);  color: var(--accept);  border: 1px solid var(--accept-border); }
 .result-badge.review  { background: var(--review-bg);  color: var(--review);  border: 1px solid var(--review-border); }
 .result-badge.decline { background: var(--decline-bg); color: var(--decline); border: 1px solid var(--decline-border); }
+.result-card.none { border-left-color: var(--slate); }
+.result-badge.none { background: var(--light-bg); color: var(--slate); border: 1px solid var(--border); }
 
 .result-body { padding: 0 20px 18px; }
 .result-list { display: flex; flex-direction: column; gap: 8px; }
@@ -422,6 +424,18 @@ const UW_STATE_NAMES = {
 // Year-round guaranteed issue for Medicare Supplement: applications have no
 // health questions, so no carrier can decline for health. Add states here.
 const UW_GUARANTEED_ISSUE_STATES = ['CT', 'NY', 'MA'];
+
+// States where a carrier doesn't sell Medicare Supplement. Matched on the
+// carrier's display name. Shown as "Not Offered" instead of a result.
+const UW_NOT_OFFERED = [
+  { match: /^aetna/i,        states: ['ME', 'WA', 'HI'] },
+  { match: /^healthspring/i, states: ['NY', 'MA'] },
+];
+function uwNotOffered(carrier, state) {
+  if (!state) return false;
+  const names = [carrier, bvpCarrierDisplay(carrier)];
+  return UW_NOT_OFFERED.some(r => r.states.includes(state) && names.some(n => r.match.test(n || '')));
+}
 
 function initStateOptions() {
   const sel = document.getElementById('uw-state');
@@ -719,8 +733,10 @@ async function runUWCheck() {
   const profile = { gender: selectedSex, heightIn, weightLb, age, state };
   const carriers = [...selectedCarriers];
 
+  const notOfferedResult = carrier => ({ carrier, status: 'none', notOffered: true, ruleState: state, reasons: [], flags: [], infos: [] });
+
   if (state && UW_GUARANTEED_ISSUE_STATES.includes(state)) {
-    renderResults(carriers.map(carrier => ({
+    renderResults(carriers.map(carrier => uwNotOffered(carrier, state) ? notOfferedResult(carrier) : ({
       carrier, status: 'accept', guaranteedIssue: true, ruleState: state,
       reasons: [], flags: [], infos: []
     })), carriers);
@@ -731,7 +747,8 @@ async function runUWCheck() {
 
   if (!uwData) uwData = await bvpLoadUWData();
 
-  const results = bvpEvaluateUW(profile, selectedConditions, selectedDrugs, carriers, uwData);
+  const results = bvpEvaluateUW(profile, selectedConditions, selectedDrugs, carriers, uwData)
+    .map(r => uwNotOffered(r.carrier, state) ? notOfferedResult(r.carrier) : r);
   renderResults(results, carriers);
 
   btn.disabled = false;
@@ -783,10 +800,23 @@ function renderResults(results, carriers) {
   const badgeIcon  = { accept: '✓', review: '!', decline: '✕' };
 
   // Sort: decline first, then review, then accept — worst news up top
-  const order = { decline: 0, review: 1, accept: 2 };
+  const order = { decline: 0, review: 1, accept: 2, none: 3 };
   const sorted = [...results].sort((a, b) => order[a.status] - order[b.status]);
 
   wrap.innerHTML = sorted.map(r => {
+    if (r.notOffered) {
+      const stName = UW_STATE_NAMES[r.ruleState] || r.ruleState;
+      return `
+      <div class="result-card none">
+        <div class="result-header">
+          <span class="result-carrier">${bvpCarrierDisplay(r.carrier)}</span>
+          <span class="result-badge none">— Not Offered</span>
+        </div>
+        <div class="result-body">
+          <div class="result-clean">${bvpCarrierDisplay(r.carrier)} does not currently offer Medicare Supplement in ${stName}.</div>
+        </div>
+      </div>`;
+    }
     if (r.guaranteedIssue) {
       const stName = UW_STATE_NAMES[r.ruleState] || r.ruleState;
       return `
