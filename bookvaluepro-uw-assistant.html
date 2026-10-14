@@ -428,7 +428,7 @@ const UW_GUARANTEED_ISSUE_STATES = ['CT', 'NY', 'MA'];
 // States where a carrier doesn't sell Medicare Supplement. Matched on the
 // carrier's display name. Shown as "Not Offered" instead of a result.
 const UW_NOT_OFFERED = [
-  { match: /^aetna/i,        states: ['ME', 'WA', 'HI'] },
+  { match: /^aetna/i,        states: ['ME', 'WA', 'HI', 'NY', 'MA'] },
   { match: /^healthspring/i, states: ['NY', 'MA'] },
 ];
 function uwNotOffered(carrier, state) {
