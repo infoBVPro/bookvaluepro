@@ -474,6 +474,20 @@ function uwNotOffered(carrier, state) {
 //   note:   an extra line shown on every result for that carrier.
 const UW_CARRIER_NOTES = [
   {
+    // Nassau's guide (pages 3-4) lists generic health questions plus state variations.
+    // OH and PA change the result and have their own rows; IL, NC, ND, UT differ in wording only.
+    match: /nassau/i,
+    source: r => {
+      const st = r.ruleState, stName = st ? (UW_STATE_NAMES[st] || st) : null;
+      const base = "Based on Nassau Life's underwriting guide health questions";
+      if (!st) return `${base} (generic questions).`;
+      if (st === 'OH') return `${base} with Ohio's variations: question 8 has no time limit and question 16 (office injections, pain clinic) is not asked.`;
+      if (st === 'PA') return `${base} with Pennsylvania's variations: questions 2–10 look back 5 years.`;
+      if (['IL', 'NC', 'ND', 'UT'].includes(st)) return `${base} — ${stName}'s variations are wording only and don't change the result.`;
+      return `${base} — no ${stName}-specific variations.`;
+    },
+  },
+  {
     match: /lumos|plateau/i,
     source: () => "Based on Plateau Insurance Company's Texas application health questions (PTAPP2026TX), used for every state where Lumos is offered.",
     note: 'Lumos underwrites automatically from prescription and medical history (Milliman IntelliScript) and may accept a condition if overall health is good or it is controlled — submit for a decision (about 2 minutes). Height, weight and medications aren\'t screened here.',
