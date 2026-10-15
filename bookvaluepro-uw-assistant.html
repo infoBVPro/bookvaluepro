@@ -946,7 +946,7 @@ function uwGIPanelHTML(state) {
   } else {
     return ''; // no state GI right: no panel
   }
-  return `<div class="gi-panel"><div class="gi-panel-head">${stName} state GI rights${uwTip('stateGI')}</div>${body}</div>`;
+  return `<div class="gi-panel"><div class="gi-panel-head">${stName} State-Specific Guaranteed Issue Right${uwTip('stateGI')}</div>${body}</div>`;
 }
 
 // One line under each result saying which rules were applied. With state
@@ -1087,7 +1087,7 @@ const UW_TIPS = {
   age:     { title: 'Age on effective date', body: "Only affects carriers with age-based rules (currently Physicians Mutual), which apply some conditions and medications only at certain ages. If left blank, those show as Needs Review." },
   conditions: { title: 'Health conditions', body: "Built from each carrier's application health questions and the declinable conditions in its underwriting guide. Type it the way you'd say it: common names, abbreviations and alternate spellings (for example, \"COPD\" or \"chronic obstructive pulmonary disease\") find the same condition. If a condition isn't recognized, every carrier shows Needs Review for it." },
   medications: { title: 'Medications', body: "Includes 5,700+ prescription drugs, searchable by brand or generic name. Each one is checked against the declinable medication list in the carrier's underwriting guide. Some carriers flag a drug only when it's tied to a condition on their application." },
-  stateGI: { title: 'State GI rights', body: "Times when this state lets a client switch Medicare Supplement plans without health questions (birthday, anniversary or year-round rules). Inside the window, the carrier can't decline for health — but the switch is usually written as guaranteed issue, which often pays little or no commission. Federal guaranteed-issue rights (like losing employer coverage) apply in every state and aren't listed here." },
+  stateGI: { title: 'State-Specific Guaranteed Issue Right', body: "Times when this state lets a client switch Medicare Supplement plans without health questions (birthday, anniversary or year-round rules). Inside the window, the carrier can't decline for health — but the switch is usually written as guaranteed issue, which often pays little or no commission. Federal guaranteed-issue rights (like losing employer coverage) apply in every state and aren't listed here." },
   unrecognized: { title: 'Unrecognized', body: "This condition isn't on our list, so every carrier shows Needs Review for it." },
 };
 function uwTip(key) {
