@@ -216,6 +216,10 @@ body { font-family: var(--sans); color: var(--text); background: var(--light-bg)
   font-size: 11.5px; color: var(--text-muted); margin-top: 10px; padding-top: 8px;
   border-top: 1px dashed var(--border);
 }
+.result-note {
+  font-size: 12px; color: var(--slate); padding: 8px 12px; background: var(--light-bg);
+  border: 1px solid var(--border); border-radius: 8px; margin-top: 10px; line-height: 1.5;
+}
 .result-nodata {
   font-size: 12px; color: var(--text-muted); padding: 8px 12px; background: var(--light-bg);
   border-radius: 8px; margin-top: 4px;
@@ -460,6 +464,21 @@ function uwNotOffered(carrier, state) {
   const names = [carrier, bvpCarrierDisplay(carrier)];
   return UW_NOT_OFFERED.some(r => names.some(n => r.match.test(n || '')) &&
     (r.onlyIn ? !r.onlyIn.includes(state) : (r.states || []).includes(state)));
+}
+
+// Carrier-specific wording on the result card.
+//   source: replaces the "Based on …" line under the result.
+//   note:   an extra line shown on every result for that carrier.
+const UW_CARRIER_NOTES = [
+  {
+    match: /lumos|plateau/i,
+    source: () => "Based on Plateau Insurance Company's Texas application health questions (PTAPP2026TX), used for every state where Lumos is offered.",
+    note: 'Lumos underwrites automatically using prescription history (Milliman IntelliScript); height, weight and medications aren\'t screened here.',
+  },
+];
+function uwCarrierNote(carrier) {
+  const names = [carrier, bvpCarrierDisplay(carrier)];
+  return UW_CARRIER_NOTES.find(r => names.some(n => r.match.test(n || ''))) || null;
 }
 
 function initStateOptions() {
@@ -793,6 +812,8 @@ function carrierHasAnyData(carrier) {
 // findings come from the carrier's underwriting guide — so the line names
 // only the sources that produced this result's findings.
 function ruleSourceText(r) {
+  const special = uwCarrierNote(r.carrier);
+  if (special && special.source) return special.source(r);
   const name = bvpCarrierDisplay(r.carrier);
   const stName = r.ruleState ? (UW_STATE_NAMES[r.ruleState] || r.ruleState) : null;
   if (r.ruleSource === 'state') {
@@ -871,6 +892,7 @@ function renderResults(results, carriers) {
         <div class="result-body">
           ${(r.reasons.length + r.flags.length) ? '' : `<div class="result-clean">No flags found based on what you entered.</div>`}
           ${items.length ? `<div class="result-list">${items.join('')}</div>` : ''}
+          ${uwCarrierNote(r.carrier)?.note ? `<div class="result-note">${uwCarrierNote(r.carrier).note}</div>` : ''}
           ${hasData ? `<div class="result-source">${ruleSourceText(r)}</div>` : ''}
           ${!hasData ? `<div class="result-nodata">No underwriting data has been loaded yet for ${bvpCarrierDisplay(r.carrier)} — this result only reflects what's entered above, not ${bvpCarrierDisplay(r.carrier)}'s actual rules.</div>` : ''}
         </div>
