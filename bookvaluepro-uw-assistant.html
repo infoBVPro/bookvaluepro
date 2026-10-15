@@ -897,6 +897,7 @@ function uwGIRuleLines(r) {
   }
   const scope = {
     any_carrier: 'Any carrier',
+    same_company: "Only with the client's current underwriting company",
     same_carrier_group: 'Only with the current carrier or its affiliates',
     same_carrier_group_then_any_fallback: "Current carrier or an affiliate; any carrier if neither sells the client's plan",
   }[r.carrier_scope];
@@ -939,7 +940,6 @@ function uwGIPanelHTML(state) {
       <div class="gi-rule">
         <div class="gi-rule-name">${_giEsc(r.rule_name)}${r.needs_review ? ' <span style="font-weight:400;color:var(--review)">(unconfirmed)</span>' : ''}</div>
         <ul>${uwGIRuleLines(r).map(x => `<li>${x}</li>`).join('')}</ul>
-        ${r.source_document ? `<div class="gi-rule-src">Source: ${_giEsc(r.source_document)}${r.source_page ? `, p. ${_giEsc(r.source_page)}` : ''}</div>` : ''}
       </div>`).join('');
   } else if (UW_GUARANTEED_ISSUE_STATES.includes(state)) {
     body = `<div class="gi-rule"><div class="gi-rule-name">Year-round guaranteed issue</div><ul><li>Medicare Supplement is sold without health questions all year in ${stName}.</li></ul></div>`;
