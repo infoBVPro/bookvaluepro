@@ -944,7 +944,7 @@ function uwGIPanelHTML(state) {
   } else if (UW_GUARANTEED_ISSUE_STATES.includes(state)) {
     body = `<div class="gi-rule"><div class="gi-rule-name">Year-round guaranteed issue</div><ul><li>Medicare Supplement is sold without health questions all year in ${stName}.</li></ul></div>`;
   } else {
-    body = `<div class="gi-none">${stName} has no birthday, anniversary or year-round guaranteed-issue rule. Federal guaranteed-issue rights (such as losing employer coverage) still apply.</div>`;
+    return ''; // no state GI right: no panel
   }
   return `<div class="gi-panel"><div class="gi-panel-head">${stName} state GI rights${uwTip('stateGI')}</div>${body}</div>`;
 }
