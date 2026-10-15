@@ -435,6 +435,15 @@ const UW_NOT_OFFERED = [
   // WoodmenLife underwriting guide (616163), page 24 — Rate Type Available by State.
   { match: /woodmen/i, onlyIn: ['AL', 'AZ', 'AR', 'CO', 'FL', 'GA', 'IA', 'IL', 'IN', 'KY', 'LA', 'MI', 'MS',
                                 'MT', 'NC', 'NJ', 'OH', 'OK', 'OR', 'PA', 'SC', 'TN', 'TX', 'VA', 'WV'] },
+  // Mutual of Omaha underwriting guide (604504), pages 34–36 — every state except Massachusetts.
+  { match: /mutual of omaha/i, states: ['MA'] },
+  // LifeShield underwriting guide (R022024), page 16 — Rate Type Available by State.
+  { match: /lifeshield/i, onlyIn: ['AL', 'AR', 'AZ', 'CO', 'DC', 'DE', 'FL', 'GA', 'IA', 'IL', 'IN', 'KS', 'KY',
+                                   'LA', 'MD', 'MO', 'MS', 'NC', 'ND', 'NE', 'NJ', 'NM', 'NV', 'OH', 'OK', 'PA',
+                                   'SC', 'SD', 'TN', 'TX', 'UT', 'VA', 'WV', 'WY'] },
+  // Wellabe underwriting guide, page 1 — "For Arizona, California, … and Wisconsin."
+  { match: /wellabe/i, onlyIn: ['AZ', 'CA', 'CO', 'DE', 'FL', 'GA', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'MD', 'MI',
+                                'MO', 'NH', 'NJ', 'NC', 'NE', 'OH', 'PA', 'SC', 'TN', 'TX', 'VA', 'WA', 'WI'] },
 ];
 function uwNotOffered(carrier, state) {
   if (!state) return false;
