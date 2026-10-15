@@ -444,6 +444,10 @@ const UW_NOT_OFFERED = [
   // Wellabe underwriting guide, page 1 — "For Arizona, California, … and Wisconsin."
   { match: /wellabe/i, onlyIn: ['AZ', 'CA', 'CO', 'DE', 'FL', 'GA', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'MD', 'MI',
                                 'MO', 'NH', 'NJ', 'NC', 'NE', 'OH', 'PA', 'SC', 'TN', 'TX', 'VA', 'WA', 'WI'] },
+  // Lumos / Plateau underwriting guide (PTMSPTP-0826), page 12 — Household Premium Discount
+  // table, which doubles as Lumos's current availability list.
+  { match: /lumos|plateau/i, onlyIn: ['AL', 'AR', 'AZ', 'CO', 'FL', 'GA', 'IA', 'IL', 'KY', 'LA', 'MI', 'MO', 'MS',
+                                      'NJ', 'NC', 'ND', 'NV', 'OH', 'OK', 'SC', 'SD', 'TX', 'UT', 'VT', 'WI', 'WV', 'WY'] },
 ];
 function uwNotOffered(carrier, state) {
   if (!state) return false;
