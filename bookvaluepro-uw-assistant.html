@@ -426,15 +426,21 @@ const UW_STATE_NAMES = {
 const UW_GUARANTEED_ISSUE_STATES = ['CT', 'NY', 'MA'];
 
 // States where a carrier doesn't sell Medicare Supplement. Matched on the
-// carrier's display name. Shown as "Not Offered" instead of a result.
+// carrier's name or display name. Shown as "Not Offered" instead of a result.
+// Use `states` to list where it ISN'T sold, or `onlyIn` to list the only
+// states where it IS sold (every other state shows Not Offered).
 const UW_NOT_OFFERED = [
   { match: /^aetna/i,        states: ['ME', 'WA', 'HI', 'NY', 'MA'] },
   { match: /^healthspring/i, states: ['NY', 'MA'] },
+  // WoodmenLife underwriting guide (616163), page 24 — Rate Type Available by State.
+  { match: /woodmen/i, onlyIn: ['AL', 'AZ', 'AR', 'CO', 'FL', 'GA', 'IA', 'IL', 'IN', 'KY', 'LA', 'MI', 'MS',
+                                'MT', 'NC', 'NJ', 'OH', 'OK', 'OR', 'PA', 'SC', 'TN', 'TX', 'VA', 'WV'] },
 ];
 function uwNotOffered(carrier, state) {
   if (!state) return false;
   const names = [carrier, bvpCarrierDisplay(carrier)];
-  return UW_NOT_OFFERED.some(r => r.states.includes(state) && names.some(n => r.match.test(n || '')));
+  return UW_NOT_OFFERED.some(r => names.some(n => r.match.test(n || '')) &&
+    (r.onlyIn ? !r.onlyIn.includes(state) : (r.states || []).includes(state)));
 }
 
 function initStateOptions() {
