@@ -225,6 +225,28 @@ body { font-family: var(--sans); color: var(--text); background: var(--light-bg)
   border-radius: 8px; margin-top: 4px;
 }
 
+/* ── TOOLTIPS (same look as the dashboard's info buttons) ── */
+.uw-info-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid currentColor;
+  font-size: 9px; font-weight: 600; font-family: var(--sans); font-style: normal;
+  text-transform: none; letter-spacing: 0; line-height: 1;
+  opacity: 0.45; cursor: help; transition: opacity .15s; flex-shrink: 0;
+  vertical-align: middle; margin-left: 5px; user-select: none;
+}
+.uw-info-btn:hover, .uw-info-btn:focus { opacity: 1; outline: none; }
+.uw-section-label .uw-info-btn { margin-left: -2px; }
+#uw-tooltip {
+  position: fixed; z-index: 600; background: #0f1214; color: #fff;
+  border-radius: 10px; padding: 14px 16px; width: 260px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.18); pointer-events: none;
+  opacity: 0; transform: translateY(4px); transition: opacity .15s ease, transform .15s ease;
+  font-family: var(--sans); text-align: left;
+}
+#uw-tooltip.visible { opacity: 1; transform: translateY(0); }
+#uw-tooltip .tt-title { font-size: 12px; font-weight: 600; margin-bottom: 6px; letter-spacing: .01em; }
+#uw-tooltip .tt-body { font-size: 12px; color: rgba(255,255,255,.78); line-height: 1.55; font-weight: 400; }
+
 /* ── SIDE NAVIGATION (canonical — same across all pages) ── */
 .bvp-sidenav {
   position: fixed; top: 0; left: 0; bottom: 0; width: 64px;
@@ -330,7 +352,7 @@ body { padding-left: 64px; }
       <div class="uw-section-label">Applicant profile</div>
       <div class="uw-grid">
         <div class="uw-field">
-          <label for="uw-state">State</label>
+          <label for="uw-state">State<span class="uw-info-btn" data-tip="state" tabindex="0" role="button" aria-label="About State">i</span></label>
           <select class="uw-select" id="uw-state" onchange="onStateChange()">
             <option value="">National rules</option>
           </select>
@@ -354,7 +376,7 @@ body { padding-left: 64px; }
           <input class="uw-input" type="number" id="uw-weight" min="60" max="500" placeholder="e.g. 185">
         </div>
         <div class="uw-field">
-          <label for="uw-age">Age on effective date (optional)</label>
+          <label for="uw-age">Age on effective date (optional)<span class="uw-info-btn" data-tip="age" tabindex="0" role="button" aria-label="About Age on effective date">i</span></label>
           <input class="uw-input" type="number" id="uw-age" min="0" max="120" placeholder="e.g. 68">
         </div>
       </div>
@@ -362,7 +384,7 @@ body { padding-left: 64px; }
 
     <!-- CONDITIONS -->
     <div class="uw-section">
-      <div class="uw-section-label">Health conditions</div>
+      <div class="uw-section-label">Health conditions<span class="uw-info-btn" data-tip="conditions" tabindex="0" role="button" aria-label="About Health conditions">i</span></div>
       <div class="uw-tag-input-wrap">
         <div class="uw-tag-box" id="uw-condition-box">
           <input type="text" id="uw-condition-input" placeholder="Start typing a condition, e.g. &quot;diabetes&quot;...">
@@ -373,7 +395,7 @@ body { padding-left: 64px; }
 
     <!-- MEDICATIONS -->
     <div class="uw-section">
-      <div class="uw-section-label">Medications</div>
+      <div class="uw-section-label">Medications<span class="uw-info-btn" data-tip="medications" tabindex="0" role="button" aria-label="About Medications">i</span></div>
       <div class="uw-tag-input-wrap">
         <div class="uw-tag-box" id="uw-drug-box">
           <input type="text" id="uw-drug-input" placeholder="Start typing a medication, e.g. &quot;eliquis&quot;...">
@@ -398,6 +420,7 @@ body { padding-left: 64px; }
   </div>
 </div>
 
+<div id="uw-tooltip" role="tooltip"><div class="tt-title" id="uw-tt-title"></div><div class="tt-body" id="uw-tt-body"></div></div>
 <script>
 // ── STATE ─────────────────────────────────────────────────────────────
 let bvpSession = null;
@@ -657,7 +680,7 @@ function setupTagInput({ inputId, boxId, suggestId, list, selectedArr, getLabel,
       chip.className = isUnrec ? 'uw-chip unrec' : 'uw-chip';
       if (isUnrec) chip.title = 'Not a recognized condition: every carrier will show Needs Review for it.';
       chip.innerHTML = isUnrec
-        ? `${name} <span class="unrec-tag">unrecognized</span> <button type="button" aria-label="Remove">✕</button>`
+        ? `${name} <span class="unrec-tag">unrecognized</span>${uwTip('unrecognized')} <button type="button" aria-label="Remove">✕</button>`
         : `${name} <button type="button" aria-label="Remove">✕</button>`;
       chip.querySelector('button').onclick = () => {
         if (unrecognized) unrecognized.delete(selectedArr[i].toLowerCase());
@@ -867,7 +890,7 @@ function renderResults(results, carriers) {
       <div class="result-card none">
         <div class="result-header">
           <span class="result-carrier">${bvpCarrierDisplay(r.carrier)}</span>
-          <span class="result-badge none">— Not Offered</span>
+          <span class="result-badge none">— Not Offered${uwTip('notOffered')}</span>
         </div>
         <div class="result-body">
           <div class="result-clean">${bvpCarrierDisplay(r.carrier)} does not currently offer Medicare Supplement in ${stName}.</div>
@@ -880,7 +903,7 @@ function renderResults(results, carriers) {
       <div class="result-card accept">
         <div class="result-header">
           <span class="result-carrier">${bvpCarrierDisplay(r.carrier)}</span>
-          <span class="result-badge accept">✓ Guaranteed Issue</span>
+          <span class="result-badge accept">✓ Guaranteed Issue${uwTip('gi')}</span>
         </div>
         <div class="result-body">
           <div class="result-clean">Guaranteed issue in ${stName} — no health questions. The client can't be declined for health reasons.</div>
@@ -898,7 +921,7 @@ function renderResults(results, carriers) {
       <div class="result-card ${r.status}">
         <div class="result-header">
           <span class="result-carrier">${bvpCarrierDisplay(r.carrier)}</span>
-          <span class="result-badge ${r.status}">${badgeIcon[r.status]} ${badgeLabel[r.status]}</span>
+          <span class="result-badge ${r.status}">${badgeIcon[r.status]} ${badgeLabel[r.status]}${uwTip(r.status)}</span>
         </div>
         <div class="result-body">
           ${(r.reasons.length + r.flags.length) ? '' : `<div class="result-clean">No flags found based on what you entered.</div>`}
@@ -940,6 +963,66 @@ async function initFromSupabase() {
     getLabel: item => item.name, getMeta: item => item.generic_name || '',
   });
 }
+
+// ── TOOLTIPS ──────────────────────────────────────────────────────────
+// Hover (or tab to) any small "i" icon to see its definition.
+const UW_TIPS = {
+  accept:  { title: 'Likely Accept', body: "Nothing entered matches a knockout question, medication or build limit for this carrier. The carrier still makes the final decision." },
+  review:  { title: 'Needs Review', body: "Something entered may be accepted or declined depending on details (timing, severity, how it's controlled). Confirm with the carrier before submitting." },
+  decline: { title: 'Likely Decline', body: "Something entered matches a question or rule the carrier uses to decline. Consider another carrier." },
+  gi:      { title: 'Guaranteed Issue', body: "This state requires Medicare Supplement to be sold without health questions, so health can't cause a decline." },
+  notOffered: { title: 'Not Offered', body: "This carrier doesn't currently sell Medicare Supplement in this state." },
+  state:   { title: 'State', body: "Uses the carrier's rules for the applicant's state where loaded; otherwise its national rules. Also checks guaranteed issue and where each carrier sells." },
+  age:     { title: 'Age on effective date', body: "Some carriers apply rules only at certain ages. Leave blank if unsure." },
+  conditions: { title: 'Health conditions', body: "Built from each carrier's application health questions and the declinable conditions in its underwriting guide. Type it the way you'd say it: common names, abbreviations and alternate spellings (for example, \"COPD\" or \"chronic obstructive pulmonary disease\") find the same condition. If a condition isn't recognized, every carrier shows Needs Review for it." },
+  medications: { title: 'Medications', body: "Includes 5,700+ prescription drugs, searchable by brand or generic name. Each one is checked against the declinable medication list in the carrier's underwriting guide. Some carriers flag a drug only when it's tied to a condition on their application." },
+  unrecognized: { title: 'Unrecognized', body: "This condition isn't on our list, so every carrier shows Needs Review for it." },
+};
+function uwTip(key) {
+  const t = UW_TIPS[key];
+  return t ? `<span class="uw-info-btn" data-tip="${key}" tabindex="0" role="button" aria-label="About ${t.title}">i</span>` : '';
+}
+(function initUWTooltips() {
+  const tt = document.getElementById('uw-tooltip');
+  const tTitle = document.getElementById('uw-tt-title');
+  const tBody = document.getElementById('uw-tt-body');
+  let pinned = null;
+  const fill = el => {
+    const t = UW_TIPS[el.dataset.tip]; if (!t) return false;
+    tTitle.textContent = t.title; tBody.textContent = t.body; return true;
+  };
+  const place = (x, y) => {
+    tt.style.left = Math.max(8, Math.min(x, window.innerWidth - 276)) + 'px';
+    tt.style.top  = Math.max(8, Math.min(y, window.innerHeight - tt.offsetHeight - 8)) + 'px';
+  };
+  const showAt = el => {
+    if (!fill(el)) return;
+    const r = el.getBoundingClientRect();
+    tt.classList.add('visible');
+    place(r.left, r.bottom + 8);
+  };
+  const hide = () => { tt.classList.remove('visible'); pinned = null; };
+  document.addEventListener('mouseover', e => {
+    const el = e.target.closest('.uw-info-btn'); if (!el || pinned) return;
+    if (fill(el)) { tt.classList.add('visible'); place(e.clientX + 14, e.clientY + 14); }
+  });
+  document.addEventListener('mousemove', e => {
+    if (!pinned && e.target.closest('.uw-info-btn')) place(e.clientX + 14, e.clientY + 14);
+  });
+  document.addEventListener('mouseout', e => {
+    if (!pinned && e.target.closest('.uw-info-btn')) tt.classList.remove('visible');
+  });
+  document.addEventListener('focusin', e => { const el = e.target.closest('.uw-info-btn'); if (el) showAt(el); });
+  document.addEventListener('focusout', e => { if (e.target.closest('.uw-info-btn')) hide(); });
+  // Click / tap: keep it open (phones have no hover). Inside a <label>, don't jump to the field.
+  document.addEventListener('click', e => {
+    const el = e.target.closest('.uw-info-btn');
+    if (el) { e.preventDefault(); e.stopPropagation(); if (pinned === el) { hide(); } else { showAt(el); pinned = el; } return; }
+    if (pinned) hide();
+  }, true);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
+  window.addEventListener('scroll', () => { if (pinned) hide(); }, { passive: true });
+})();
 
 initFormOptions();
 initStateOptions();
