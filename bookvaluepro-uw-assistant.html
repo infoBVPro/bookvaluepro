@@ -225,6 +225,23 @@ body { font-family: var(--sans); color: var(--text); background: var(--light-bg)
   border-radius: 8px; margin-top: 4px;
 }
 
+/* ── STATE GI RIGHTS PANEL ── */
+.gi-panel {
+  background: var(--white); border: 1.5px solid var(--border); border-left: 5px solid var(--emerald);
+  border-radius: 14px; padding: 14px 20px 16px; margin-bottom: 14px;
+}
+.gi-panel-head { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--slate);
+  letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 10px; }
+.gi-rule { padding: 10px 0; border-top: 1px dashed var(--border); }
+.gi-rule:first-of-type { border-top: none; padding-top: 0; }
+.gi-rule-name { font-size: 14.5px; font-weight: 600; color: var(--deep); margin-bottom: 6px; }
+.gi-rule ul { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.gi-rule li { font-size: 13px; color: var(--text); line-height: 1.5; padding-left: 14px; position: relative; }
+.gi-rule li::before { content: '•'; position: absolute; left: 2px; color: var(--emerald); }
+.gi-rule li b { font-weight: 600; color: var(--deep); }
+.gi-rule-src { font-size: 11.5px; color: var(--text-muted); margin-top: 6px; }
+.gi-none { font-size: 13px; color: var(--text-muted); }
+
 /* ── TOOLTIPS (same look as the dashboard's info buttons) ── */
 .uw-info-btn {
   display: inline-flex; align-items: center; justify-content: center;
@@ -811,6 +828,8 @@ async function runUWCheck() {
   const profile = { gender: selectedSex, heightIn, weightLb, age, state };
   const carriers = [...selectedCarriers];
 
+  if (state) await uwLoadGIRules();
+
   const notOfferedResult = carrier => ({ carrier, status: 'none', notOffered: true, ruleState: state, reasons: [], flags: [], infos: [] });
 
   if (state && UW_GUARANTEED_ISSUE_STATES.includes(state)) {
@@ -838,6 +857,96 @@ function carrierHasAnyData(carrier) {
   return (uwData.buildCharts || []).some(r => r.carrier === carrier)
     || (uwData.knockouts || []).some(r => r.carrier === carrier)
     || (uwData.declinableDrugs || []).some(r => r.carrier === carrier);
+}
+
+// ── STATE GI RIGHTS (birthday / anniversary / year-round) ───────────────
+// Read straight from the Supabase `state_gi_rules` table, so edits there
+// show up here automatically. Shown above the carrier results for the
+// chosen state.
+let uwGIRules = null; // null = not loaded yet; [] = loaded (or failed)
+async function uwLoadGIRules() {
+  if (uwGIRules) return uwGIRules;
+  try {
+    const { data, error } = await bvp.from('state_gi_rules').select('*').eq('is_active', true);
+    if (error) throw error;
+    uwGIRules = data || [];
+  } catch (e) { console.warn('state_gi_rules:', e.message || e); uwGIRules = []; }
+  return uwGIRules;
+}
+
+const _giEsc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const _giDate = d => { const x = new Date(String(d).slice(0, 10) + 'T12:00:00'); return isNaN(x) ? d : x.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
+
+function uwGIRuleLines(r) {
+  const L = [];
+  const plans = {
+    same_plan: 'Same plan letter the client has now',
+    equal_or_lesser: 'A plan with equal or lesser benefits',
+    any_plan: 'Any plan',
+    plan_a_only: 'Plan A only',
+    crosswalk: "Plan switches allowed by the state's plan chart (below)",
+  }[r.plan_eligibility];
+  if (plans) L.push(`<b>Plans:</b> ${plans}`);
+  if (r.plan_crosswalk) {
+    try {
+      const cw = typeof r.plan_crosswalk === 'string' ? JSON.parse(r.plan_crosswalk) : r.plan_crosswalk;
+      const groups = {};
+      Object.entries(cw).forEach(([from, to]) => { const k = to.join(', '); (groups[k] = groups[k] || []).push(from); });
+      Object.entries(groups).forEach(([to, from]) => L.push(`<b>From Plan ${from.join(', ')}:</b> to ${to}`));
+    } catch (e) {}
+  }
+  const scope = {
+    any_carrier: 'Any carrier',
+    same_carrier_group: 'Only with the current carrier or its affiliates',
+    same_carrier_group_then_any_fallback: "Current carrier or an affiliate; any carrier if neither sells the client's plan",
+  }[r.carrier_scope];
+  if (scope) L.push(`<b>Carriers:</b> ${scope}`);
+  const who = [];
+  if (r.min_age != null && r.max_age != null) who.push(`ages ${r.min_age}–${r.max_age}`);
+  else if (r.min_age != null) who.push(`age ${r.min_age}+`);
+  else if (r.max_age != null) who.push(`age ${r.max_age} or younger`);
+  if (r.requires_current_medsupp) who.push('must have a Medicare Supplement now');
+  if (r.min_continuous_coverage_months) who.push(`current policy in force ${r.min_continuous_coverage_months}+ months`);
+  if (r.max_coverage_gap_days) who.push(`no gap in coverage over ${r.max_coverage_gap_days} days`);
+  if (who.length) L.push(`<b>Who qualifies:</b> ${who.join('; ')}`);
+  if (r.early_application_days > 0) L.push(`<b>Apply early:</b> up to ${r.early_application_days} days before the window opens`);
+  const after = r.max_effective_days_after_app;
+  if (r.effective_not_before === 'first_of_next_month') {
+    L.push('<b>Effective date:</b> 1st of the month after the application is signed');
+  } else if (r.effective_not_before || after) {
+    const nb = { birthday: 'before the birthday', birthday_minus_30: 'more than 30 days before the birthday' }[r.effective_not_before];
+    const parts = [nb && `${nb}`, after && `more than ${after} days after the application`].filter(Boolean);
+    if (parts.length) L.push(`<b>Effective date:</b> can't be ${parts.join(' or ')}`);
+  }
+  if (r.rule_effective_date && new Date(r.rule_effective_date) > new Date()) L.push(`<b>Starts:</b> ${_giDate(r.rule_effective_date)}`);
+  if (r.exclusions) L.push(`<b>Exclusions:</b> ${_giEsc(r.exclusions)}`);
+  if (r.documentation_required) L.push(`<b>Documents:</b> ${_giEsc(r.documentation_required)}`);
+  if (r.notes) L.push(`<b>Note:</b> ${_giEsc(r.notes)}`);
+  return L;
+}
+
+function uwGIPanelHTML(state) {
+  if (!state || !uwGIRules) return '';
+  const stName = UW_STATE_NAMES[state] || state;
+  const today = new Date().toISOString().slice(0, 10);
+  const order = { continuous: 0, birthday: 1, anniversary: 2, annual_month: 3, plan_conversion: 4 };
+  const rows = uwGIRules
+    .filter(r => r.state === state && (!r.rule_end_date || String(r.rule_end_date).slice(0, 10) >= today))
+    .sort((a, b) => (order[a.rule_code] ?? 9) - (order[b.rule_code] ?? 9));
+  let body;
+  if (rows.length) {
+    body = rows.map(r => `
+      <div class="gi-rule">
+        <div class="gi-rule-name">${_giEsc(r.rule_name)}${r.needs_review ? ' <span style="font-weight:400;color:var(--review)">(unconfirmed)</span>' : ''}</div>
+        <ul>${uwGIRuleLines(r).map(x => `<li>${x}</li>`).join('')}</ul>
+        ${r.source_document ? `<div class="gi-rule-src">Source: ${_giEsc(r.source_document)}${r.source_page ? `, p. ${_giEsc(r.source_page)}` : ''}</div>` : ''}
+      </div>`).join('');
+  } else if (UW_GUARANTEED_ISSUE_STATES.includes(state)) {
+    body = `<div class="gi-rule"><div class="gi-rule-name">Year-round guaranteed issue</div><ul><li>Medicare Supplement is sold without health questions all year in ${stName}.</li></ul></div>`;
+  } else {
+    body = `<div class="gi-none">${stName} has no birthday, anniversary or year-round guaranteed-issue rule. Federal guaranteed-issue rights (such as losing employer coverage) still apply.</div>`;
+  }
+  return `<div class="gi-panel"><div class="gi-panel-head">${stName} state GI rights${uwTip('stateGI')}</div>${body}</div>`;
 }
 
 // One line under each result saying which rules were applied. With state
@@ -883,7 +992,8 @@ function renderResults(results, carriers) {
   const order = { decline: 0, review: 1, accept: 2, none: 3 };
   const sorted = [...results].sort((a, b) => order[a.status] - order[b.status]);
 
-  wrap.innerHTML = sorted.map(r => {
+  const giState = document.getElementById('uw-state').value || null;
+  wrap.innerHTML = uwGIPanelHTML(giState) + sorted.map(r => {
     if (r.notOffered) {
       const stName = UW_STATE_NAMES[r.ruleState] || r.ruleState;
       return `
@@ -977,6 +1087,7 @@ const UW_TIPS = {
   age:     { title: 'Age on effective date', body: "Only affects carriers with age-based rules (currently Physicians Mutual), which apply some conditions and medications only at certain ages. If left blank, those show as Needs Review." },
   conditions: { title: 'Health conditions', body: "Built from each carrier's application health questions and the declinable conditions in its underwriting guide. Type it the way you'd say it: common names, abbreviations and alternate spellings (for example, \"COPD\" or \"chronic obstructive pulmonary disease\") find the same condition. If a condition isn't recognized, every carrier shows Needs Review for it." },
   medications: { title: 'Medications', body: "Includes 5,700+ prescription drugs, searchable by brand or generic name. Each one is checked against the declinable medication list in the carrier's underwriting guide. Some carriers flag a drug only when it's tied to a condition on their application." },
+  stateGI: { title: 'State GI rights', body: "Times when this state lets a client switch Medicare Supplement plans without health questions (birthday, anniversary or year-round rules). Inside the window, the carrier can't decline for health — but the switch is usually written as guaranteed issue, which often pays little or no commission. Federal guaranteed-issue rights (like losing employer coverage) apply in every state and aren't listed here." },
   unrecognized: { title: 'Unrecognized', body: "This condition isn't on our list, so every carrier shows Needs Review for it." },
 };
 function uwTip(key) {
