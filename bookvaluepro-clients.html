@@ -1004,13 +1004,16 @@ let bvpBook = null;
 
   document.getElementById('agent-name').textContent = bvpSession.user.email;
 
-  bvpBook = await bvpGetActiveBook(bvpSession.user.id);
+  // An agency owner can open an agent's clients read-only (?agent=<id>).
+  const view = await bvpResolveViewAgent(bvpSession);
+
+  bvpBook = await bvpGetActiveBook(view.agentId);
   if (bvpBook) {
     document.getElementById('book-name').textContent = bvpBook.file_name + ' — ' + bvpBook.policy_count + ' policies';
     const policies = await bvpGetPolicies(bvpBook.id);
     // Enrich with live NPV from Supabase commission rates
     await bvpLoadCarriers(); // carrier master list (Supabase `carriers` table)
-    const enriched = await bvpEnrichPolicies(bvpSession.user.id, policies);
+    const enriched = await bvpEnrichPolicies(view.agentId, policies);
     allClients = enriched.map(p => ({
       ...p,
       name: [p.first_name, p.last_name].filter(Boolean).join(' ') || null,

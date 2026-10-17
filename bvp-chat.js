@@ -229,7 +229,8 @@
     try {
       const { data: { session } } = await bvp.auth.getSession();
       if (!session) throw new Error('Not authenticated');
-      const agentId = session.user.id;
+      // When an agency owner is viewing an agent's book, answer about that book.
+      const agentId = (typeof BVP_VIEW_AGENT_ID !== 'undefined' && BVP_VIEW_AGENT_ID) || session.user.id;
       const accessToken = session.access_token;
 
       const [book, knowledgeDocs] = await Promise.all([

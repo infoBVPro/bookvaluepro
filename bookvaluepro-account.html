@@ -271,7 +271,10 @@ function renderPaidPlan(sub, agency) {
         ${row('Licenses in use', used > included ? `${used} (${included} included + ${used - included} extra)` : `${used} of ${included} included`)}
         ${row('Extra licenses', `${fmtMoney(BVP_PRICING.agency.extraLicense)} / month each beyond ${included}`)}
       </dl>
-      <p class="muted-note">Inviting agents and managing your team will be added to the Agency section soon.</p>`;
+      <div class="actions">
+        <a class="btn btn-primary" href="${BVP_TEAM_PAGE}">Manage team</a>
+        <a class="btn btn-outline" href="${BVP_AGENCY_PAGE}">Agency Overview</a>
+      </div>`;
     document.getElementById('agency-card').classList.remove('hidden');
   }
 }
@@ -294,7 +297,7 @@ async function loadSubscription(access, userId) {
 async function render(session) {
   const access = await bvpGetAccess(true);
   document.getElementById('bvp-sidenav').classList.toggle('no-access', !access.has_access);
-  if (access.has_access) bvpSetAdminNavVisible(session.user.email);
+  if (access.has_access) { bvpSetAdminNavVisible(session.user.email); bvpAddAccountNav(access); }
 
   switch (access.reason) {
     case 'admin':

@@ -205,7 +205,7 @@ async function bvpRequireAuth() {
   if (!session) return null;
   const access = await bvpGetAccess();
   if (!access.has_access) { window.location.href = BVP_PLANS_PAGE; return null; }
-  bvpAddAccountNav();
+  bvpAddAccountNav(access);
   return session;
 }
 
@@ -273,16 +273,117 @@ async function bvpOpenBillingPortal() {
   window.location.href = url;
 }
 
-// Adds the "Account" link to the bottom of the side nav on every tool page.
-function bvpAddAccountNav() {
-  const bottom = document.querySelector('.bvp-sidenav-bottom');
-  if (!bottom || document.getElementById('bvp-sidenav-account')) return;
+// Adds "Account" (everyone) and, for agency owners, "Agency" + "Team" links
+// to the bottom of the side nav on every tool page.
+function _bvpNavLink(id, href, label, svgPaths) {
   const a = document.createElement('a');
-  a.href = BVP_ACCOUNT_PAGE;
+  a.href = href;
   a.className = 'bvp-sidenav-item';
-  a.id = 'bvp-sidenav-account';
-  a.innerHTML = '<span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.2 3.6-7 8-7s8 2.8 8 7"/></svg></span><span class="bvp-sidenav-label">Account</span>';
-  bottom.insertBefore(a, bottom.firstChild);
+  a.id = id;
+  a.innerHTML = '<span class="bvp-sidenav-node"><svg viewBox="0 0 24 24">' + svgPaths + '</svg></span><span class="bvp-sidenav-label">' + label + '</span>';
+  const page = location.pathname.split('/').pop();
+  if (page === href) a.classList.add('active');
+  return a;
+}
+
+function bvpAddAccountNav(access) {
+  const bottom = document.querySelector('.bvp-sidenav-bottom');
+  if (!bottom) return;
+  const first = bottom.firstChild;
+  if (access && access.reason === 'agency_owner' && !document.getElementById('bvp-sidenav-agency')) {
+    bottom.insertBefore(_bvpNavLink('bvp-sidenav-agency', BVP_AGENCY_PAGE, 'Agency Overview',
+      '<path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6"/>'), first);
+    bottom.insertBefore(_bvpNavLink('bvp-sidenav-team', BVP_TEAM_PAGE, 'Team',
+      '<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"/><path d="M17 11v6M14 14h6"/>'), first);
+  }
+  if (!document.getElementById('bvp-sidenav-account')) {
+    bottom.insertBefore(_bvpNavLink('bvp-sidenav-account', BVP_ACCOUNT_PAGE, 'Account',
+      '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.2 3.6-7 8-7s8 2.8 8 7"/>'), first);
+  }
+}
+
+// ── AGENCIES ─────────────────────────────────────────────────
+const BVP_AGENCY_PAGE = 'bookvaluepro-agency.html';
+const BVP_TEAM_PAGE   = 'bookvaluepro-agency-team.html';
+const BVP_JOIN_PAGE   = 'bookvaluepro-join.html';
+
+// Calls the agency-team server function. Throws an Error with a readable message.
+async function bvpAgencyAction(action, payload = {}) {
+  return bvpCallFunction('agency-team', { action, ...payload, returnBase: bvpSiteBase() });
+}
+
+// The owner's team: [{ user_id, email, role, joined_at }]. Empty for non-owners.
+async function bvpGetAgencyRoster() {
+  const { data, error } = await bvp.rpc('bvp_agency_roster');
+  if (error) { console.error('bvpGetAgencyRoster:', error); return []; }
+  return data || [];
+}
+
+async function bvpGetAgency(agencyId) {
+  const { data, error } = await bvp.from('agencies').select('*').eq('id', agencyId).maybeSingle();
+  if (error) { console.error('bvpGetAgency:', error); return null; }
+  return data;
+}
+
+async function bvpGetAgencyInvites(agencyId) {
+  const { data, error } = await bvp.from('agency_invites')
+    .select('id, email, status, created_at, expires_at')
+    .eq('agency_id', agencyId).eq('status', 'pending')
+    .order('created_at', { ascending: false });
+  if (error) { console.error('bvpGetAgencyInvites:', error); return []; }
+  return data || [];
+}
+
+// ── VIEW-ONLY MODE (agency owner looking at an agent's book) ──
+// Pages that support it call bvpResolveViewAgent(session) and use the returned
+// agentId instead of session.user.id. With ?agent=<id> in the address, an agency
+// owner sees that agent's book read-only; everyone else sees their own book.
+let BVP_READ_ONLY = false;
+let BVP_VIEW_AGENT_ID = null; // set while viewing an agent's book
+
+async function bvpResolveViewAgent(session) {
+  const requested = new URLSearchParams(location.search).get('agent');
+  if (!requested || requested === session.user.id) return { agentId: session.user.id, readOnly: false };
+  const roster = await bvpGetAgencyRoster();
+  const member = roster.find(m => m.user_id === requested);
+  if (!member) {
+    // Not one of your agents: show your own book.
+    history.replaceState(null, '', location.pathname);
+    return { agentId: session.user.id, readOnly: false };
+  }
+  BVP_READ_ONLY = true;
+  BVP_VIEW_AGENT_ID = member.user_id;
+  bvpShowReadOnlyBar(member);
+  return { agentId: member.user_id, readOnly: true, agentEmail: member.email };
+}
+
+function bvpShowReadOnlyBar(member) {
+  document.body.classList.add('bvp-readonly');
+  if (!document.getElementById('bvp-readonly-style')) {
+    const st = document.createElement('style');
+    st.id = 'bvp-readonly-style';
+    st.textContent = `
+      .bvp-readonly-bar{position:sticky;top:0;z-index:150;background:#fff4dc;color:#6b4a00;border-bottom:1px solid #f0d9a6;
+        font-family:'DM Sans',sans-serif;font-size:13px;padding:9px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+      .bvp-readonly-bar strong{color:#4a3300;}
+      .bvp-readonly-bar a{color:#6b4a00;font-weight:600;text-decoration:underline;}
+      .bvp-readonly-bar .sp{flex:1;}
+      body.bvp-readonly .edit-toggle, body.bvp-readonly #btn-save, body.bvp-readonly #btn-cancel,
+      body.bvp-readonly .priority-override-hint button { display:none !important; }`;
+    document.head.appendChild(st);
+  }
+  const bar = document.createElement('div');
+  bar.className = 'bvp-readonly-bar';
+  const id = encodeURIComponent(member.user_id);
+  const safe = String(member.email).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  bar.innerHTML = `<span>👁 Viewing <strong>${safe}</strong>'s book: <strong>view only</strong></span>
+    <a href="bookvaluepro-dashboard.html?agent=${id}">Dashboard</a>
+    <a href="bookvaluepro-clients.html?agent=${id}">Clients</a>
+    <span class="sp"></span>
+    <a href="${BVP_AGENCY_PAGE}">← Back to Agency Overview</a>`;
+  const header = document.querySelector('.bvp-header');
+  if (header && header.parentNode) header.parentNode.insertBefore(bar, header.nextSibling);
+  else document.body.prepend(bar);
 }
 
 // ── BETA TESTERS (admin only) ─────────────────────────────────
@@ -533,6 +634,7 @@ async function bvpResetCommissionRate(agentId, carrier, state, plan, enrollmentT
 
 // ── ASSUMPTIONS ───────────────────────────────────────────────
 async function bvpSaveAssumptions(bookId, discountRate, savingsPct) {
+  if (BVP_READ_ONLY) return; // viewing another agent's book
   const { error } = await bvp.from('books')
     .update({ discount_rate: discountRate, savings_pct: savingsPct }).eq('id', bookId);
   if (error) console.error('bvpSaveAssumptions:', error);
@@ -704,6 +806,7 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
 // Saves a manual priority override for a single policy.
 // Sets priority to the new value and records it was manually overridden.
 async function bvpSetPriorityOverride(policyId, newPriority, agentEmail) {
+  if (BVP_READ_ONLY) return false; // viewing another agent's book
   const { error } = await bvp.from('policies').update({
     priority:             newPriority,
     priority_override:    newPriority,
@@ -715,6 +818,7 @@ async function bvpSetPriorityOverride(policyId, newPriority, agentEmail) {
 
 // Clears a manual override, restoring the calculated priority.
 async function bvpClearPriorityOverride(policyId, calculatedPriority) {
+  if (BVP_READ_ONLY) return false; // viewing another agent's book
   const { error } = await bvp.from('policies').update({
     priority:             calculatedPriority,
     priority_override:    null,

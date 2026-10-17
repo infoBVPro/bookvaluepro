@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BookValuePro — Agency Overview</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="bvp-supabase.js"></script>
+<style>
+:root{--forest:#1a5c3a;--emerald:#3da272;--deep:#0d2e1e;--slate:#5a6472;--mist:#e6f5ee;--sage:#7abf9a;--light-bg:#f7faf8;--border:#dde8e2;--text:#1a1a1a;--text-muted:#556b5e;--danger:#c0392b;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;color:var(--text);background:var(--light-bg);min-height:100vh;}
+
+.bvp-header{background:#0d2e1e;min-height:64px;display:flex;align-items:center;justify-content:flex-end;padding:0 2rem;border-bottom:1px solid rgba(61,162,114,0.15);position:sticky;top:0;z-index:100;gap:16px;}
+.bvp-agent-email{font-size:12px;color:#7abf9a;white-space:nowrap;}
+.bvp-signout{font-size:12px;color:#7abf9a;background:transparent;border:1px solid rgba(122,191,154,0.3);padding:6px 14px;border-radius:6px;cursor:pointer;font-family:inherit;}
+.bvp-signout:hover{border-color:#3da272;color:white;}
+
+.page{max-width:1200px;margin:0 auto;padding:36px 40px 80px;}
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:1.5rem;}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--emerald);text-transform:uppercase;margin-bottom:0.5rem;}
+h1{font-family:'DM Serif Display',serif;font-size:34px;color:var(--deep);font-weight:400;}
+.head-actions a{font-size:13px;color:var(--forest);font-weight:600;text-decoration:none;border:1.5px solid var(--border);background:white;padding:9px 16px;border-radius:9px;}
+.head-actions a:hover{border-color:var(--emerald);}
+
+.tiles{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:18px;}
+.tile{background:white;border:1px solid var(--border);border-radius:14px;padding:16px 18px;}
+.tile.feature{background:var(--deep);border-color:var(--deep);}
+.tile-label{font-size:11px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:var(--slate);margin-bottom:8px;}
+.tile.feature .tile-label{color:var(--sage);}
+.tile-val{font-family:'DM Serif Display',serif;font-size:28px;color:var(--deep);line-height:1.1;font-variant-numeric:tabular-nums;}
+.tile.feature .tile-val{color:white;}
+.tile-sub{font-size:12px;color:var(--text-muted);margin-top:6px;}
+.tile.feature .tile-sub{color:var(--sage);}
+
+.card{background:white;border:1px solid var(--border);border-radius:16px;padding:1.25rem 1.25rem 0.5rem;margin-bottom:16px;}
+.card-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;padding:0 0.25rem 0.75rem;}
+.card-label{font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--slate);}
+.card-note{font-size:12px;color:var(--text-muted);}
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:820px;}
+th{text-align:right;font-size:10.5px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--slate);padding:9px 8px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;line-height:1.35;vertical-align:bottom;}
+th:first-child,td:first-child{text-align:left;}
+th.sorted{color:var(--forest);}
+th .arrow{font-size:9px;margin-left:3px;}
+th.group{cursor:default;text-align:center;border-bottom:none;padding-bottom:0;color:var(--text-muted);font-size:10px;}
+td{padding:12px 8px;border-bottom:1px solid var(--border);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+tbody tr:hover td{background:#fafcfb;}
+tfoot td{font-weight:600;color:var(--deep);border-top:2px solid var(--border);border-bottom:none;}
+td.agent{font-weight:500;color:var(--deep);}
+td.agent .role{font-size:11px;color:var(--text-muted);font-weight:400;margin-left:6px;}
+td.muted{color:var(--text-muted);}
+.view{font-size:12px;color:var(--forest);font-weight:600;text-decoration:none;border:1px solid var(--border);padding:5px 10px;border-radius:7px;}
+.view:hover{border-color:var(--emerald);}
+.nobook{font-size:12px;color:var(--text-muted);}
+.loading{color:var(--text-muted);font-size:14px;padding:12px 4px;}
+.foot-note{font-size:12px;color:var(--text-muted);line-height:1.6;margin:10px 4px 0;}
+.hidden{display:none !important;}
+
+/* ── SIDE NAVIGATION (canonical — same across all pages) ── */
+.bvp-sidenav {
+  position: fixed; top: 0; left: 0; bottom: 0; width: 64px;
+  background: #0d2e1e; border-right: 1px solid rgba(61,162,114,0.15);
+  display: flex; flex-direction: column; z-index: 500;
+  overflow: hidden; transition: width .18s ease;
+  font-family: 'DM Sans', sans-serif;
+}
+.bvp-sidenav:hover, .bvp-sidenav.expanded { width: 218px; box-shadow: 6px 0 28px rgba(0,0,0,.18); }
+.bvp-sidenav-logo {
+  display: flex; align-items: center; gap: 10px; text-decoration: none;
+  height: 64px; padding: 0 15px; flex-shrink: 0;
+  border-bottom: 1px solid rgba(61,162,114,0.12);
+}
+.bvp-sidenav-mark {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+  background: #1a5c3a; border: 1.5px solid #3da272;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; color: white; font-family: 'DM Sans', sans-serif;
+}
+.bvp-sidenav-word {
+  font-family: 'DM Serif Display', serif; font-size: 16px; color: white;
+  white-space: nowrap; opacity: 0; transition: opacity .12s;
+}
+.bvp-sidenav-word em { color: #3da272; font-style: normal; }
+.bvp-sidenav:hover .bvp-sidenav-word, .bvp-sidenav.expanded .bvp-sidenav-word { opacity: 1; transition-delay: .06s; }
+.bvp-sidenav-steps { position: relative; padding: 14px 0; }
+
+.bvp-sidenav-item {
+  position: relative; display: flex; align-items: center; gap: 14px;
+  height: 44px; padding: 0 21px; color: #7abf9a; text-decoration: none;
+  white-space: nowrap; cursor: pointer; transition: color .15s, background .15s;
+}
+.bvp-sidenav-item:hover { color: white; background: rgba(61,162,114,0.08); }
+.bvp-sidenav-item.active { color: white; font-weight: 500; background: rgba(61,162,114,0.14); cursor: default; }
+.bvp-sidenav-item.locked { color: rgba(122,191,154,0.3); cursor: not-allowed; pointer-events: none; }
+.bvp-sidenav-node {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center;
+  position: relative; z-index: 1;
+}
+.bvp-sidenav-node svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.bvp-sidenav-item.active .bvp-sidenav-node { background: #3da272; color: white; }
+.bvp-sidenav-item.done .bvp-sidenav-node { background: #1a5c3a; color: #3da272; }
+.bvp-sidenav-item.locked .bvp-sidenav-node { background: rgba(255,255,255,0.05); color: rgba(122,191,154,0.3); }
+.bvp-sidenav-label { font-size: 13px; opacity: 0; transition: opacity .12s; }
+.bvp-sidenav:hover .bvp-sidenav-label, .bvp-sidenav.expanded .bvp-sidenav-label { opacity: 1; transition-delay: .06s; }
+.bvp-sidenav-bottom { border-top: 1px solid rgba(61,162,114,0.12); padding: 10px 0; flex-shrink: 0; }
+#bvp-sidenav-admin { display: none; }
+body { padding-left: 64px; }
+@media (max-width: 640px) {
+  .bvp-sidenav.expanded { width: 200px; }
+}
+
+
+@media (max-width:1000px){ .tiles{grid-template-columns:repeat(3,1fr);} }
+@media (max-width:640px){
+  .page{padding:24px 16px 60px;}
+  .tiles{grid-template-columns:1fr 1fr;}
+  .tile.feature{grid-column:1 / -1;}
+  .bvp-header{padding:10px 1rem;}
+  .bvp-agent-email{display:none;}
+}
+</style>
+</head>
+<body>
+<nav class="bvp-sidenav" id="bvp-sidenav">
+  <a href="bookvaluepro-dashboard.html" class="bvp-sidenav-logo">
+    <div class="bvp-sidenav-mark">BV</div>
+    <span class="bvp-sidenav-word">Book<em>Value</em>Pro</span>
+  </a>
+  <div class="bvp-sidenav-steps">
+    <a href="bookvaluepro-upload.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M12 16V4M12 4l-5 5M12 4l5 5"/><path d="M4 16v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg></span><span class="bvp-sidenav-label">Upload</span></a>
+    <a href="bookvaluepro-dashboard.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.3"/><rect x="14" y="3" width="7" height="7" rx="1.3"/><rect x="3" y="14" width="7" height="7" rx="1.3"/><rect x="14" y="14" width="7" height="7" rx="1.3"/></svg></span><span class="bvp-sidenav-label">Dashboard</span></a>
+    <a href="bookvaluepro-clients.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"/><circle cx="17" cy="8.5" r="2.4"/><path d="M15.5 14.7c2.6.3 4.5 2.3 4.5 5.3"/></svg></span><span class="bvp-sidenav-label">Clients</span></a>
+    <a href="bookvaluepro-outreach.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 00-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0014.3 4.9L20 16"/><path d="M20 21v-5h-5"/></svg></span><span class="bvp-sidenav-label">Renewal Outreach</span></a>
+    <a href="bookvaluepro-leads.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="3.5"/><path d="M3 20c0-3.6 2.7-6 6-6s6 2.4 6 6"/><path d="M18 8v6M21 11h-6"/></svg></span><span class="bvp-sidenav-label">Leads</span></a>
+    <a href="bookvaluepro-lead-outreach.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4 18-7z"/></svg></span><span class="bvp-sidenav-label">Lead Outreach</span></a>
+    <a href="bookvaluepro-commissions.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6.5v11M15 9.2c0-1.4-1.3-2.2-3-2.2s-3 .9-3 2.2c0 1.4 1.3 1.8 3 2.2 1.7.4 3 1 3 2.4 0 1.3-1.3 2.2-3 2.2s-3-.8-3-2.2"/></svg></span><span class="bvp-sidenav-label">Commissions</span></a>
+    <a href="bookvaluepro-uw-assistant.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg></span><span class="bvp-sidenav-label">Underwriting Assistant</span></a>
+  </div>
+  <div class="bvp-sidenav-bottom">
+    <a href="bookvaluepro-admin.html" class="bvp-sidenav-item" id="bvp-sidenav-admin"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg></span><span class="bvp-sidenav-label">Admin</span></a>
+  </div>
+</nav>
+
+<header class="bvp-header">
+  <span class="bvp-agent-email" id="agent-email"></span>
+  <button class="bvp-signout" onclick="bvpSignOut()">Sign out</button>
+</header>
+
+<main class="page">
+  <div class="head">
+    <div>
+      <div class="eyebrow">Agency Overview</div>
+      <h1 id="agency-name">Your agency</h1>
+    </div>
+    <div class="head-actions"><a href="bookvaluepro-agency-team.html">Manage team →</a></div>
+  </div>
+
+  <div class="tiles">
+    <div class="tile feature"><div class="tile-label">Current LTV</div><div class="tile-val" id="t-curr">—</div><div class="tile-sub" id="t-curr-sub">Across all agents</div></div>
+    <div class="tile"><div class="tile-label">Opportunity LTV</div><div class="tile-val" id="t-opp">—</div><div class="tile-sub">If Save &amp; Switch is acted on</div></div>
+    <div class="tile"><div class="tile-label">Policies</div><div class="tile-val" id="t-pol">—</div><div class="tile-sub" id="t-prem">—</div></div>
+    <div class="tile"><div class="tile-label">Renewals, next 3 mo.</div><div class="tile-val" id="t-ren">—</div><div class="tile-sub">Policies with an anniversary coming up</div></div>
+    <div class="tile"><div class="tile-label">Agents</div><div class="tile-val" id="t-agents">—</div><div class="tile-sub" id="t-agents-sub">—</div></div>
+  </div>
+
+  <section class="card">
+    <div class="card-head">
+      <div class="card-label">By agent</div>
+      <div class="card-note" id="progress">Loading…</div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr id="sort-row">
+            <th data-key="email">Agent</th>
+            <th data-key="policies">Policies</th>
+            <th data-key="premium">Annual<br>premium</th>
+            <th data-key="curr">Current<br>LTV</th>
+            <th data-key="opp">Opportunity<br>LTV</th>
+            <th data-key="renewals" title="Policies with an anniversary in the next 3 months">Renewals<br>next 3 mo.</th>
+            <th data-key="touches" title="Calls, emails, notes and stage changes logged on leads in the last 30 days">Lead touches<br>last 30 days</th>
+            <th data-key="openLeads">Open<br>leads</th>
+            <th data-key="won">Leads won<br>last 30 days</th>
+            <th style="cursor:default"></th>
+          </tr>
+        </thead>
+        <tbody id="rows"><tr><td colspan="10" class="loading">Loading your team's books…</td></tr></tbody>
+        <tfoot id="totals"></tfoot>
+      </table>
+    </div>
+    <p class="foot-note">Book values use each agent's own commission rates and assumptions, the same numbers they see on their dashboard. "Lead touches" counts logged calls, emails, notes and stage changes on leads; renewal outreach isn't logged yet, so it isn't counted here. Click any column to sort.</p>
+  </section>
+</main>
+
+<script>
+let rows = [];
+let sortKey = 'curr', sortDir = -1;
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const money = v => '$' + Math.round(v || 0).toLocaleString('en-US');
+const moneyShort = v => {
+  const n = Math.round(v || 0);
+  if (Math.abs(n) >= 1e6) return '$' + (n / 1e6).toFixed(n >= 1e7 ? 1 : 2).replace(/\.?0+$/, '') + 'M';
+  if (Math.abs(n) >= 1e4) return '$' + Math.round(n / 1e3).toLocaleString('en-US') + 'K';
+  return '$' + n.toLocaleString('en-US');
+};
+const num = v => (v || 0).toLocaleString('en-US');
+
+// Same formula as the dashboard's Opportunity LTV, so the numbers match when you drill in.
+function oppLTV(p, savPct, discount) {
+  const rr = p._renRates || [];
+  let v = 0;
+  for (let i = 0; i < rr.length; i++) v += (rr[i] * (p.curr_prem || 0) * (1 - savPct / 100) * 12) / Math.pow(1 + discount, i + 1);
+  return v;
+}
+
+function renewalMonths() {
+  const m = new Date().getMonth() + 1;
+  return [m, (m % 12) + 1, ((m + 1) % 12) + 1];
+}
+
+async function loadAgentBook(member) {
+  const row = { ...member, policies: 0, premium: 0, curr: 0, opp: 0, renewals: 0, touches: 0, openLeads: 0, won: 0, hasBook: false };
+  const book = await bvpGetActiveBook(member.user_id);
+  if (!book) return row;
+  const policies = await bvpGetPolicies(book.id);
+  if (!policies.length) return row;
+  const discountPct = book.discount_rate || 10;
+  const savingsPct = book.savings_pct || 10;
+  const enriched = await bvpEnrichPolicies(member.user_id, policies, discountPct, savingsPct);
+  const months = renewalMonths();
+  row.hasBook = true;
+  row.policies = enriched.length;
+  enriched.forEach(p => {
+    row.premium += p._annualCurrPrem || 0;
+    row.curr += p.curr_npv || 0;
+    row.opp += oppLTV(p, savingsPct, discountPct / 100);
+    if (p.eff_month && months.includes(Number(p.eff_month))) row.renewals += 1;
+  });
+  return row;
+}
+
+async function loadLeadStats(ids) {
+  const cutoff = new Date(Date.now() - 30 * 864e5).toISOString();
+  const { data: leads, error } = await bvp.from('leads').select('id, agent_id, stage, converted_at').in('agent_id', ids);
+  if (error) { console.error('leads:', error); return {}; }
+  const byAgent = {};
+  const leadOwner = {};
+  (leads || []).forEach(l => {
+    leadOwner[l.id] = l.agent_id;
+    const s = byAgent[l.agent_id] ||= { touches: 0, openLeads: 0, won: 0 };
+    if (!['won', 'lost'].includes(l.stage)) s.openLeads += 1;
+    if (l.stage === 'won' && l.converted_at && l.converted_at >= cutoff) s.won += 1;
+  });
+  const leadIds = Object.keys(leadOwner);
+  if (leadIds.length) {
+    const { data: acts, error: e2 } = await bvp.from('lead_activity').select('lead_id').gte('created_at', cutoff);
+    if (e2) console.error('lead_activity:', e2);
+    (acts || []).forEach(a => {
+      const agent = leadOwner[a.lead_id];
+      if (agent) (byAgent[agent] ||= { touches: 0, openLeads: 0, won: 0 }).touches += 1;
+    });
+  }
+  return byAgent;
+}
+
+function renderTotals() {
+  const t = rows.reduce((s, r) => {
+    ['policies', 'premium', 'curr', 'opp', 'renewals', 'touches', 'openLeads', 'won'].forEach(k => s[k] += r[k] || 0);
+    return s;
+  }, { policies: 0, premium: 0, curr: 0, opp: 0, renewals: 0, touches: 0, openLeads: 0, won: 0 });
+
+  document.getElementById('t-curr').textContent = moneyShort(t.curr);
+  document.getElementById('t-opp').textContent = moneyShort(t.opp);
+  document.getElementById('t-pol').textContent = num(t.policies);
+  document.getElementById('t-prem').textContent = money(t.premium) + ' annual premium';
+  document.getElementById('t-ren').textContent = num(t.renewals);
+  const withBooks = rows.filter(r => r.hasBook).length;
+  document.getElementById('t-agents').textContent = rows.length;
+  document.getElementById('t-agents-sub').textContent = `${withBooks} with a book uploaded`;
+
+  document.getElementById('totals').innerHTML = rows.length > 1 ? `<tr>
+    <td>Agency total</td><td>${num(t.policies)}</td><td>${money(t.premium)}</td><td>${money(t.curr)}</td><td>${money(t.opp)}</td>
+    <td>${num(t.renewals)}</td><td>${num(t.touches)}</td><td>${num(t.openLeads)}</td><td>${num(t.won)}</td><td></td></tr>` : '';
+}
+
+function renderRows() {
+  const sorted = [...rows].sort((a, b) => {
+    const av = a[sortKey], bv = b[sortKey];
+    if (typeof av === 'string') return av.localeCompare(bv) * sortDir;
+    return ((av || 0) - (bv || 0)) * sortDir;
+  });
+  document.querySelectorAll('#sort-row th[data-key]').forEach(th => {
+    const on = th.dataset.key === sortKey;
+    th.classList.toggle('sorted', on);
+    if (!th.dataset.label) th.dataset.label = th.innerHTML;
+    th.innerHTML = th.dataset.label + (on ? `<span class="arrow">${sortDir > 0 ? '▲' : '▼'}</span>` : '');
+  });
+  document.getElementById('rows').innerHTML = sorted.map(r => {
+    const link = r.isMe ? 'bookvaluepro-dashboard.html' : `bookvaluepro-dashboard.html?agent=${encodeURIComponent(r.user_id)}`;
+    const book = r.hasBook
+      ? `<td>${num(r.policies)}</td><td>${money(r.premium)}</td><td>${money(r.curr)}</td><td>${money(r.opp)}</td><td>${num(r.renewals)}</td>`
+      : `<td colspan="5" class="nobook" style="text-align:center;">No book uploaded yet</td>`;
+    return `<tr>
+      <td class="agent">${esc(r.email)}${r.role === 'owner' ? '<span class="role">Owner</span>' : ''}${r.isMe ? '<span class="role">(you)</span>' : ''}</td>
+      ${book}
+      <td>${num(r.touches)}</td><td>${num(r.openLeads)}</td><td>${num(r.won)}</td>
+      <td><a class="view" href="${link}">${r.isMe ? 'Open' : 'View'}</a></td></tr>`;
+  }).join('') || '<tr><td colspan="10" class="loading">No agents yet. <a href="bookvaluepro-agency-team.html">Invite your first agent →</a></td></tr>';
+}
+
+document.getElementById('sort-row').addEventListener('click', e => {
+  const th = e.target.closest('th[data-key]');
+  if (!th) return;
+  const key = th.dataset.key;
+  sortDir = key === sortKey ? -sortDir : (key === 'email' ? 1 : -1);
+  sortKey = key;
+  renderRows();
+});
+
+(async () => {
+  const session = await bvpRequireAuth();
+  if (!session) return;
+  document.getElementById('agent-email').textContent = session.user.email;
+  bvpSetAdminNavVisible(session.user.email);
+
+  const access = await bvpGetAccess();
+  if (access.reason !== 'agency_owner') { window.location.replace(BVP_ACCOUNT_PAGE); return; }
+  const agency = await bvpGetAgency(access.agency_id);
+  if (agency) document.getElementById('agency-name').textContent = agency.name;
+
+  const roster = await bvpGetAgencyRoster();
+  const progress = document.getElementById('progress');
+  const leadStats = await loadLeadStats(roster.map(m => m.user_id));
+
+  // Load books a few at a time so a large team doesn't overload the browser.
+  let done = 0;
+  const queue = [...roster];
+  const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
+    while (queue.length) {
+      const m = queue.shift();
+      let row;
+      try { row = await loadAgentBook(m); }
+      catch (err) { console.error('loadAgentBook', m.email, err); row = { ...m, hasBook: false }; }
+      Object.assign(row, leadStats[m.user_id] || {}, { isMe: m.user_id === session.user.id });
+      rows.push(row);
+      done += 1;
+      progress.textContent = done < roster.length ? `Loading ${done} of ${roster.length} agents…` : `Updated ${new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+      renderRows(); renderTotals();
+    }
+  });
+  await Promise.all(workers);
+  if (!roster.length) { renderRows(); renderTotals(); progress.textContent = ''; }
+})();
+
+(function () {
+  var nav = document.getElementById('bvp-sidenav');
+  if (!nav) return;
+  if (!window.matchMedia('(hover: hover)').matches) {
+    nav.addEventListener('click', function (e) {
+      if (!nav.classList.contains('expanded')) {
+        var link = e.target.closest('a');
+        if (link) { e.preventDefault(); nav.classList.add('expanded'); }
+      }
+    });
+    document.addEventListener('click', function (e) {
+      if (!nav.contains(e.target)) nav.classList.remove('expanded');
+    });
+  }
+})();
+</script>
+</body>
+</html>

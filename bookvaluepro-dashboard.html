@@ -1350,6 +1350,7 @@ function renderAll() {
 // ── SUPABASE INIT ─────────────────────────────────────────────
 let bvpSession = null;
 let bvpBook    = null;
+let bvpViewAgentId = null; // whose book is shown (an agency owner can view an agent's, read-only)
 
 async function initFromSupabase() {
   bvpSession = await bvpRequireAuth();
@@ -1359,10 +1360,13 @@ async function initFromSupabase() {
   const nameEl = document.getElementById('agent-name');
   if (nameEl) nameEl.textContent = bvpSession.user.email;
 
+  const view = await bvpResolveViewAgent(bvpSession);
+  bvpViewAgentId = view.agentId;
+
   showLoadingState();
 
 
-  bvpBook = await bvpGetActiveBook(bvpSession.user.id);
+  bvpBook = await bvpGetActiveBook(bvpViewAgentId);
 
   if (bvpBook) {
     if (bvpBook.discount_rate) {
@@ -1386,7 +1390,7 @@ async function initFromSupabase() {
 
     if (dbPolicies.length > 0) {
       const enriched = await bvpEnrichPolicies(
-        bvpSession.user.id, dbPolicies, discountRate, savingsPct
+        bvpViewAgentId, dbPolicies, discountRate, savingsPct
       );
       POLICIES.length = 0;
       enriched.forEach(p => {
@@ -1416,7 +1420,7 @@ async function initFromSupabase() {
     showNoDataState();
   }
 
-  startRealtimeListener(bvpSession.user.id);
+  startRealtimeListener(bvpViewAgentId);
 }
 
 function showLoadingState() {
