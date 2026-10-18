@@ -382,7 +382,7 @@ body { padding-left: 64px; }
           </div>
         </div>
         <div class="uw-field">
-          <label for="uw-height-ft">Height</label>
+          <label for="uw-height-ft">Height<span class="uw-info-btn" data-tip="height" tabindex="0" role="button" aria-label="About Height">i</span></label>
           <div style="display:flex;gap:8px;">
             <select class="uw-select" id="uw-height-ft"></select>
             <select class="uw-select" id="uw-height-in"></select>
@@ -578,18 +578,19 @@ async function renderCarrierChips() {
 
 function initFormOptions() {
 
+  // Height starts blank — height and weight are optional.
   const ftSel = document.getElementById('uw-height-ft');
+  ftSel.appendChild(Object.assign(document.createElement('option'), { value: '', textContent: 'ft' }));
   for (let ft = 4; ft <= 7; ft++) {
     const o = document.createElement('option');
     o.value = ft; o.textContent = ft + " ft";
-    if (ft === 5) o.selected = true;
     ftSel.appendChild(o);
   }
   const inSel = document.getElementById('uw-height-in');
+  inSel.appendChild(Object.assign(document.createElement('option'), { value: '', textContent: 'in' }));
   for (let inch = 0; inch <= 11; inch++) {
     const o = document.createElement('option');
     o.value = inch; o.textContent = inch + " in";
-    if (inch === 8) o.selected = true;
     inSel.appendChild(o);
   }
 
@@ -817,9 +818,10 @@ async function runUWCheck() {
   btn.disabled = true;
   btn.textContent = 'Checking…';
 
-  const ft = +document.getElementById('uw-height-ft').value;
-  const inch = +document.getElementById('uw-height-in').value;
-  const heightIn = ft * 12 + inch;
+  const ftVal = document.getElementById('uw-height-ft').value;
+  const inVal = document.getElementById('uw-height-in').value;
+  // No feet selected = no height entered (build check skipped). Feet with blank inches = 0 in.
+  const heightIn = ftVal === '' ? null : (+ftVal) * 12 + (inVal === '' ? 0 : +inVal);
   const weightLb = +document.getElementById('uw-weight').value || null;
   const age = +document.getElementById('uw-age').value || null;
 
@@ -954,6 +956,19 @@ function uwGIPanelHTML(state) {
 // underwriting company and form number), while medication and height/weight
 // findings come from the carrier's underwriting guide — so the line names
 // only the sources that produced this result's findings.
+// True when this carrier has state-specific application rows for some state.
+function uwCarrierHasStateApps(carrier) {
+  return !!(uwData && (uwData.knockouts || []).some(k => k.carrier === carrier && k.state));
+}
+// For a carrier whose state applications are loaded for other states but not this one,
+// national rows can quote another state's application wording. Drop that quote so the
+// result doesn't point at a form from a different state.
+function uwStripOtherStateQuote(r, x) {
+  if (r.ruleSource === 'state' || !r.ruleState || !uwCarrierHasStateApps(r.carrier) || !x.notes) return x;
+  const notes = x.notes.replace(/\s*Application asks: "[^"]*"/g, '').trim();
+  return { ...x, notes: notes || null };
+}
+
 function ruleSourceText(r) {
   const special = uwCarrierNote(r.carrier);
   if (special && special.source) return special.source(r);
@@ -961,8 +976,8 @@ function ruleSourceText(r) {
   const stName = r.ruleState ? (UW_STATE_NAMES[r.ruleState] || r.ruleState) : null;
   if (r.ruleSource === 'state') {
     const who = r.ruleUnderwriter || name;
-    const form = r.ruleFormNumber ? ` (${r.ruleFormNumber})` : '';
-    const appText = `${who}'s ${stName} ${r.stateRules.join(', ')}${form}`;
+    const extra = [r.ruleFormNumber && `form ${r.ruleFormNumber}`, r.ruleUnderwriter && `issued by ${r.ruleUnderwriter}`].filter(Boolean).join(', ');
+    const appText = `${name}'s ${stName} application${extra ? ` (${extra})` : ''}`;
     const b = r.basis || {};
     const guideParts = [b.guide && (b.app ? 'other conditions' : 'conditions'), b.drug && 'medications', b.build && 'height/weight'].filter(Boolean);
     const guideText = `${name}'s underwriting guide`;
@@ -975,6 +990,8 @@ function ruleSourceText(r) {
     }
     return `Based on ${appText}.`;
   }
+  if (stName && uwCarrierHasStateApps(r.carrier))
+    return `Based on ${name}'s national underwriting rules and underwriting guide — ${name}'s ${stName} application isn't loaded yet.`;
   return stName
     ? `Based on ${name}'s national rules — no ${stName}-specific rules are loaded for ${name}.`
     : `Based on ${name}'s national rules.`;
@@ -1022,6 +1039,7 @@ function renderResults(results, carriers) {
       </div>`;
     }
     const hasData = carrierHasAnyData(r.carrier);
+    ['reasons', 'flags', 'infos'].forEach(k => { if (r[k]) r[k] = r[k].map(x => uwStripOtherStateQuote(r, x)); });
     const items = [
       ...r.reasons.map(x => `<div class="result-item reason"><span class="ri-icon">✕</span><span>${x.text}${x.notes ? `<span class="ri-notes">${x.notes}</span>` : ''}</span></div>`),
       ...r.flags.map(x => `<div class="result-item flag"><span class="ri-icon">!</span><span>${x.text}${x.notes ? `<span class="ri-notes">${x.notes}</span>` : ''}</span></div>`),
@@ -1083,6 +1101,7 @@ const UW_TIPS = {
   gi:      { title: 'Guaranteed Issue', body: "This state requires Medicare Supplement to be sold without health questions, so health can't cause a decline." },
   notOffered: { title: 'Not Offered', body: "This carrier doesn't currently sell Medicare Supplement in this state." },
   state:   { title: 'State', body: "Uses the carrier's rules for the applicant's state where loaded; otherwise its national rules. Also checks state-specific additional guaranteed issue rights." },
+  height:  { title: 'Height and weight (optional)', body: "Enter both and we'll check them against each carrier's build chart from its underwriting guide — a weight outside a carrier's range for that height can mean a decline or a higher rate. Leave them blank to skip the build check." },
   sex:     { title: 'Sex', body: "Only affects the height/weight check, and only for carriers with separate build charts for men and women (currently Physicians Mutual). It doesn't affect conditions or medications." },
   age:     { title: 'Age on effective date', body: "Only affects carriers with age-based rules (currently Physicians Mutual), which apply some conditions and medications only at certain ages. If left blank, those show as Needs Review." },
   conditions: { title: 'Health conditions', body: "Built from each carrier's application health questions and the declinable conditions in its underwriting guide. Type it the way you'd say it: common names, abbreviations and alternate spellings (for example, \"COPD\" or \"chronic obstructive pulmonary disease\") find the same condition. If a condition isn't recognized, every carrier shows Needs Review for it." },
