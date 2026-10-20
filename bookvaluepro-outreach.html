@@ -419,6 +419,95 @@ body { padding-left: 64px; }
 @media (max-width: 640px) {
   .bvp-sidenav.expanded { width: 200px; }
 }
+/* ── COHORT FILTER (multi-select) ── */
+.c-pill{cursor:pointer;border:1.5px solid transparent;transition:opacity .15s,border-color .15s}
+.c-pill:hover{border-color:currentColor}
+.c-pill.on{border-color:currentColor}
+.c-pill.off{opacity:.38}
+.c-pill.gi{cursor:default}
+.c-pill.gi:hover{border-color:transparent}
+.filter-hint{font-size:11px;color:var(--ink-3);margin-left:4px}
+
+/* ── LAST EMAILED TAGS ── */
+.em-tag{display:inline-block;margin-left:8px;font-family:var(--mono);font-size:10px;padding:1px 6px;border-radius:4px;vertical-align:1px;font-weight:500}
+.em-tag.sent{background:var(--accent-l);color:var(--accent)}
+.em-tag.sched{background:var(--blue-l);color:var(--blue-2)}
+.em-tag.unsub{background:#f3f1ed;color:var(--ink-3)}
+
+/* ── SENT & SCHEDULED HISTORY ── */
+.email-history{background:var(--white);border:1px solid var(--cream-2);border-radius:12px;box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden}
+.eh-head{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;cursor:pointer;user-select:none}
+.eh-title{font-family:var(--serif);font-size:18px;color:var(--ink)}
+.eh-rows{display:none;border-top:1px solid var(--cream-2)}
+.email-history.open .eh-rows{display:block}
+.email-history.open .chevron{transform:rotate(180deg)}
+.eh-row{display:flex;align-items:center;gap:14px;padding:11px 20px;border-bottom:1px solid var(--cream-2)}
+.eh-row:last-child{border-bottom:none}
+.eh-main{flex:1;min-width:0}
+.eh-subj{font-size:13px;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.eh-meta{font-size:11px;color:var(--ink-3)}
+.eh-counts{font-family:var(--mono);font-size:11px;color:var(--ink-2);white-space:nowrap}
+.eh-chip{font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;white-space:nowrap}
+.eh-chip.sent{background:var(--accent-l);color:var(--accent)}.eh-chip.sched{background:var(--blue-l);color:var(--blue-2)}
+.eh-chip.grey{background:var(--cream);color:var(--ink-3)}.eh-chip.red{background:#fdeceb;color:#b02a2a}.eh-chip.amber{background:var(--gold-l);color:var(--gold-2)}
+.eh-cancel{font-size:11px;font-family:var(--sans);border:1px solid var(--cream-2);background:white;color:var(--ink-2);padding:4px 10px;border-radius:7px;cursor:pointer;white-space:nowrap}
+.eh-cancel:hover,.eh-cancel.confirm{border-color:#c0392b;color:#c0392b}
+.eh-cancel-spacer{width:58px}
+
+/* ── EMAIL COMPOSER ── */
+#email-modal{width:760px}
+.cmp-label{display:block;font-size:10px;font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin:14px 0 6px}
+.cmp-input,.cmp-textarea,.cmp-select{width:100%;border:1px solid var(--cream-2);border-radius:9px;padding:10px 12px;font-family:var(--sans);font-size:13px;color:var(--ink);background:white;outline:none}
+.cmp-input:focus,.cmp-textarea:focus,.cmp-select:focus{border-color:var(--accent-2)}
+.cmp-textarea{resize:vertical;line-height:1.65}
+.cmp-textarea.tall{min-height:200px}
+.cmp-select{width:auto;max-width:100%;padding:6px 10px}
+.cmp-recipients{font-size:13px;color:var(--ink-2);background:var(--cream);border:1px solid var(--cream-2);border-radius:9px;padding:9px 12px}
+.cmp-notice{font-size:13px;line-height:1.55;background:var(--blue-l);color:var(--blue-2);border-radius:9px;padding:9px 12px;margin-bottom:10px}
+.cmp-notice.warn{background:var(--gold-l);color:#7a5200}
+.cmp-notice a{color:inherit;font-weight:600}
+.cmp-chips,.cmp-fields{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center}
+.cmp-chip{font-family:var(--sans);font-size:12px;border:1px solid var(--cream-2);background:white;color:var(--ink-2);padding:5px 10px;border-radius:14px;cursor:pointer}
+.cmp-chip:hover{border-color:var(--accent-2);color:var(--accent)}
+.cmp-chip.small{font-size:11px;padding:3px 8px}
+.cmp-hint{font-size:12px;color:var(--ink-3);margin-top:12px;line-height:1.55}
+.cmp-hint code{font-family:var(--mono);font-size:11px;background:var(--cream);padding:1px 4px;border-radius:3px}
+.cmp-error{font-size:13px;color:#c0392b;margin-top:8px;min-height:1px}
+.cmp-error a{color:inherit;font-weight:600}
+.cmp-muted{font-size:12px;color:var(--ink-3)}
+.cmp-empty{font-size:13px;color:var(--ink-3);padding:24px 4px}
+.cmp-actions{display:flex;gap:8px;align-items:center}
+.cmp-btn{font-family:var(--sans);font-size:13px;font-weight:600;border-radius:9px;padding:9px 16px;cursor:pointer;border:1px solid transparent}
+.cmp-btn.primary{background:var(--accent);color:white}
+.cmp-btn.primary:hover:not(:disabled){background:var(--accent-2)}
+.cmp-btn.primary:disabled{opacity:.5;cursor:not-allowed}
+.cmp-btn.ghost{background:white;color:var(--ink-2);border-color:var(--cream-2)}
+.cmp-btn.ghost:hover{border-color:var(--ink-3)}
+.cmp-btn.link{background:none;color:var(--accent-2);padding:9px 4px}
+.cmp-preview-head{display:flex;align-items:center;gap:10px;margin:16px 0 8px;flex-wrap:wrap}
+.cmp-preview{border:1px solid var(--cream-2);border-radius:10px;padding:14px 16px;background:#fcfcfa}
+.pv-meta{font-size:11px;color:var(--ink-3);margin-bottom:6px}
+.pv-meta span{font-family:var(--mono);text-transform:uppercase;font-size:9px;letter-spacing:.06em}
+.pv-subject{font-weight:600;font-size:14px;color:var(--ink);margin-bottom:10px}
+.pv-body{font-size:13px;line-height:1.7;color:var(--ink-2)}
+.pv-footer{margin-top:14px;padding-top:10px;border-top:1px solid var(--cream-2);font-size:11px;line-height:1.6;color:var(--ink-3)}
+.pv-footer.standalone{margin-top:8px;border:1px dashed var(--cream-2);border-radius:8px;padding:8px 12px}
+.cmp-to{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13px;color:var(--ink-2)}
+.cmp-include{font-size:12px;color:var(--ink-2);display:flex;gap:6px;align-items:center}
+.email-tab.excluded{text-decoration:line-through;opacity:.55}
+.cmp-send{margin-top:16px;padding-top:14px;border-top:1px solid var(--cream-2)}
+.cmp-when{display:flex;gap:16px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--ink-2)}
+.cmp-when label{display:flex;gap:6px;align-items:center;cursor:pointer}
+.cmp-when input[type=datetime-local]{border:1px solid var(--cream-2);border-radius:8px;padding:6px 8px;font-family:var(--sans);font-size:13px}
+.cmp-when input[type=datetime-local]:disabled{opacity:.45}
+.cmp-attest{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--ink-2);margin-top:12px;line-height:1.5;cursor:pointer}
+.cmp-attest input{margin-top:2px}
+.cmp-done{font-family:var(--serif);font-size:24px;color:var(--accent);margin:8px 0 6px}
+.cmp-list{font-size:12px;color:var(--ink-2);padding-left:18px;line-height:1.7;max-height:180px;overflow:auto}
+@media (max-width:640px){
+  .eh-row{flex-wrap:wrap}.eh-cancel-spacer{display:none}
+  .cmp-actions{flex-wrap:wrap}
+}
 </style>
 </head>
 <body>
@@ -473,6 +562,10 @@ body { padding-left: 64px; }
   <!-- ── RENEWALS TAB ── -->
   <div id="renewals-tab">
     <div class="summary-strip" id="summary-strip"></div>
+    <div class="email-history" id="email-history" style="display:none">
+      <div class="eh-head" onclick="toggleHistory()"><span class="eh-title">Sent &amp; scheduled emails</span><span class="chevron">▾</span></div>
+      <div class="eh-rows"></div>
+    </div>
     <div class="month-list" id="month-list"></div>
   </div>
 </div>
@@ -482,7 +575,7 @@ body { padding-left: 64px; }
   <div class="bulk-bar-sep"></div>
   <button class="bulk-btn bulk-btn-email" onclick="openBulkEmail()">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/></svg>
-    Draft emails
+    <span id="bulk-email-label">Email selected</span>
   </button>
   <button class="bulk-btn bulk-btn-clear" onclick="clearSelection()">✕ Clear</button>
 </div>
@@ -497,24 +590,8 @@ body { padding-left: 64px; }
       </div>
       <button class="ai-modal-close" onclick="closeEmailModal()">✕</button>
     </div>
-    <div class="ai-modal-body" id="email-modal-body">
-      <div class="ai-generating" id="email-generating">
-        <div class="ai-spinner"></div>
-        <div class="ai-gen-label">Drafting personalized email...</div>
-      </div>
-      <div id="email-tabs-row" class="email-tabs" style="display:none"></div>
-      <div id="email-panels"></div>
-    </div>
-    <div class="ai-modal-footer">
-      <div style="font-size:11px;color:var(--ink-3)">✦ AI-generated — review before sending</div>
-      <div style="display:flex;gap:8px">
-        <button class="bulk-btn bulk-btn-clear" style="color:var(--ink-2);border-color:var(--cream-2)" onclick="closeEmailModal()">Close</button>
-        <button class="bulk-btn bulk-btn-email" id="email-copy-btn" onclick="copyCurrentEmail()" style="display:none">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-          Copy email
-        </button>
-      </div>
-    </div>
+    <div class="ai-modal-body" id="email-modal-body"></div>
+    <div class="ai-modal-footer" id="email-modal-footer"></div>
   </div>
 </div>
 
@@ -604,21 +681,32 @@ function liveMonSav(p){ return p.currPrem * (SAVINGS_PCT / 100); }
 function liveOppNPV(p){ return p.renNPV; } // ren_npv already calculated at current SAVINGS_PCT
 const fmtK=v=>'$'+(Math.abs(v)>=1000?(Math.abs(v)/1000).toFixed(1)+'K':Math.round(Math.abs(v)));
 
-let activeFilter='all';
+let activeCohorts=new Set(); // empty = all cohorts
 let leadMonths = +(localStorage.getItem('bvp_lead_months') || 3);
 let openMonths=new Set([CURRENT_MONTH]);
 
 
+// Cohort filter: pick one or more of Save & Switch / Steady Book / Loyalty Watch.
+// The toolbar buttons and the pills on each month header control the same filter.
 function setFilter(f){
-  activeFilter=f;
+  if(f==='all') activeCohorts.clear();
+  else { const n=+f; if(activeCohorts.has(n)) activeCohorts.delete(n); else activeCohorts.add(n); if(activeCohorts.size===3) activeCohorts.clear(); }
   document.querySelectorAll('.filter-btn').forEach(b=>{
+    const k=b.dataset.filter;
     b.className='filter-btn';
-    if(b.dataset.filter===f) b.classList.add(f==='all'?'active-all':f==='1'?'active-ss':f==='2'?'active-sb':'active-lw');
+    if(k==='all'&&!activeCohorts.size) b.classList.add('active-all');
+    if(k!=='all'&&activeCohorts.has(+k)) b.classList.add(k==='1'?'active-ss':k==='2'?'active-sb':'active-lw');
   });
+  // Drop selections that are now hidden, so a batch only goes to the cohorts on screen.
+  [...selectedIdxs].forEach(idx=>{ const p=POLICIES.find(x=>x.idx===idx); if(p&&!cohortVisible(p.priority)) selectedIdxs.delete(idx); });
+  if(!selectedIdxs.size) monthSelectUsed=false;
+  updateBulkBar();
   renderAll();
 }
+function cohortVisible(pr){ return !activeCohorts.size || activeCohorts.has(pr); }
+function pillState(pr){ return !activeCohorts.size ? '' : (activeCohorts.has(pr) ? ' on' : ' off'); }
 
-function filtered(m){return policiesForMonth(m,leadMonths).filter(p=>activeFilter==='all'||p.priority===+activeFilter);}
+function filtered(m){return policiesForMonth(m,leadMonths).filter(p=>cohortVisible(p.priority));}
 
 function renderSummary(){
   const ssCount=POLICIES.filter(p=>p.priority===1).length;
@@ -640,7 +728,7 @@ function renderCalendar(){
   for(let m=1;m<=12;m++){
     const all=policiesForMonth(m,leadMonths);
     const ss=all.filter(p=>p.priority===1),sb=all.filter(p=>p.priority===2),lw=all.filter(p=>p.priority===3);
-    const ssLift=ss.reduce((s,p)=>s+Math.max(0,p.renNPV-p.currNPV),0);
+    const ssLift=all.filter(p=>p.priority===1&&cohortVisible(1)).reduce((s,p)=>s+Math.max(0,p.renNPV-p.currNPV),0);
     const giDue=all.filter(p=>isGIContact(p,m)).length;
     const isCurrent=m===CURRENT_MONTH,isPast=m<CURRENT_MONTH,isEmpty=all.length===0,isOpen=openMonths.has(m);
     let cls='month-card';
@@ -654,9 +742,9 @@ function renderCalendar(){
           ${isCurrent?'<span class="month-badge badge-current">This month</span>':''}
           ${isPast?'<span class="month-badge badge-past">Past</span>':''}
           <div class="cohort-pills">
-            ${ss.length?`<span class="c-pill ss"><span class="c-pill-dot"></span>${ss.length} Save &amp; Switch</span>`:''}
-            ${sb.length?`<span class="c-pill sb"><span class="c-pill-dot"></span>${sb.length} Steady Book</span>`:''}
-            ${lw.length?`<span class="c-pill lw"><span class="c-pill-dot"></span>${lw.length} Loyalty Watch</span>`:''}
+            ${ss.length?`<span class="c-pill ss${pillState(1)}" title="Show only Save &amp; Switch (click again to undo)" onclick="event.stopPropagation();setFilter('1')"><span class="c-pill-dot"></span>${ss.length} Save &amp; Switch</span>`:''}
+            ${sb.length?`<span class="c-pill sb${pillState(2)}" title="Show only Steady Book (click again to undo)" onclick="event.stopPropagation();setFilter('2')"><span class="c-pill-dot"></span>${sb.length} Steady Book</span>`:''}
+            ${lw.length?`<span class="c-pill lw${pillState(3)}" title="Show only Loyalty Watch (click again to undo)" onclick="event.stopPropagation();setFilter('3')"><span class="c-pill-dot"></span>${lw.length} Loyalty Watch</span>`:''}
             ${giDue?`<span class="c-pill gi" title="Clients scheduled this month to get underwritten before their state GI window opens"><span class="c-pill-dot"></span>${giDue} GI underwriting</span>`:''}
             ${isEmpty?'<span style="font-size:12px;color:var(--ink-3)">No contacts this month</span>':''}
           </div>
@@ -678,7 +766,7 @@ function buildTable(m){
   const sb=vis.filter(p=>p.priority===2).sort((a,b)=>a.rank-b.rank);
   const lw=vis.filter(p=>p.priority===3).sort((a,b)=>a.rank-b.rank);
   const thead=`<thead><tr>
-    <th class="row-check"><input type="checkbox" title="Select all in month" onchange="toggleMonthSelect(${m},this.checked)"></th>
+    <th class="row-check"><input type="checkbox" title="Select everyone shown in this month (sends one personalized template)" ${vis.every(p=>selectedIdxs.has(p.idx))?'checked':''} onchange="toggleMonthSelect(${m},this.checked)"></th>
     <th>Client</th><th>Carrier</th><th>State</th>
     <th title="State guaranteed-issue right">State GI Right</th>
     <th class="num">Age</th>
@@ -694,7 +782,7 @@ function buildTable(m){
       <div class="cohort-section-header ${cls}">${label}<span class="cohort-count">${policies.length} client${policies.length>1?'s':''}</span></div>
     </td></tr>`+policies.map(p=>`<tr data-idx="${p.idx}" class="${selectedIdxs.has(p.idx)?'selected':''}">
       <td class="row-check"><input type="checkbox" data-idx="${p.idx}" ${selectedIdxs.has(p.idx)?'checked':''} onchange="toggleRowSelect(${p.idx},this.checked)"></td>
-      <td class="name-cell"><span class="client-name-link" onclick="openScriptModal(${p.idx})" style="cursor:pointer;border-bottom:1px dashed var(--accent-2);color:var(--ink)">${p.name}</span>${isGIContact(p,m)?'<span class="gi-tag" title="Scheduled here to get underwritten before the GI window opens">GI</span>':''}</td>
+      <td class="name-cell"><span class="client-name-link" onclick="openScriptModal(${p.idx})" style="cursor:pointer;border-bottom:1px dashed var(--accent-2);color:var(--ink)">${p.name}</span>${emailTag(p)}${isGIContact(p,m)?'<span class="gi-tag" title="Scheduled here to get underwritten before the GI window opens">GI</span>':''}</td>
       <td><span class="carrier-badge">${p.company}</span></td>
       <td><span class="carrier-badge">${p.state || '—'}</span></td>
       <td>${giRightCell(p.gi)}</td>
@@ -746,9 +834,11 @@ document.addEventListener('DOMContentLoaded', function(){
 
 // ── BULK SELECTION ─────────────────────────────────────────────────────
 const selectedIdxs = new Set();
+let monthSelectUsed = false; // true once "select all" on a month was used → one template
 
 function toggleRowSelect(idx, checked) {
   if (checked) selectedIdxs.add(idx); else selectedIdxs.delete(idx);
+  if (!selectedIdxs.size) monthSelectUsed = false;
   updateBulkBar();
   const row = document.querySelector(`tr[data-idx="${idx}"]`);
   if (row) row.classList.toggle('selected', checked);
@@ -759,6 +849,8 @@ function toggleMonthSelect(m, checked) {
   vis.forEach(p => {
     if (checked) selectedIdxs.add(p.idx); else selectedIdxs.delete(p.idx);
   });
+  if (checked) monthSelectUsed = true;
+  if (!selectedIdxs.size) monthSelectUsed = false;
   // re-render that table so checkboxes reflect state
   const wrap = document.getElementById(`ptable-${m}`);
   if (wrap) wrap.innerHTML = buildTable(m);
@@ -767,6 +859,7 @@ function toggleMonthSelect(m, checked) {
 
 function clearSelection() {
   selectedIdxs.clear();
+  monthSelectUsed = false;
   document.querySelectorAll('tr[data-idx]').forEach(r => r.classList.remove('selected'));
   document.querySelectorAll('input[data-idx]').forEach(c => c.checked = false);
   updateBulkBar();
@@ -778,6 +871,8 @@ function updateBulkBar() {
   const n = selectedIdxs.size;
   cnt.textContent = n + ' selected';
   bar.classList.toggle('visible', n > 0);
+  const lbl = document.getElementById('bulk-email-label');
+  if (lbl) lbl.textContent = (monthSelectUsed || n > 50) ? 'Email selected · one template' : 'Email selected · written individually';
 }
 
 // ── AI HELPERS ──────────────────────────────────────────────────────────
@@ -798,21 +893,6 @@ Policy duration: Year ${p.duration || 'N/A'}${p.gi && p.gi.hasRight ? `
 State GI right: ${p.gi.ruleName} — ${bvpGIStatusText(p.gi)}. (Agent note: aim to complete an underwritten application before the GI window opens; do not mention commissions to the client.)` : ''}`;
 }
 
-async function callClaude(systemPrompt, userPrompt) {
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1000,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }]
-    })
-  });
-  const data = await resp.json();
-  return data.content?.map(b => b.text || '').join('') || '';
-}
-
 function showToast(msg) {
   const t = document.getElementById('copy-toast');
   t.textContent = msg || 'Copied to clipboard ✓';
@@ -820,107 +900,516 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2000);
 }
 
-// ── EMAIL MODAL ────────────────────────────────────────────────────────
-let emailDrafts = []; // [{name, subject, body, idx}]
-let activeEmailTab = 0;
+// ── EMAIL COMPOSER ─────────────────────────────────────────────────────
+// How the writing style is chosen (decided with Josh, 2026-10-20):
+//   • "Select all" on a month (alone or mixed with row ticks) → ONE personalized template
+//   • Only individual row ticks → each email written individually (up to 50)
+//   • The ✉ Email button on one row → written individually
+const INDIVIDUAL_LIMIT = 50;
+const BVP_AI_PROXY = BVP_URL + '/functions/v1/bvp-chat';
 
+let senderProfile = null;          // agent_profiles row (null = not set up yet)
+let suppressedEmails = new Set();  // lower-case addresses that unsubscribed
+let lastEmailed = new Map();       // policy id -> { at, status }
+let compose = null;                // the email being written right now
+
+const MERGE_FIELDS = [
+  ['first_name', 'First name'], ['carrier', 'Carrier'], ['monthly_premium', 'Monthly premium'],
+  ['monthly_savings', 'Est. monthly savings'], ['annual_savings', 'Est. annual savings'],
+  ['renewal_month', 'Renewal month'], ['agent_name', 'Your name'], ['agent_phone', 'Your phone'],
+];
+
+const escH = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const fmtDay = iso => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+const fmtWhen = iso => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+function clientEmail(p) { return (p.email || '').trim().toLowerCase(); }
+function emailBlocker(p) {
+  const e = clientEmail(p);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return 'No email address';
+  if (suppressedEmails.has(e)) return 'Unsubscribed';
+  return null;
+}
+
+function mergeValues(p) {
+  const sav = liveMonSav(p);
+  return {
+    first_name: p.firstName || (p.name || '').split(' ')[0] || 'there',
+    carrier: p.company || 'your carrier',
+    monthly_premium: fmt$(p.currPrem || 0),
+    monthly_savings: fmt$(sav),
+    annual_savings: fmt$(sav * 12),
+    renewal_month: MONTHS[((p.month || 1) - 1 + 12) % 12],
+    agent_name: (senderProfile && senderProfile.display_name) || 'Your agent',
+    agent_phone: (senderProfile && senderProfile.phone) || '',
+  };
+}
+function fillTemplate(text, p) {
+  const v = mergeValues(p);
+  return String(text || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => (k in v ? v[k] : m)).replace(/\n{3,}/g, '\n\n');
+}
+
+// What the AI may know about a client for an email. No LTV or commission figures.
+function emailContext(p) {
+  const v = mergeValues(p);
+  return `First name: ${v.first_name}
+Carrier: ${v.carrier}, State: ${p.state || 'N/A'}
+Plan renews in: ${v.renewal_month}
+Current monthly premium: ${v.monthly_premium}
+Estimated monthly savings if they switch: ${v.monthly_savings} (estimate)
+Group: ${COHORT_LABELS[p.priority] || ''}${p.gi && p.gi.hasRight ? `
+Has a state guaranteed-issue right: ${p.gi.ruleName}` : ''}`;
+}
+
+const EMAIL_RULES = `Rules:
+- Warm, plain, professional. 110-190 words. Short paragraphs. No markdown, no emojis.
+- Savings are estimates: say "may" or "could", never promise or guarantee a price.
+- Never mention commissions, LTV, or anything about the agent's compensation.
+- Never imply you are Medicare, the government, or the insurance company.
+- End with a clear call to action (reply or call), then sign off with the agent's name and phone on separate lines.
+- Do NOT add an unsubscribe line or mailing address; those are added automatically.
+Return ONLY a JSON object: {"subject": "...", "body": "..."}. Use \\n\\n between paragraphs in body.`;
+
+async function callClaude(systemPrompt, userPrompt) {
+  const { data: { session } } = await bvp.auth.getSession();
+  if (!session) throw new Error('Please sign in again.');
+  const resp = await fetch(BVP_AI_PROXY, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+    body: JSON.stringify({ system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok || data.error) throw new Error((data.error && (data.error.message || data.error)) || 'The AI writer is unavailable right now.');
+  return (data.content || []).map(b => b.text || '').join('');
+}
+
+function parseDraft(raw, fallbackSubject) {
+  try {
+    const m = String(raw).match(/\{[\s\S]*\}/);
+    const parsed = JSON.parse(m ? m[0] : raw);
+    return { subject: String(parsed.subject || fallbackSubject), body: String(parsed.body || '').trim() };
+  } catch (_) {
+    return { subject: fallbackSubject, body: String(raw || '').replace(/```(json)?/g, '').trim() };
+  }
+}
+
+// ── OPEN ──
 function openSingleEmail(idx) {
   const p = POLICIES.find(x => x.idx === idx);
-  if (!p) return;
-  openEmailModal([p]);
+  if (p) openEmailModal([p], 'individual');
 }
 
 function openBulkEmail() {
   const policies = POLICIES.filter(p => selectedIdxs.has(p.idx));
   if (!policies.length) return;
-  openEmailModal(policies);
-}
-
-async function openEmailModal(policies) {
-  const overlay = document.getElementById('email-overlay');
-  const titleEl = document.getElementById('email-modal-title');
-  const subEl = document.getElementById('email-modal-sub');
-  const genEl = document.getElementById('email-generating');
-  const tabsRow = document.getElementById('email-tabs-row');
-  const panelsEl = document.getElementById('email-panels');
-  const copyBtn = document.getElementById('email-copy-btn');
-
-  titleEl.textContent = policies.length === 1
-    ? `Email Draft — ${policies[0].name}`
-    : `Email Drafts — ${policies.length} clients`;
-  subEl.textContent = 'AI-generated · edit before sending';
-  genEl.style.display = 'flex';
-  tabsRow.style.display = 'none';
-  panelsEl.innerHTML = '';
-  copyBtn.style.display = 'none';
-  emailDrafts = [];
-  activeEmailTab = 0;
-
-  overlay.classList.add('open');
-
-  const SYSTEM = `You are a Medicare Supplement insurance agent assistant. Write concise, warm, professional renewal outreach emails.
-Return ONLY a JSON object with keys "subject" and "body". No markdown, no explanation.
-The body should be 3-4 paragraphs, conversational, reference specific numbers (savings, carrier), and end with a clear call to action. Sign off as "Your agent".`;
-
-  try {
-    for (let i = 0; i < policies.length; i++) {
-      const p = policies[i];
-      subEl.textContent = policies.length > 1
-        ? `Drafting ${i + 1} of ${policies.length}...`
-        : 'AI-generated · edit before sending';
-
-      const raw = await callClaude(SYSTEM, `Write a renewal outreach email for this client:\n${clientContext(p)}`);
-      let subject = '', body = '';
-      try {
-        const clean = raw.replace(/```json|```/g,'').trim();
-        const parsed = JSON.parse(clean);
-        subject = parsed.subject || '';
-        body = parsed.body || raw;
-      } catch { body = raw; subject = `Your Medicare Supplement renewal — ${p.company}`; }
-      emailDrafts.push({ name: p.name, subject, body, idx: p.idx });
-    }
-
-    genEl.style.display = 'none';
-    subEl.textContent = 'AI-generated · edit before sending';
-    copyBtn.style.display = 'flex';
-
-    if (emailDrafts.length > 1) {
-      tabsRow.style.display = 'flex';
-      tabsRow.innerHTML = emailDrafts.map((d, i) =>
-        `<button class="email-tab ${i === 0 ? 'active' : ''}" onclick="switchEmailTab(${i})">${d.name.split(' ')[0]}</button>`
-      ).join('');
-    }
-
-    panelsEl.innerHTML = emailDrafts.map((d, i) => `
-      <div class="email-panel ${i === 0 ? 'active' : ''}" id="email-panel-${i}">
-        <div class="email-subject-row">
-          <span class="email-subject-label">Subject</span>
-          <span class="email-subject-val" id="email-subj-${i}" contenteditable="true" style="outline:none">${d.subject}</span>
-        </div>
-        <textarea class="email-body-area" id="email-body-${i}">${d.body}</textarea>
-      </div>`).join('');
-
-  } catch(e) {
-    genEl.style.display = 'none';
-    panelsEl.innerHTML = `<div style="color:red;padding:20px">Error generating email. Please try again.</div>`;
+  if (monthSelectUsed) return openEmailModal(policies, 'template');
+  if (policies.length > INDIVIDUAL_LIMIT) {
+    return openEmailModal(policies, 'template',
+      `You picked ${policies.length} clients one by one. Individually written emails are limited to ${INDIVIDUAL_LIMIT} at a time, so this batch uses one personalized template.`);
   }
+  openEmailModal(policies, 'individual');
 }
 
-function switchEmailTab(i) {
-  activeEmailTab = i;
-  document.querySelectorAll('.email-tab').forEach((t, j) => t.classList.toggle('active', i === j));
-  document.querySelectorAll('.email-panel').forEach((p, j) => p.classList.toggle('active', i === j));
+function audienceLabel(policies) {
+  const cohorts = [...new Set(policies.map(p => COHORT_LABELS[p.priority]).filter(Boolean))];
+  return `${cohorts.join(' + ') || 'Clients'} · ${policies.length} client${policies.length === 1 ? '' : 's'}`;
 }
 
-function copyCurrentEmail() {
-  const subj = document.getElementById(`email-subj-${activeEmailTab}`)?.innerText || '';
-  const body = document.getElementById(`email-body-${activeEmailTab}`)?.value || '';
-  navigator.clipboard.writeText(`Subject: ${subj}\n\n${body}`).then(() => showToast('Email copied!'));
+function openEmailModal(policies, mode, notice = '') {
+  compose = {
+    mode, notice, policies,
+    sendable: policies.filter(p => !emailBlocker(p)),
+    blocked: policies.filter(p => emailBlocker(p)),
+    instructions: '', template: null, drafts: [], active: 0, previewIdx: 0,
+  };
+  document.getElementById('email-overlay').classList.add('open');
+  renderCompose();
 }
 
 function closeEmailModal(e) {
   if (e && e.target !== document.getElementById('email-overlay')) return;
+  if (compose && compose.busy) return;
   document.getElementById('email-overlay').classList.remove('open');
+  compose = null;
+}
+
+function setModal(title, sub, bodyHtml, footerHtml) {
+  document.getElementById('email-modal-title').textContent = title;
+  document.getElementById('email-modal-sub').textContent = sub;
+  document.getElementById('email-modal-body').innerHTML = bodyHtml;
+  document.getElementById('email-modal-footer').innerHTML = footerHtml;
+}
+
+function recipientSummary() {
+  const c = compose;
+  const noEmail = c.blocked.filter(p => emailBlocker(p) === 'No email address').length;
+  const unsub = c.blocked.length - noEmail;
+  const parts = [`<strong>${c.sendable.length}</strong> client${c.sendable.length === 1 ? '' : 's'} will get this email`];
+  if (noEmail) parts.push(`${noEmail} skipped: no email address`);
+  if (unsub) parts.push(`${unsub} skipped: unsubscribed`);
+  return `<div class="cmp-recipients">${parts.join(' · ')}</div>`;
+}
+
+function profileNotice() {
+  if (senderProfile) return '';
+  return `<div class="cmp-notice warn">Before you can send, add your sender details (name, phone, reply-to email and mailing address) on your
+    <a href="bookvaluepro-account.html#sender-profile">Account page</a>. You can still draft emails now.</div>`;
+}
+
+// ── STEP 1: WHAT TO SAY ──
+function renderCompose() {
+  const c = compose;
+  const isTemplate = c.mode === 'template';
+  const single = c.policies.length === 1;
+  const title = single ? `Email ${c.policies[0].name}` : `Email ${c.policies.length} clients`;
+  const sub = isTemplate ? 'One personalized template · each client gets their own details'
+                         : (single ? 'Written individually for this client' : 'Each email written individually');
+  const suggestions = [
+    'Their renewal is coming up. Offer a quick, free rate check to see if they could pay less.',
+    'A friendly check-in. Ask if anything has changed with their health or budget; no sales pitch.',
+    'Remind them I am here to help and invite them to reply with any questions about their plan.',
+  ];
+  if (!c.sendable.length) {
+    setModal(title, sub,
+      `${c.notice ? `<div class="cmp-notice">${escH(c.notice)}</div>` : ''}${recipientSummary()}
+       <div class="cmp-empty">None of these clients can be emailed. Add an email address on the Clients page first.</div>`,
+      `<span></span><button class="cmp-btn ghost" onclick="closeEmailModal()">Close</button>`);
+    return;
+  }
+  setModal(title, sub, `
+    ${c.notice ? `<div class="cmp-notice">${escH(c.notice)}</div>` : ''}
+    ${profileNotice()}
+    ${recipientSummary()}
+    <label class="cmp-label" for="cmp-instructions">What should this email say?</label>
+    <textarea class="cmp-textarea" id="cmp-instructions" rows="4" placeholder="e.g. Their renewal is coming up. Offer a quick rate check and mention they may be able to save each month.">${escH(c.instructions)}</textarea>
+    <div class="cmp-chips">${suggestions.map((s, i) => `<button type="button" class="cmp-chip" onclick="useSuggestion(${i})">${escH(s.split('.')[0])}</button>`).join('')}</div>
+    <div class="cmp-hint">${isTemplate
+      ? 'The AI writes one email with fill-ins like <code>{{first_name}}</code> and <code>{{monthly_savings}}</code>. You can edit it and preview it for any client before sending.'
+      : 'The AI writes a separate email for each client using their own details. You can edit each one before sending.'}</div>
+    <div class="cmp-error" id="cmp-error"></div>`,
+    `<button class="cmp-btn link" onclick="writeMyself()">Write it myself</button>
+     <div class="cmp-actions">
+       <button class="cmp-btn ghost" onclick="closeEmailModal()">Cancel</button>
+       <button class="cmp-btn primary" onclick="draftWithAI()">✦ Draft with AI</button>
+     </div>`);
+  window._suggestions = suggestions;
+}
+
+function useSuggestion(i) {
+  const ta = document.getElementById('cmp-instructions');
+  ta.value = window._suggestions[i];
+  ta.focus();
+}
+
+function writeMyself() {
+  const c = compose;
+  c.instructions = (document.getElementById('cmp-instructions') || {}).value || c.instructions;
+  if (c.mode === 'template') {
+    c.template = { subject: 'Your {{carrier}} plan renews in {{renewal_month}}', body: 'Hi {{first_name}},\n\n\n\n{{agent_name}}\n{{agent_phone}}' };
+  } else {
+    c.drafts = c.sendable.map(p => ({ idx: p.idx, include: true, subject: `Your ${p.company || ''} plan`.trim(), body: fillTemplate('Hi {{first_name}},\n\n\n\n{{agent_name}}\n{{agent_phone}}', p) }));
+  }
+  renderReview();
+}
+
+function showGenerating(label) {
+  document.getElementById('email-modal-body').innerHTML =
+    `<div class="ai-generating"><div class="ai-spinner"></div><div class="ai-gen-label" id="cmp-gen-label">${escH(label)}</div></div>`;
+  document.getElementById('email-modal-footer').innerHTML = `<span></span><span class="cmp-muted">This usually takes a few seconds…</span>`;
+}
+
+async function draftWithAI() {
+  const c = compose;
+  const instr = document.getElementById('cmp-instructions').value.trim();
+  if (!instr) { document.getElementById('cmp-error').textContent = 'Tell the AI what the email should say, or pick a suggestion.'; return; }
+  c.instructions = instr;
+  c.busy = true;
+  const agent = `Agent name: ${(senderProfile && senderProfile.display_name) || '{{agent_name}}'}\nAgent phone: ${(senderProfile && senderProfile.phone) || '{{agent_phone}}'}`;
+  try {
+    if (c.mode === 'template') {
+      showGenerating('Writing your email template…');
+      const system = `You write outreach emails for an independent Medicare Supplement insurance agent to their own existing clients.
+Write ONE email TEMPLATE that will be personalized per client. Use these placeholders exactly where client details belong:
+{{first_name}}, {{carrier}}, {{monthly_premium}}, {{monthly_savings}}, {{annual_savings}}, {{renewal_month}}, {{agent_name}}, {{agent_phone}}.
+Only use placeholders that fit the instructions. Never invent other placeholders or write specific numbers yourself.
+Sign off with {{agent_name}} and {{agent_phone}}.
+${EMAIL_RULES}`;
+      const raw = await callClaude(system, `Agent's instructions: ${instr}\n\nAudience: ${audienceLabel(c.sendable)}.`);
+      c.template = parseDraft(raw, 'Your {{carrier}} plan renews in {{renewal_month}}');
+    } else {
+      const system = `You write outreach emails for an independent Medicare Supplement insurance agent to one of their own existing clients.
+Write a personal email for this specific client using their details. Use the agent's real name and phone in the sign-off.
+${EMAIL_RULES}`;
+      c.drafts = [];
+      for (let i = 0; i < c.sendable.length; i++) {
+        const p = c.sendable[i];
+        showGenerating(c.sendable.length > 1 ? `Writing email ${i + 1} of ${c.sendable.length}…` : 'Writing your email…');
+        const raw = await callClaude(system, `Agent's instructions: ${instr}\n\n${agent}\n\nClient:\n${emailContext(p)}`);
+        const d = parseDraft(raw, `Your ${p.company || 'Medicare Supplement'} plan`);
+        c.drafts.push({ idx: p.idx, include: true, subject: fillTemplate(d.subject, p), body: fillTemplate(d.body, p) });
+      }
+    }
+    c.busy = false;
+    renderReview();
+  } catch (err) {
+    c.busy = false;
+    renderCompose();
+    document.getElementById('cmp-error').textContent = 'Could not draft the email: ' + err.message;
+  }
+}
+
+// ── STEP 2: REVIEW ──
+function renderReview() {
+  const c = compose;
+  if (c.mode === 'template') renderTemplateReview(); else renderIndividualReview();
+}
+
+function sendControls(count) {
+  const min = new Date(Date.now() + 10 * 60 * 1000), max = new Date(Date.now() + 30 * 864e5);
+  const local = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  const def = new Date(); def.setDate(def.getDate() + 1); def.setHours(9, 0, 0, 0);
+  return `
+    <div class="cmp-send">
+      <div class="cmp-when">
+        <label><input type="radio" name="cmp-when" value="now" checked onchange="toggleSchedule()"> Send now</label>
+        <label><input type="radio" name="cmp-when" value="later" onchange="toggleSchedule()"> Schedule</label>
+        <input type="datetime-local" id="cmp-at" min="${local(min)}" max="${local(max)}" value="${local(def)}" disabled>
+      </div>
+      <label class="cmp-attest"><input type="checkbox" id="cmp-attest">
+        These are my clients, and this message follows my carriers' and CMS marketing rules.</label>
+      <div class="cmp-error" id="cmp-error"></div>
+    </div>`;
+}
+
+function toggleSchedule() {
+  const later = document.querySelector('input[name="cmp-when"]:checked').value === 'later';
+  document.getElementById('cmp-at').disabled = !later;
+  const btn = document.getElementById('cmp-send-btn');
+  if (btn) btn.textContent = btn.textContent.replace(/^(Send|Schedule)/, later ? 'Schedule' : 'Send');
+}
+
+function renderTemplateReview() {
+  const c = compose;
+  const t = c.template;
+  setModal(`Email ${c.sendable.length} client${c.sendable.length === 1 ? '' : 's'}`, 'One personalized template · review before sending', `
+    ${profileNotice()}
+    <label class="cmp-label" for="cmp-subject">Subject</label>
+    <input class="cmp-input" id="cmp-subject" value="${escH(t.subject)}" maxlength="200" oninput="compose.template.subject=this.value;renderPreview()">
+    <label class="cmp-label" for="cmp-body">Message</label>
+    <textarea class="cmp-textarea tall" id="cmp-body" oninput="compose.template.body=this.value;renderPreview()">${escH(t.body)}</textarea>
+    <div class="cmp-fields"><span class="cmp-muted">Insert:</span>${MERGE_FIELDS.map(([k, l]) => `<button type="button" class="cmp-chip small" onclick="insertField('${k}')">${l}</button>`).join('')}</div>
+    <div class="cmp-preview-head">
+      <span class="cmp-label" style="margin:0">Preview for</span>
+      <select class="cmp-select" id="cmp-preview-who" onchange="compose.previewIdx=+this.value;renderPreview()">
+        ${c.sendable.map((p, i) => `<option value="${i}" ${i === c.previewIdx ? 'selected' : ''}>${escH(p.name)}${p.email ? ' · ' + escH(p.email) : ''}</option>`).join('')}
+      </select>
+    </div>
+    <div class="cmp-preview" id="cmp-preview"></div>
+    ${sendControls(c.sendable.length)}`,
+    `<button class="cmp-btn link" onclick="renderCompose()">← Change instructions</button>
+     <div class="cmp-actions">
+       <button class="cmp-btn ghost" onclick="closeEmailModal()">Cancel</button>
+       <button class="cmp-btn primary" id="cmp-send-btn" onclick="sendEmails()">Send ${c.sendable.length} email${c.sendable.length === 1 ? '' : 's'}</button>
+     </div>`);
+  renderPreview();
+}
+
+function insertField(k) {
+  const ta = document.getElementById('cmp-body');
+  const token = `{{${k}}}`;
+  const s = ta.selectionStart ?? ta.value.length, e = ta.selectionEnd ?? ta.value.length;
+  ta.value = ta.value.slice(0, s) + token + ta.value.slice(e);
+  ta.focus(); ta.selectionStart = ta.selectionEnd = s + token.length;
+  compose.template.body = ta.value;
+  renderPreview();
+}
+
+function footerPreview() {
+  const sp = senderProfile;
+  if (!sp) return '<em>Your name, phone, mailing address and an unsubscribe link are added here.</em>';
+  return `You're receiving this email because you're a client of ${escH(sp.display_name)}.<br>${escH(sp.display_name)}${sp.phone ? ' · ' + escH(sp.phone) : ''}<br>${escH(sp.mailing_address).replace(/\n/g, ', ')}<br><u>Unsubscribe</u>`;
+}
+
+function renderPreview() {
+  const c = compose;
+  const p = c.sendable[c.previewIdx] || c.sendable[0];
+  const el = document.getElementById('cmp-preview');
+  if (!el || !p) return;
+  const subj = fillTemplate(c.template.subject, p), body = fillTemplate(c.template.body, p);
+  const fromName = (senderProfile && senderProfile.display_name) || 'Your name';
+  el.innerHTML = `<div class="pv-meta"><span>From</span> ${escH(fromName)} · <span>To</span> ${escH(p.email || '')}</div>
+    <div class="pv-subject">${escH(subj)}</div>
+    <div class="pv-body">${escH(body).replace(/\n/g, '<br>')}</div>
+    <div class="pv-footer">${footerPreview()}</div>`;
+}
+
+function renderIndividualReview() {
+  const c = compose;
+  const n = c.drafts.length;
+  const tabs = n > 1 ? `<div class="email-tabs">${c.drafts.map((d, i) => {
+    const p = POLICIES.find(x => x.idx === d.idx);
+    return `<button class="email-tab ${i === c.active ? 'active' : ''} ${d.include ? '' : 'excluded'}" onclick="switchEmailTab(${i})">${escH((p.name || '').split(' ')[0] || 'Client')}</button>`;
+  }).join('')}</div>` : '';
+  const d = c.drafts[c.active];
+  const p = POLICIES.find(x => x.idx === d.idx);
+  const count = c.drafts.filter(x => x.include).length;
+  setModal(n === 1 ? `Email ${p.name}` : `Email ${n} clients`, 'Written individually · review before sending', `
+    ${profileNotice()}
+    ${tabs}
+    <div class="cmp-to"><span>To <strong>${escH(p.name)}</strong> · ${escH(p.email || '')}</span>
+      ${n > 1 ? `<label class="cmp-include"><input type="checkbox" ${d.include ? 'checked' : ''} onchange="compose.drafts[${c.active}].include=this.checked;renderIndividualReview()"> Include in this send</label>` : ''}</div>
+    <label class="cmp-label" for="cmp-subject">Subject</label>
+    <input class="cmp-input" id="cmp-subject" value="${escH(d.subject)}" maxlength="200" oninput="compose.drafts[${c.active}].subject=this.value">
+    <label class="cmp-label" for="cmp-body">Message</label>
+    <textarea class="cmp-textarea tall" id="cmp-body" oninput="compose.drafts[${c.active}].body=this.value">${escH(d.body)}</textarea>
+    <div class="pv-footer standalone">${footerPreview()}</div>
+    ${sendControls(count)}`,
+    `<div class="cmp-actions">
+       <button class="cmp-btn link" onclick="renderCompose()">← Change instructions</button>
+       <button class="cmp-btn ghost" onclick="copyCurrentEmail()">Copy</button>
+     </div>
+     <div class="cmp-actions">
+       <button class="cmp-btn ghost" onclick="closeEmailModal()">Cancel</button>
+       <button class="cmp-btn primary" id="cmp-send-btn" onclick="sendEmails()" ${count ? '' : 'disabled'}>Send ${count} email${count === 1 ? '' : 's'}</button>
+     </div>`);
+}
+
+function switchEmailTab(i) {
+  compose.active = i;
+  renderIndividualReview();
+}
+
+function copyCurrentEmail() {
+  const subj = document.getElementById('cmp-subject')?.value || '';
+  const body = document.getElementById('cmp-body')?.value || '';
+  navigator.clipboard.writeText(`Subject: ${subj}\n\n${body}`).then(() => showToast('Email copied!'));
+}
+
+// ── STEP 3: SEND ──
+async function sendEmails() {
+  const c = compose;
+  const err = document.getElementById('cmp-error');
+  err.textContent = '';
+  if (!senderProfile) { err.innerHTML = 'Add your sender details on the <a href="bookvaluepro-account.html#sender-profile">Account page</a> first.'; return; }
+  if (!document.getElementById('cmp-attest').checked) { err.textContent = 'Please tick the box to confirm before sending.'; return; }
+
+  let items;
+  if (c.mode === 'template') {
+    if (!c.template.subject.trim() || !c.template.body.trim()) { err.textContent = 'The subject and message can\'t be empty.'; return; }
+    items = c.sendable.map(p => ({ policyId: p.id, subject: fillTemplate(c.template.subject, p).trim(), body: fillTemplate(c.template.body, p).trim() }));
+  } else {
+    items = c.drafts.filter(d => d.include).map(d => ({ policyId: POLICIES.find(x => x.idx === d.idx).id, subject: d.subject.trim(), body: d.body.trim() }));
+    if (items.some(i => !i.subject || !i.body)) { err.textContent = 'One of the emails is missing a subject or message.'; return; }
+  }
+  const leftover = items.find(i => /\{\{\s*\w+\s*\}\}/.test(i.subject + i.body));
+  if (leftover) { err.textContent = 'The email still has an unknown fill-in like {{...}}. Fix it before sending.'; return; }
+
+  let scheduledAt = null;
+  if (document.querySelector('input[name="cmp-when"]:checked').value === 'later') {
+    const v = document.getElementById('cmp-at').value;
+    if (!v) { err.textContent = 'Pick a date and time to send.'; return; }
+    scheduledAt = new Date(v).toISOString();
+  }
+
+  c.busy = true;
+  showGenerating(scheduledAt ? 'Scheduling your emails…' : `Sending ${items.length} email${items.length === 1 ? '' : 's'}…`);
+  try {
+    const result = await bvpCallFunction('outreach-email', {
+      action: 'send', mode: c.mode, items, scheduledAt, audience: audienceLabel(c.sendable), returnBase: bvpSiteBase(),
+    });
+    c.busy = false;
+    renderResult(result);
+    clearSelection();
+    loadOutreachData();
+  } catch (e) {
+    c.busy = false;
+    renderReview();
+    document.getElementById('cmp-error').textContent = e.message;
+  }
+}
+
+function renderResult(r) {
+  const done = r.scheduled
+    ? `<div class="cmp-done">🕒 ${r.scheduled} email${r.scheduled === 1 ? '' : 's'} scheduled for <strong>${fmtWhen(r.scheduledAt)}</strong></div>
+       <p class="cmp-muted">You can cancel this batch under "Sent &amp; scheduled emails" until it goes out.</p>`
+    : `<div class="cmp-done">✓ ${r.sent} email${r.sent === 1 ? '' : 's'} sent</div>
+       <p class="cmp-muted">Replies go straight to ${escH(senderProfile.reply_to_email)}.</p>`;
+  const skipped = (r.skipped || []).length
+    ? `<div class="cmp-label">Skipped (${r.skipped.length})</div><ul class="cmp-list">${r.skipped.slice(0, 30).map(s => `<li>${escH(s.name || 'Client')}: ${escH(s.reason)}</li>`).join('')}</ul>` : '';
+  const failed = r.failed
+    ? `<div class="cmp-notice warn">${r.failed} email${r.failed === 1 ? '' : 's'} couldn't be sent: ${escH((r.failures[0] || {}).error || 'email service error')}. Try those again later.</div>` : '';
+  setModal('Done', '', `${done}${failed}${skipped}`,
+    `<span></span><button class="cmp-btn primary" onclick="closeEmailModal()">Close</button>`);
+}
+
+// ── SENT & SCHEDULED HISTORY, LAST-EMAILED TAGS ──
+async function loadOutreachData() {
+  const uid = bvpSession.user.id;
+  const [prof, supp, emails, camps] = await Promise.all([
+    bvp.from('agent_profiles').select('display_name, phone, reply_to_email, mailing_address').eq('user_id', uid).maybeSingle(),
+    bvp.from('email_suppressions').select('email').eq('agent_id', uid),
+    bvp.from('outreach_emails').select('policy_id, status, sent_at').eq('agent_id', uid).in('status', ['sent', 'scheduled']).order('sent_at', { ascending: false }).limit(5000),
+    bvp.from('outreach_campaigns').select('*').eq('agent_id', uid).order('created_at', { ascending: false }).limit(12),
+  ]);
+  senderProfile = prof.data || null;
+  suppressedEmails = new Set((supp.data || []).map(s => s.email));
+  lastEmailed = new Map();
+  (emails.data || []).forEach(e => { if (!lastEmailed.has(e.policy_id)) lastEmailed.set(e.policy_id, { at: e.sent_at, status: e.status }); });
+  renderHistory(camps.data || []);
+  renderCalendar();
+}
+
+function emailTag(p) {
+  if (p.email && suppressedEmails.has(clientEmail(p))) return '<span class="em-tag unsub" title="This client unsubscribed from your emails">Unsubscribed</span>';
+  const le = lastEmailed.get(String(p.id));
+  if (!le) return '';
+  const future = new Date(le.at) > new Date();
+  return future ? `<span class="em-tag sched" title="Email scheduled">🕒 ${fmtDay(le.at)}</span>`
+                : `<span class="em-tag sent" title="Last emailed">✉ ${fmtDay(le.at)}</span>`;
+}
+
+function renderHistory(camps) {
+  const el = document.getElementById('email-history');
+  if (!el) return;
+  if (!camps.length) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  const now = new Date();
+  const label = c => {
+    if (c.status === 'scheduled' && c.scheduled_at && new Date(c.scheduled_at) > now) return '<span class="eh-chip sched">Scheduled</span>';
+    if (c.status === 'cancelled') return '<span class="eh-chip grey">Cancelled</span>';
+    if (c.status === 'failed') return '<span class="eh-chip red">Failed</span>';
+    if (c.status === 'partial') return '<span class="eh-chip amber">Partly sent</span>';
+    return '<span class="eh-chip sent">Sent</span>';
+  };
+  el.querySelector('.eh-rows').innerHTML = camps.map(c => {
+    const when = c.scheduled_at || c.created_at;
+    const canCancel = c.status === 'scheduled' && c.scheduled_at && new Date(c.scheduled_at) > now;
+    return `<div class="eh-row">
+      <div class="eh-main"><div class="eh-subj">${escH(c.subject || '(no subject)')}</div>
+        <div class="eh-meta">${escH(c.audience || '')} · ${c.mode === 'template' ? 'Template' : 'Individual'} · ${fmtWhen(when)}</div></div>
+      <div class="eh-counts">${c.sent_count} ${canCancel ? 'scheduled' : 'sent'}${c.skipped_count ? ` · ${c.skipped_count} skipped` : ''}${c.failed_count ? ` · ${c.failed_count} failed` : ''}</div>
+      ${label(c)}
+      ${canCancel ? `<button class="eh-cancel" data-id="${escH(c.id)}" onclick="cancelCampaign(this)">Cancel</button>` : '<span class="eh-cancel-spacer"></span>'}
+    </div>`;
+  }).join('');
+}
+
+function toggleHistory() {
+  document.getElementById('email-history').classList.toggle('open');
+}
+
+async function cancelCampaign(btn) {
+  if (btn.dataset.confirm !== '1') {
+    btn.dataset.confirm = '1'; btn.textContent = 'Click again to cancel'; btn.classList.add('confirm');
+    setTimeout(() => { if (btn.isConnected) { btn.dataset.confirm = ''; btn.textContent = 'Cancel'; btn.classList.remove('confirm'); } }, 4000);
+    return;
+  }
+  btn.disabled = true; btn.textContent = 'Cancelling…';
+  try {
+    const r = await bvpCallFunction('outreach-email', { action: 'cancel', campaignId: btn.dataset.id });
+    showToast(r.tooLate ? `Cancelled ${r.cancelled}; ${r.tooLate} had already gone out` : 'Scheduled emails cancelled');
+    loadOutreachData();
+  } catch (e) { showToast(e.message); btn.disabled = false; btn.textContent = 'Cancel'; }
 }
 
 // ── CALL SCRIPT MODAL ──────────────────────────────────────────────────
@@ -1042,6 +1531,9 @@ async function initFromSupabase() {
       enriched.forEach(p => {
         POLICIES.push({
           idx:      p.policy_idx,
+          id:       String(p.id),
+          firstName: p.first_name || null,
+          lastName:  p.last_name || null,
           name:     [p.first_name, p.last_name].filter(Boolean).join(' ') || ('Policy #' + p.policy_idx),
           company:  p.company,
           state:    p.issued_state,
@@ -1069,6 +1561,7 @@ async function initFromSupabase() {
 
       hideLoadingState();
       renderAll();
+      loadOutreachData().catch(err => console.warn('loadOutreachData:', err));
     } else {
       showNoDataState();
     }

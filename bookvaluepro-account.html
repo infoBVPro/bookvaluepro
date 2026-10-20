@@ -59,6 +59,16 @@ h1{font-family:'DM Serif Display',serif;font-size:36px;color:var(--deep);margin-
 .spinner{width:16px;height:16px;border:2px solid #b8dfc8;border-top-color:var(--forest);border-radius:50%;display:inline-block;animation:spin .8s linear infinite;vertical-align:-3px;margin-right:8px;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .hidden{display:none !important;}
+.sp-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;}
+.sp-field label{display:block;font-size:11px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:var(--slate);margin-bottom:6px;}
+.sp-field input,.sp-field textarea{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;color:var(--text);outline:none;background:white;}
+.sp-field textarea{resize:vertical;min-height:64px;line-height:1.5;}
+.sp-field input:focus,.sp-field textarea:focus{border-color:var(--emerald);box-shadow:0 0 0 3px rgba(61,162,114,0.12);}
+.sp-field.full{grid-column:1 / -1;}
+.sp-help{font-size:12px;color:var(--text-muted);margin-top:4px;line-height:1.5;}
+.ok-msg{font-size:13px;color:var(--forest);margin-top:10px;display:none;}
+.ok-msg.show{display:block;}
+@media (max-width:640px){.sp-grid{grid-template-columns:1fr;}}
 
 /* ── SIDE NAVIGATION (canonical — same across all pages) ── */
 .bvp-sidenav {
@@ -167,6 +177,22 @@ body { padding-left: 64px; }
   <section class="card hidden" id="agency-card">
     <div class="card-label">Agency</div>
     <div id="agency-body"></div>
+  </section>
+
+  <section class="card hidden" id="sender-profile">
+    <div class="card-label">Email sender profile</div>
+    <p class="plan-sub" style="margin-bottom:1rem;">Used on outreach emails you send to clients. Clients see your name as the sender, and their replies go to your reply-to email. Federal anti-spam law (CAN-SPAM) requires a mailing address on every marketing email.</p>
+    <div class="sp-grid">
+      <div class="sp-field"><label for="sp-name">Your name, as clients see it</label><input id="sp-name" maxlength="80" placeholder="Sarah Miller"/></div>
+      <div class="sp-field"><label for="sp-phone">Phone</label><input id="sp-phone" maxlength="40" placeholder="(402) 555-0100"/></div>
+      <div class="sp-field full"><label for="sp-reply">Reply-to email</label><input id="sp-reply" type="email" placeholder="you@youragency.com"/>
+        <div class="sp-help">Client replies come here. Emails are sent from a BookValuePro address with your name on it.</div></div>
+      <div class="sp-field full"><label for="sp-address">Business mailing address</label><textarea id="sp-address" maxlength="300" placeholder="123 Main St, Suite 200&#10;Omaha, NE 68102"></textarea>
+        <div class="sp-help">A street address or a PO box you've registered with the post office.</div></div>
+    </div>
+    <div class="actions"><button class="btn btn-primary" id="sp-save" onclick="saveSenderProfile()">Save sender profile</button></div>
+    <div class="err" id="sp-err"></div>
+    <div class="ok-msg" id="sp-ok">Saved. You're ready to send outreach emails.</div>
   </section>
 
   <section class="card">
@@ -345,6 +371,38 @@ async function render(session) {
   }
 }
 
+async function loadSenderProfile(session) {
+  const { data } = await bvp.from('agent_profiles').select('*').eq('user_id', session.user.id).maybeSingle();
+  document.getElementById('sp-name').value = data?.display_name || '';
+  document.getElementById('sp-phone').value = data?.phone || '';
+  document.getElementById('sp-reply').value = data?.reply_to_email || session.user.email || '';
+  document.getElementById('sp-address').value = data?.mailing_address || '';
+  document.getElementById('sender-profile').classList.remove('hidden');
+  if (location.hash === '#sender-profile') document.getElementById('sender-profile').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function saveSenderProfile() {
+  const err = document.getElementById('sp-err'), ok = document.getElementById('sp-ok'), btn = document.getElementById('sp-save');
+  err.classList.remove('show'); ok.classList.remove('show');
+  const row = {
+    display_name: document.getElementById('sp-name').value.trim(),
+    phone: document.getElementById('sp-phone').value.trim() || null,
+    reply_to_email: document.getElementById('sp-reply').value.trim(),
+    mailing_address: document.getElementById('sp-address').value.trim(),
+    updated_at: new Date().toISOString(),
+  };
+  const fail = m => { err.textContent = m; err.classList.add('show'); };
+  if (!row.display_name) return fail('Please enter your name.');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.reply_to_email)) return fail('Please enter a valid reply-to email.');
+  if (row.mailing_address.length < 5) return fail('Please enter your business mailing address.');
+  btn.disabled = true;
+  const { data: { user } } = await bvp.auth.getUser();
+  const { error } = await bvp.from('agent_profiles').upsert({ user_id: user.id, ...row }, { onConflict: 'user_id' });
+  btn.disabled = false;
+  if (error) return fail('Could not save: ' + error.message);
+  ok.classList.add('show');
+}
+
 (async () => {
   const session = await bvpRequireLogin();
   if (!session) return;
@@ -356,6 +414,7 @@ async function render(session) {
   if (justPaid) history.replaceState(null, '', location.pathname);
 
   let access = await render(session);
+  if (access.has_access) loadSenderProfile(session).catch(e => console.warn('sender profile:', e));
 
   // Right after checkout, Stripe's confirmation can take a few seconds to arrive.
   if (justPaid) {

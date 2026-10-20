@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="noindex"/>
+<title>Unsubscribe</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,400;9..40,600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="bvp-supabase.js"></script>
+<style>
+:root{--forest:#1a5c3a;--deep:#0d2e1e;--border:#dde8e2;--muted:#556b5e;--danger:#c0392b;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:#f7faf8;color:#1a1a1a;min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:12vh 16px 40px;}
+.card{background:white;border:1px solid var(--border);border-radius:16px;max-width:440px;width:100%;padding:2rem;text-align:center;}
+h1{font-family:'DM Serif Display',serif;font-weight:400;font-size:26px;color:var(--deep);margin-bottom:.6rem;}
+p{font-size:15px;color:var(--muted);line-height:1.6;}
+.btn{margin-top:1.4rem;background:var(--forest);color:white;border:none;padding:12px 22px;border-radius:10px;font-size:15px;font-weight:600;font-family:inherit;cursor:pointer;}
+.btn:disabled{opacity:.6;cursor:wait;}
+.err{color:var(--danger);font-size:14px;margin-top:1rem;}
+.hidden{display:none;}
+</style>
+</head>
+<body>
+<div class="card">
+  <div id="ask">
+    <h1>Unsubscribe?</h1>
+    <p>You'll stop receiving emails from your insurance agent sent through BookValuePro.</p>
+    <button class="btn" id="btn" onclick="unsubscribe()">Unsubscribe</button>
+    <div class="err" id="err"></div>
+  </div>
+  <div id="done" class="hidden">
+    <h1>You're unsubscribed</h1>
+    <p>You won't receive any more of these emails from <strong id="agent"></strong>. You can still contact your agent directly at any time.</p>
+  </div>
+</div>
+<script>
+const token = new URLSearchParams(location.search).get('t');
+if (!token) {
+  document.getElementById('btn').classList.add('hidden');
+  document.getElementById('err').textContent = 'This unsubscribe link is incomplete. Please use the link from your email.';
+}
+async function unsubscribe() {
+  const btn = document.getElementById('btn');
+  btn.disabled = true; btn.textContent = 'Unsubscribing…';
+  try {
+    const r = await bvpCallFunction('outreach-email', { action: 'unsubscribe', token });
+    document.getElementById('agent').textContent = r.agentName;
+    document.getElementById('ask').classList.add('hidden');
+    document.getElementById('done').classList.remove('hidden');
+  } catch (e) {
+    document.getElementById('err').textContent = e.message;
+    btn.disabled = false; btn.textContent = 'Unsubscribe';
+  }
+}
+</script>
+</body>
+</html>

@@ -181,17 +181,18 @@ body { padding-left: 64px; }
             <th data-key="curr">Current<br>LTV</th>
             <th data-key="opp">Opportunity<br>LTV</th>
             <th data-key="renewals" title="Policies with an anniversary in the next 3 months">Renewals<br>next 3 mo.</th>
+            <th data-key="emails" title="Outreach emails sent to clients from the Renewal Outreach page in the last 30 days">Emails sent<br>last 30 days</th>
             <th data-key="touches" title="Calls, emails, notes and stage changes logged on leads in the last 30 days">Lead touches<br>last 30 days</th>
             <th data-key="openLeads">Open<br>leads</th>
             <th data-key="won">Leads won<br>last 30 days</th>
             <th style="cursor:default"></th>
           </tr>
         </thead>
-        <tbody id="rows"><tr><td colspan="10" class="loading">Loading your team's books…</td></tr></tbody>
+        <tbody id="rows"><tr><td colspan="11" class="loading">Loading your team's books…</td></tr></tbody>
         <tfoot id="totals"></tfoot>
       </table>
     </div>
-    <p class="foot-note">Book values use each agent's own commission rates and assumptions, the same numbers they see on their dashboard. "Lead touches" counts logged calls, emails, notes and stage changes on leads; renewal outreach isn't logged yet, so it isn't counted here. Click any column to sort.</p>
+    <p class="foot-note">Book values use each agent's own commission rates and assumptions, the same numbers they see on their dashboard. "Emails sent" counts outreach emails sent from the Renewal Outreach page. "Lead touches" counts logged calls, emails, notes and stage changes on leads. Click any column to sort.</p>
   </section>
 </main>
 
@@ -223,7 +224,7 @@ function renewalMonths() {
 }
 
 async function loadAgentBook(member) {
-  const row = { ...member, policies: 0, premium: 0, curr: 0, opp: 0, renewals: 0, touches: 0, openLeads: 0, won: 0, hasBook: false };
+  const row = { ...member, policies: 0, premium: 0, curr: 0, opp: 0, renewals: 0, emails: 0, touches: 0, openLeads: 0, won: 0, hasBook: false };
   const book = await bvpGetActiveBook(member.user_id);
   if (!book) return row;
   const policies = await bvpGetPolicies(book.id);
@@ -255,6 +256,12 @@ async function loadLeadStats(ids) {
     if (!['won', 'lost'].includes(l.stage)) s.openLeads += 1;
     if (l.stage === 'won' && l.converted_at && l.converted_at >= cutoff) s.won += 1;
   });
+  // Outreach emails that have actually gone out in the last 30 days.
+  const { data: sentEmails, error: e3 } = await bvp.from('outreach_emails').select('agent_id')
+    .in('agent_id', ids).in('status', ['sent', 'scheduled']).gte('sent_at', cutoff).lte('sent_at', new Date().toISOString());
+  if (e3) console.warn('outreach_emails:', e3.message);
+  (sentEmails || []).forEach(e => { (byAgent[e.agent_id] ||= { touches: 0, openLeads: 0, won: 0, emails: 0 }).emails = ((byAgent[e.agent_id].emails) || 0) + 1; });
+
   const leadIds = Object.keys(leadOwner);
   if (leadIds.length) {
     const { data: acts, error: e2 } = await bvp.from('lead_activity').select('lead_id').gte('created_at', cutoff);
@@ -269,9 +276,9 @@ async function loadLeadStats(ids) {
 
 function renderTotals() {
   const t = rows.reduce((s, r) => {
-    ['policies', 'premium', 'curr', 'opp', 'renewals', 'touches', 'openLeads', 'won'].forEach(k => s[k] += r[k] || 0);
+    ['policies', 'premium', 'curr', 'opp', 'renewals', 'emails', 'touches', 'openLeads', 'won'].forEach(k => s[k] += r[k] || 0);
     return s;
-  }, { policies: 0, premium: 0, curr: 0, opp: 0, renewals: 0, touches: 0, openLeads: 0, won: 0 });
+  }, { policies: 0, premium: 0, curr: 0, opp: 0, renewals: 0, emails: 0, touches: 0, openLeads: 0, won: 0 });
 
   document.getElementById('t-curr').textContent = moneyShort(t.curr);
   document.getElementById('t-opp').textContent = moneyShort(t.opp);
@@ -284,7 +291,7 @@ function renderTotals() {
 
   document.getElementById('totals').innerHTML = rows.length > 1 ? `<tr>
     <td>Agency total</td><td>${num(t.policies)}</td><td>${money(t.premium)}</td><td>${money(t.curr)}</td><td>${money(t.opp)}</td>
-    <td>${num(t.renewals)}</td><td>${num(t.touches)}</td><td>${num(t.openLeads)}</td><td>${num(t.won)}</td><td></td></tr>` : '';
+    <td>${num(t.renewals)}</td><td>${num(t.emails)}</td><td>${num(t.touches)}</td><td>${num(t.openLeads)}</td><td>${num(t.won)}</td><td></td></tr>` : '';
 }
 
 function renderRows() {
@@ -307,9 +314,9 @@ function renderRows() {
     return `<tr>
       <td class="agent">${esc(r.email)}${r.role === 'owner' ? '<span class="role">Owner</span>' : ''}${r.isMe ? '<span class="role">(you)</span>' : ''}</td>
       ${book}
-      <td>${num(r.touches)}</td><td>${num(r.openLeads)}</td><td>${num(r.won)}</td>
+      <td>${num(r.emails)}</td><td>${num(r.touches)}</td><td>${num(r.openLeads)}</td><td>${num(r.won)}</td>
       <td><a class="view" href="${link}">${r.isMe ? 'Open' : 'View'}</a></td></tr>`;
-  }).join('') || '<tr><td colspan="10" class="loading">No agents yet. <a href="bookvaluepro-agency-team.html">Invite your first agent →</a></td></tr>';
+  }).join('') || '<tr><td colspan="11" class="loading">No agents yet. <a href="bookvaluepro-agency-team.html">Invite your first agent →</a></td></tr>';
 }
 
 document.getElementById('sort-row').addEventListener('click', e => {
