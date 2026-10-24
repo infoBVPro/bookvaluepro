@@ -572,7 +572,8 @@ function hhMemberOK(r, h) {
   const partnerOK = h.partner !== 'none' && !!r[h.partner + '_qualifies'];
   const minA = Math.max(1, r.other_adults_min || 1);
   const ageOK = !r.other_adult_min_age || r.other_adult_min_age <= 18 || h.adultAge >= r.other_adult_min_age;
-  const adultsOK = h.adults >= minA && (r.other_adults_max == null || h.adults <= r.other_adults_max) && ageOK;
+  const adultsCount = r.other_adults_min != null || r.other_adult_min_age != null;   // does this rule let a non-partner adult qualify?
+  const adultsOK = adultsCount && h.adults >= minA && (r.other_adults_max == null || h.adults <= r.other_adults_max) && ageOK && (!r.other_adult_months || h.together12);
   const ok = r.spouse_required ? (partnerOK && (r.other_adults_max == null || h.adults <= r.other_adults_max)) : (partnerOK || adultsOK);
   return ok && monthsOK;
 }
@@ -589,10 +590,12 @@ function hhWho(r) {
   if (r.other_adult_min_age) {
     const n = r.other_adults_max ? `${Math.max(1, r.other_adults_min || 1)}–${r.other_adults_max} adults` : 'another adult';
     aText = `${n} age ${r.other_adult_min_age}+`;
+  } else if (r.other_adults_min) {
+    aText = `anyone else you've lived with${r.other_adult_months ? ` for the past ${r.other_adult_months} months` : ''}`;
   }
   let who = r.spouse_required
     ? `your ${pText}${r.other_adults_max ? ` (plus no more than ${r.other_adults_max} other adults ${r.other_adult_min_age || 18}+)` : ''}`
-    : [aText, pText && `your ${pText}`].filter(Boolean).join(', or ');
+    : (r.other_adult_min_age ? [aText, pText && `your ${pText}`] : [pText && `your ${pText}`, aText]).filter(Boolean).join(', or ');
   if (r.months_together) who += ` for the past ${r.months_together} months`;
   return who;
 }
@@ -604,7 +607,7 @@ function hhTierLabel(r) {
   return { household: 'Household discount', multi_policy: 'Multi-policy discount', spousal: 'Spousal discount' }[r.tier] || 'Discount';
 }
 function hhTierRule(r) {
-  if (r.tier === 'household') return `Lives with ${hhWho(r)}.`;
+  if (r.tier === 'household') return `Lives with ${hhWho(r)}${r.requires_other_policy ? `, and that person ${hhPolicyText(r)}` : ''}.`;
   if (r.tier === 'spousal') return `Your ${hhWho(r)} ${hhPolicyText(r)}.`;
   if (r.tier === 'multi_policy') {
     if (r.requires_household_tier) return `Qualifies for the household discount, and that household member ${hhPolicyText(r)}.`;
