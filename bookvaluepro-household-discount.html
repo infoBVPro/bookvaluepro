@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BookValuePro — Household Discount Assistant</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="bvp-supabase.js"></script>
+<style>
+:root {
+  --forest: #1a5c3a; --emerald: #3da272; --deep: #0d2e1e;
+  --slate: #5a6472; --mist: #e6f5ee; --sage: #7abf9a;
+  --border: #dde8e2; --text: #1a1a1a; --text-muted: #556b5e;
+  --light-bg: #f7faf8; --white: #fff;
+  --sans: 'DM Sans', sans-serif;
+  --serif: 'DM Serif Display', serif;
+  --mono: 'DM Mono', monospace;
+  --accept: #1a5c3a;    --accept-bg: #e6f5ee;    --accept-border: #b8dfc8;
+  --review: #92640a;    --review-bg: #fef3e2;    --review-border: #fde68a;
+  --decline: #b91c1c;   --decline-bg: #fdecea;   --decline-border: #f5c6c2;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--sans); color: var(--text); background: var(--light-bg); overflow-x: hidden; }
+
+/* ── STANDARD HEADER ── */
+.bvp-header {
+  background: #0d2e1e;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 2rem;
+  border-bottom: 1px solid rgba(61,162,114,0.15);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  gap: 16px;
+  flex-wrap: nowrap;
+}
+.bvp-header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.bvp-book-chip {
+  font-size: 11px; color: #7abf9a;
+  background: rgba(26,92,58,0.4);
+  border: 1px solid rgba(61,162,114,0.2);
+  padding: 4px 12px; border-radius: 20px;
+  font-family: var(--mono);
+  white-space: nowrap; max-width: 220px;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.bvp-agent-email { font-size: 12px; color: #7abf9a; font-family: var(--mono); white-space: nowrap; }
+.bvp-signout {
+  font-size: 12px; color: #7abf9a; background: transparent;
+  border: 1px solid rgba(122,191,154,0.3); padding: 6px 14px;
+  border-radius: 6px; cursor: pointer;
+  font-family: var(--sans); transition: all 0.2s; white-space: nowrap;
+}
+.bvp-signout:hover { border-color: #3da272; color: white; }
+
+@media (max-width: 1100px) { .bvp-header { height: auto; flex-wrap: wrap; padding: 10px 1.5rem; } }
+@media (max-width: 900px)  { .bvp-header { padding: 10px 1rem; } }
+@media (max-width: 580px)  { .bvp-agent-email { display: none; } .bvp-book-chip { max-width: 120px; } }
+
+/* ── PAGE LAYOUT ── */
+.page { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+.page-header { margin-bottom: 1.5rem; }
+.page-title { font-family: var(--serif); font-size: 32px; color: var(--deep); line-height: 1; }
+.page-sub { font-size: 14px; color: var(--text-muted); margin-top: 6px; line-height: 1.5; }
+
+/* ── INPUT CARD ── */
+.uw-card {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: 16px; padding: 1.75rem; margin-bottom: 24px;
+}
+.uw-section { margin-bottom: 1.75rem; }
+.uw-section:last-child { margin-bottom: 0; }
+.uw-section-label {
+  font-size: 11px; font-weight: 600; color: var(--slate);
+  letter-spacing: 0.08em; text-transform: uppercase;
+  margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+}
+.uw-section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+.uw-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+.uw-field label {
+  display: block; font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 6px;
+}
+.uw-select, .uw-input {
+  width: 100%; padding: 10px 12px; border: 1.5px solid var(--border);
+  border-radius: 9px; font-size: 14px; font-family: var(--sans);
+  color: var(--text); background: var(--light-bg); outline: none; transition: border-color 0.2s;
+}
+.uw-select:focus, .uw-input:focus { border-color: var(--emerald); background: white; }
+
+.uw-toggle-row { display: flex; gap: 8px; }
+.uw-toggle-btn {
+  flex: 1; padding: 10px; border-radius: 9px; border: 1.5px solid var(--border);
+  background: var(--light-bg); font-size: 13px; font-weight: 500; color: var(--text-muted);
+  cursor: pointer; transition: all 0.15s; text-align: center;
+}
+.uw-toggle-btn.selected { background: var(--mist); border-color: var(--emerald); color: var(--forest); }
+
+/* Carrier chip picker */
+.uw-carrier-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.uw-carrier-chip {
+  padding: 8px 16px; border-radius: 20px; border: 1.5px solid var(--border);
+  background: var(--light-bg); font-size: 13px; font-weight: 500; color: var(--text-muted);
+  cursor: pointer; transition: all 0.15s; user-select: none;
+}
+.uw-carrier-chip.selected { background: var(--forest); border-color: var(--forest); color: white; }
+.uw-carrier-chip:hover:not(.selected) { border-color: var(--emerald); color: var(--forest); }
+.uw-carrier-all-row { display: flex; gap: 8px; margin-top: 10px; }
+.uw-link-btn {
+  font-size: 12px; color: var(--emerald); background: none; border: none;
+  cursor: pointer; font-family: var(--sans); text-decoration: underline; padding: 0;
+}
+
+/* Tag / typeahead input */
+.uw-tag-input-wrap { position: relative; }
+.uw-tag-box {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  border: 1.5px solid var(--border); border-radius: 9px; padding: 8px 10px;
+  background: var(--light-bg); min-height: 46px; transition: border-color 0.2s;
+}
+.uw-tag-box:focus-within { border-color: var(--emerald); background: white; }
+.uw-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--mist); color: var(--forest); border: 1px solid var(--accept-border);
+  padding: 4px 6px 4px 10px; border-radius: 14px; font-size: 12.5px; font-weight: 500;
+  white-space: nowrap;
+}
+.uw-chip button {
+  background: none; border: none; color: var(--forest); cursor: pointer;
+  font-size: 13px; line-height: 1; padding: 2px; opacity: 0.6; border-radius: 50%;
+}
+.uw-chip button:hover { opacity: 1; background: rgba(26,92,58,0.12); }
+.uw-chip.unrec { background: #f1f2f4; color: #4b5563; border: 1px dashed #9aa1ab; }
+.uw-chip.unrec button { color: #4b5563; }
+.uw-chip.unrec .unrec-tag { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: #6b7280; }
+.uw-suggest-head { padding: 8px 14px 4px; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.uw-suggest-item.keep .sname { color: var(--text-muted); font-style: italic; }
+.uw-tag-box input {
+  flex: 1; min-width: 140px; border: none; outline: none; background: transparent;
+  font-size: 13.5px; font-family: var(--sans); color: var(--text); padding: 4px 2px;
+}
+.uw-suggest {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20;
+  background: white; border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1); max-height: 220px; overflow-y: auto;
+  display: none;
+}
+.uw-suggest.open { display: block; }
+.uw-suggest-item { padding: 9px 14px; font-size: 13px; cursor: pointer; display: flex; flex-direction: column; gap: 1px; }
+.uw-suggest-item:hover, .uw-suggest-item.active { background: var(--mist); }
+.uw-suggest-item .sname { color: var(--text); font-weight: 500; }
+.uw-suggest-item .smeta { color: var(--text-muted); font-size: 11px; }
+.uw-suggest-empty { padding: 10px 14px; font-size: 12.5px; color: var(--text-muted); font-style: italic; }
+
+/* Run button */
+.uw-run-row { display: flex; align-items: center; gap: 14px; margin-top: 4px; }
+.btn-run {
+  background: var(--forest); color: white; border: none; padding: 13px 28px;
+  border-radius: 10px; font-size: 14.5px; font-weight: 600; font-family: var(--sans);
+  cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 8px;
+}
+.btn-run:hover:not(:disabled) { background: var(--emerald); }
+.btn-run:disabled { background: var(--border); color: var(--text-muted); cursor: not-allowed; }
+.uw-run-hint { font-size: 12.5px; color: var(--text-muted); }
+
+/* ── RESULTS ── */
+.uw-results { display: flex; flex-direction: column; gap: 14px; }
+.uw-empty {
+  text-align: center; padding: 60px 20px; color: var(--text-muted);
+  background: var(--white); border: 1px dashed var(--border); border-radius: 16px;
+}
+.uw-empty div:first-child { font-size: 32px; margin-bottom: 10px; }
+
+.result-card {
+  background: var(--white); border: 1.5px solid var(--border); border-radius: 14px;
+  overflow: hidden; border-left-width: 5px;
+}
+.result-card.accept  { border-left-color: var(--accept); }
+.result-card.review  { border-left-color: var(--review); }
+.result-card.decline { border-left-color: var(--decline); }
+
+.result-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px; gap: 12px; flex-wrap: wrap;
+}
+.result-carrier { font-size: 16px; font-weight: 600; color: var(--deep); }
+.result-badge {
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.03em;
+  padding: 5px 14px; border-radius: 20px; white-space: nowrap;
+}
+.result-badge.accept  { background: var(--accept-bg);  color: var(--accept);  border: 1px solid var(--accept-border); }
+.result-badge.review  { background: var(--review-bg);  color: var(--review);  border: 1px solid var(--review-border); }
+.result-badge.decline { background: var(--decline-bg); color: var(--decline); border: 1px solid var(--decline-border); }
+.result-card.none { border-left-color: var(--slate); }
+.result-badge.none { background: var(--light-bg); color: var(--slate); border: 1px solid var(--border); }
+
+.result-body { padding: 0 20px 18px; }
+.result-list { display: flex; flex-direction: column; gap: 8px; }
+.result-item {
+  display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.5;
+  padding: 9px 12px; border-radius: 9px;
+}
+.result-item.reason { background: var(--decline-bg); color: #7a1f1f; }
+.result-item.flag    { background: var(--review-bg); color: #6b4a05; }
+.result-item.info    { background: var(--accept-bg); color: var(--accept); }
+.result-item .ri-icon { flex-shrink: 0; font-size: 13px; margin-top: 1px; }
+.result-item .ri-notes { display: block; color: var(--text-muted); font-size: 11.5px; margin-top: 2px; }
+.result-clean {
+  font-size: 13px; color: var(--text-muted); padding: 6px 2px; font-style: italic;
+}
+.result-source {
+  font-size: 11.5px; color: var(--text-muted); margin-top: 10px; padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+.result-note {
+  font-size: 12px; color: var(--slate); padding: 8px 12px; background: var(--light-bg);
+  border: 1px solid var(--border); border-radius: 8px; margin-top: 10px; line-height: 1.5;
+}
+.result-nodata {
+  font-size: 12px; color: var(--text-muted); padding: 8px 12px; background: var(--light-bg);
+  border-radius: 8px; margin-top: 4px;
+}
+
+/* ── STATE GI RIGHTS PANEL ── */
+.gi-panel {
+  background: var(--white); border: 1.5px solid var(--border); border-left: 5px solid var(--emerald);
+  border-radius: 14px; padding: 14px 20px 16px; margin-bottom: 14px;
+}
+.gi-panel-head { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--slate);
+  letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 10px; }
+.gi-rule { padding: 10px 0; border-top: 1px dashed var(--border); }
+.gi-rule:first-of-type { border-top: none; padding-top: 0; }
+.gi-rule-name { font-size: 14.5px; font-weight: 600; color: var(--deep); margin-bottom: 6px; }
+.gi-rule ul { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.gi-rule li { font-size: 13px; color: var(--text); line-height: 1.5; padding-left: 14px; position: relative; }
+.gi-rule li::before { content: '•'; position: absolute; left: 2px; color: var(--emerald); }
+.gi-rule li b { font-weight: 600; color: var(--deep); }
+.gi-rule-src { font-size: 11.5px; color: var(--text-muted); margin-top: 6px; }
+.gi-none { font-size: 13px; color: var(--text-muted); }
+
+/* ── TOOLTIPS (same look as the dashboard's info buttons) ── */
+.uw-info-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid currentColor;
+  font-size: 9px; font-weight: 600; font-family: var(--sans); font-style: normal;
+  text-transform: none; letter-spacing: 0; line-height: 1;
+  opacity: 0.45; cursor: help; transition: opacity .15s; flex-shrink: 0;
+  vertical-align: middle; margin-left: 5px; user-select: none;
+}
+.uw-info-btn:hover, .uw-info-btn:focus { opacity: 1; outline: none; }
+.uw-section-label .uw-info-btn { margin-left: -2px; }
+#uw-tooltip {
+  position: fixed; z-index: 600; background: #0f1214; color: #fff;
+  border-radius: 10px; padding: 14px 16px; width: 260px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.18); pointer-events: none;
+  opacity: 0; transform: translateY(4px); transition: opacity .15s ease, transform .15s ease;
+  font-family: var(--sans); text-align: left;
+}
+#uw-tooltip.visible { opacity: 1; transform: translateY(0); }
+#uw-tooltip .tt-title { font-size: 12px; font-weight: 600; margin-bottom: 6px; letter-spacing: .01em; }
+#uw-tooltip .tt-body { font-size: 12px; color: rgba(255,255,255,.78); line-height: 1.55; font-weight: 400; }
+
+/* ── SIDE NAVIGATION (canonical — same across all pages) ── */
+.bvp-sidenav {
+  position: fixed; top: 0; left: 0; bottom: 0; width: 64px;
+  background: #0d2e1e; border-right: 1px solid rgba(61,162,114,0.15);
+  display: flex; flex-direction: column; z-index: 500;
+  overflow: hidden; transition: width .18s ease;
+  font-family: 'DM Sans', sans-serif;
+}
+.bvp-sidenav:hover, .bvp-sidenav.expanded { width: 218px; box-shadow: 6px 0 28px rgba(0,0,0,.18); }
+.bvp-sidenav-logo {
+  display: flex; align-items: center; gap: 10px; text-decoration: none;
+  height: 64px; padding: 0 15px; flex-shrink: 0;
+  border-bottom: 1px solid rgba(61,162,114,0.12);
+}
+.bvp-sidenav-mark {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+  background: #1a5c3a; border: 1.5px solid #3da272;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; color: white; font-family: 'DM Sans', sans-serif;
+}
+.bvp-sidenav-word {
+  font-family: 'DM Serif Display', serif; font-size: 16px; color: white;
+  white-space: nowrap; opacity: 0; transition: opacity .12s;
+}
+.bvp-sidenav-word em { color: #3da272; font-style: normal; }
+.bvp-sidenav:hover .bvp-sidenav-word, .bvp-sidenav.expanded .bvp-sidenav-word { opacity: 1; transition-delay: .06s; }
+.bvp-sidenav-steps { position: relative; padding: 14px 0; }
+
+.bvp-sidenav-item {
+  position: relative; display: flex; align-items: center; gap: 14px;
+  height: 44px; padding: 0 21px; color: #7abf9a; text-decoration: none;
+  white-space: nowrap; cursor: pointer; transition: color .15s, background .15s;
+}
+.bvp-sidenav-item:hover { color: white; background: rgba(61,162,114,0.08); }
+.bvp-sidenav-item.active { color: white; font-weight: 500; background: rgba(61,162,114,0.14); cursor: default; }
+.bvp-sidenav-item.locked { color: rgba(122,191,154,0.3); cursor: not-allowed; pointer-events: none; }
+.bvp-sidenav-node {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center;
+  position: relative; z-index: 1;
+}
+.bvp-sidenav-node svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.bvp-sidenav-item.active .bvp-sidenav-node { background: #3da272; color: white; }
+.bvp-sidenav-item.done .bvp-sidenav-node { background: #1a5c3a; color: #3da272; }
+.bvp-sidenav-item.locked .bvp-sidenav-node { background: rgba(255,255,255,0.05); color: rgba(122,191,154,0.3); }
+.bvp-sidenav-label { font-size: 13px; opacity: 0; transition: opacity .12s; }
+.bvp-sidenav:hover .bvp-sidenav-label, .bvp-sidenav.expanded .bvp-sidenav-label { opacity: 1; transition-delay: .06s; }
+.bvp-sidenav-bottom { border-top: 1px solid rgba(61,162,114,0.12); padding: 10px 0; flex-shrink: 0; }
+#bvp-sidenav-admin { display: none; }
+body { padding-left: 64px; }
+@media (max-width: 640px) { .bvp-sidenav.expanded { width: 200px; } }
+
+/* ── HOUSEHOLD DISCOUNT ── */
+.hh-tier { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.5; padding: 9px 12px; border-radius: 9px; }
+.hh-tier.yes { background: var(--accept-bg); color: var(--accept); }
+.hh-tier.no  { background: var(--light-bg); color: var(--text-muted); }
+.hh-tier.hint { background: var(--review-bg); color: #6b4a05; }
+.hh-tier b { font-weight: 600; }
+.hh-tier .ri-notes { display: block; color: var(--text-muted); font-size: 11.5px; margin-top: 2px; }
+.hh-pct { font-family: var(--serif); font-size: 26px; color: var(--accept); line-height: 1; }
+.hh-q { font-size: 11.5px; color: var(--text-muted); margin-top: 10px; line-height: 1.5; }
+.uw-field select.uw-select:disabled { opacity: .5; }
+</style>
+</head>
+<body>
+<nav class="bvp-sidenav" id="bvp-sidenav">
+  <a href="bookvaluepro-dashboard.html" class="bvp-sidenav-logo">
+    <div class="bvp-sidenav-mark">BV</div>
+    <span class="bvp-sidenav-word">Book<em>Value</em>Pro</span>
+  </a>
+  <div class="bvp-sidenav-steps">
+    <a href="bookvaluepro-upload.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M12 16V4M12 4l-5 5M12 4l5 5"/><path d="M4 16v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg></span><span class="bvp-sidenav-label">Upload</span></a>
+    <a href="bookvaluepro-dashboard.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.3"/><rect x="14" y="3" width="7" height="7" rx="1.3"/><rect x="3" y="14" width="7" height="7" rx="1.3"/><rect x="14" y="14" width="7" height="7" rx="1.3"/></svg></span><span class="bvp-sidenav-label">Dashboard</span></a>
+    <a href="bookvaluepro-clients.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"/><circle cx="17" cy="8.5" r="2.4"/><path d="M15.5 14.7c2.6.3 4.5 2.3 4.5 5.3"/></svg></span><span class="bvp-sidenav-label">Clients</span></a>
+    <a href="bookvaluepro-outreach.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 00-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0014.3 4.9L20 16"/><path d="M20 21v-5h-5"/></svg></span><span class="bvp-sidenav-label">Renewal Outreach</span></a>
+    <a href="bookvaluepro-leads.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="3.5"/><path d="M3 20c0-3.6 2.7-6 6-6s6 2.4 6 6"/><path d="M18 8v6M21 11h-6"/></svg></span><span class="bvp-sidenav-label">Leads</span></a>
+    <a href="bookvaluepro-lead-outreach.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4 18-7z"/></svg></span><span class="bvp-sidenav-label">Lead Outreach</span></a>
+    <a href="bookvaluepro-commissions.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6.5v11M15 9.2c0-1.4-1.3-2.2-3-2.2s-3 .9-3 2.2c0 1.4 1.3 1.8 3 2.2 1.7.4 3 1 3 2.4 0 1.3-1.3 2.2-3 2.2s-3-.8-3-2.2"/></svg></span><span class="bvp-sidenav-label">Commissions</span></a>
+    <a href="bookvaluepro-uw-assistant.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg></span><span class="bvp-sidenav-label">Underwriting Assistant</span></a>
+    <div class="bvp-sidenav-item active"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg></span><span class="bvp-sidenav-label">Household Discount</span></div>
+  </div>
+  <div class="bvp-sidenav-bottom">
+    <a href="bookvaluepro-admin.html" class="bvp-sidenav-item" id="bvp-sidenav-admin"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg></span><span class="bvp-sidenav-label">Admin</span></a>
+  </div>
+</nav>
+
+<header class="bvp-header">
+  <div class="bvp-header-right">
+    <span class="bvp-book-chip" id="book-name">Loading...</span>
+    <span class="bvp-agent-email" id="agent-name"></span>
+    <button class="bvp-signout" onclick="bvpSignOut()">Sign out</button>
+  </div>
+</header>
+
+<div class="page">
+  <div class="page-header">
+    <div class="page-title">Household Discount Assistant</div>
+    <div class="page-sub">Pick the carrier(s) and state, describe the client's household, and see which household discounts the client qualifies for — the % and the rule behind it, from each carrier's state application or underwriting guide.</div>
+  </div>
+
+  <div class="uw-card">
+    <div class="uw-section">
+      <div class="uw-section-label">Carriers</div>
+      <div class="uw-carrier-grid" id="uw-carrier-grid"></div>
+      <div class="uw-carrier-all-row">
+        <button class="uw-link-btn" onclick="selectAllCarriers(true)">Select all</button>
+        <span style="color:var(--border)">·</span>
+        <button class="uw-link-btn" onclick="selectAllCarriers(false)">Clear</button>
+      </div>
+    </div>
+
+    <div class="uw-section">
+      <div class="uw-section-label">Household</div>
+      <div class="uw-grid">
+        <div class="uw-field">
+          <label for="uw-state">State<span class="uw-info-btn" data-tip="state" tabindex="0" role="button" aria-label="About State">i</span></label>
+          <select class="uw-select" id="uw-state" onchange="onStateChange()">
+            <option value="">Select a state</option>
+          </select>
+        </div>
+        <div class="uw-field">
+          <label for="hh-partner">Lives with<span class="uw-info-btn" data-tip="partner" tabindex="0" role="button" aria-label="About Lives with">i</span></label>
+          <select class="uw-select" id="hh-partner">
+            <option value="none">No spouse or partner</option>
+            <option value="spouse">Spouse</option>
+            <option value="civil_union">Civil union partner</option>
+            <option value="domestic_partner">Domestic partner</option>
+          </select>
+        </div>
+        <div class="uw-field">
+          <label for="hh-adults">Other adults in the home<span class="uw-info-btn" data-tip="adults" tabindex="0" role="button" aria-label="About Other adults">i</span></label>
+          <select class="uw-select" id="hh-adults" onchange="onAdultsChange()">
+            <option value="0">None</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4 or more</option>
+          </select>
+        </div>
+        <div class="uw-field">
+          <label for="hh-adult-age">Their ages</label>
+          <select class="uw-select" id="hh-adult-age" disabled>
+            <option value="50">All 50 or older</option>
+            <option value="18">Some are 18–49</option>
+          </select>
+        </div>
+        <div class="uw-field">
+          <label>Lived together 12+ months<span class="uw-info-btn" data-tip="together" tabindex="0" role="button" aria-label="About Lived together">i</span></label>
+          <div class="uw-toggle-row">
+            <button type="button" class="uw-toggle-btn selected" id="hh-12-y" onclick="setTogether(true)">Yes</button>
+            <button type="button" class="uw-toggle-btn" id="hh-12-n" onclick="setTogether(false)">No</button>
+          </div>
+        </div>
+        <div class="uw-field">
+          <label for="hh-policy">Household member's Med Supp<span class="uw-info-btn" data-tip="policy" tabindex="0" role="button" aria-label="About household member's policy">i</span></label>
+          <select class="uw-select" id="hh-policy">
+            <option value="none">None / not applying</option>
+            <option value="same">Same company (or applying together)</option>
+            <option value="affiliate">An affiliated company</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="uw-run-row">
+      <button class="btn-run" id="btn-run-uw" onclick="runHHCheck()">Check discounts →</button>
+      <span class="uw-run-hint" id="uw-run-hint">Select at least one carrier to continue</span>
+    </div>
+  </div>
+
+  <div id="uw-results-wrap">
+    <div class="uw-empty" id="uw-empty-state">
+      <div>🏠</div>
+      <div>Pick a state and describe the household to see each carrier's household discount.</div>
+    </div>
+    <div class="uw-results" id="uw-results" style="display:none;"></div>
+  </div>
+</div>
+<div id="uw-tooltip" role="tooltip"><div class="tt-title" id="uw-tt-title"></div><div class="tt-body" id="uw-tt-body"></div></div>
+
+<script>
+let bvpSession = null;
+let hhRules = null;            // rows from uw_household_discounts
+let together12 = true;
+const selectedCarriers = new Set();
+
+const UW_STATE_NAMES = {
+  AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',CO:'Colorado',
+  CT:'Connecticut',DE:'Delaware',FL:'Florida',GA:'Georgia',HI:'Hawaii',ID:'Idaho',
+  IL:'Illinois',IN:'Indiana',IA:'Iowa',KS:'Kansas',KY:'Kentucky',LA:'Louisiana',
+  ME:'Maine',MD:'Maryland',MA:'Massachusetts',MI:'Michigan',MN:'Minnesota',MS:'Mississippi',
+  MO:'Missouri',MT:'Montana',NE:'Nebraska',NV:'Nevada',NH:'New Hampshire',NJ:'New Jersey',
+  NM:'New Mexico',NY:'New York',NC:'North Carolina',ND:'North Dakota',OH:'Ohio',OK:'Oklahoma',
+  OR:'Oregon',PA:'Pennsylvania',RI:'Rhode Island',SC:'South Carolina',SD:'South Dakota',
+  TN:'Tennessee',TX:'Texas',UT:'Utah',VT:'Vermont',VA:'Virginia',WA:'Washington',
+  WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming',DC:'Washington D.C.'
+};
+
+const UW_NOT_OFFERED = [
+  { match: /^aetna/i,        states: ['ME', 'WA', 'HI', 'NY', 'MA'] },
+  { match: /^healthspring/i, states: ['NY', 'MA'] },
+  // WoodmenLife underwriting guide (616163), page 24 — Rate Type Available by State.
+  { match: /woodmen/i, onlyIn: ['AL', 'AZ', 'AR', 'CO', 'FL', 'GA', 'IA', 'IL', 'IN', 'KY', 'LA', 'MI', 'MS',
+                                'MT', 'NC', 'NJ', 'OH', 'OK', 'OR', 'PA', 'SC', 'TN', 'TX', 'VA', 'WV'] },
+  // Mutual of Omaha underwriting guide (604504), pages 34–36 — every state except Massachusetts.
+  { match: /mutual of omaha/i, states: ['MA'] },
+  // LifeShield underwriting guide (R022024), page 16 — Rate Type Available by State.
+  { match: /lifeshield/i, onlyIn: ['AL', 'AR', 'AZ', 'CO', 'DC', 'DE', 'FL', 'GA', 'IA', 'IL', 'IN', 'KS', 'KY',
+                                   'LA', 'MD', 'MO', 'MS', 'NC', 'ND', 'NE', 'NJ', 'NM', 'NV', 'OH', 'OK', 'PA',
+                                   'SC', 'SD', 'TN', 'TX', 'UT', 'VA', 'WV', 'WY'] },
+  // Wellabe underwriting guide, page 1 — "For Arizona, California, … and Wisconsin."
+  { match: /wellabe/i, onlyIn: ['AZ', 'CA', 'CO', 'DE', 'FL', 'GA', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'MD', 'MI',
+                                'MO', 'NH', 'NJ', 'NC', 'NE', 'OH', 'PA', 'SC', 'TN', 'TX', 'VA', 'WA', 'WI'] },
+  // Lumos / Plateau underwriting guide (PTMSPTP-0826), page 12 — Household Premium Discount
+  // table, which doubles as Lumos's current availability list.
+  { match: /lumos|plateau/i, onlyIn: ['AL', 'AR', 'AZ', 'CO', 'FL', 'GA', 'IA', 'IL', 'KY', 'LA', 'MI', 'MO', 'MS',
+                                      'NJ', 'NC', 'ND', 'NV', 'OH', 'OK', 'SC', 'SD', 'TX', 'UT', 'VT', 'WI', 'WV', 'WY'] },
+  // INA (Chubb) underwriting guide, page 15 — Section C tobacco question table,
+  // which doubles as INA's current availability list.
+  { match: /\bina\b|chubb|north america/i, onlyIn: ['AL', 'AK', 'AR', 'AZ', 'CA', 'CO', 'DC', 'DE', 'FL', 'GA', 'IA', 'ID',
+                                      'IL', 'IN', 'KS', 'KY', 'LA', 'MD', 'ME', 'MI', 'MO', 'MN', 'MS', 'MT', 'NC', 'ND',
+                                      'NE', 'NH', 'NJ', 'NM', 'NV', 'OH', 'OK', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT',
+                                      'VA', 'VT', 'WA', 'WI', 'WV', 'WY'] },
+  // Nassau Life — salesnet.nfg.com/med-supp-product-state-availability (Oct 2026).
+  { match: /nassau/i, onlyIn: ['AL', 'CO', 'IL', 'IA', 'KS', 'LA', 'MS', 'MT', 'NE', 'NM', 'NC', 'ND', 'OH', 'PA',
+                               'SC', 'SD', 'TN', 'TX', 'UT'] },
+];
+function uwNotOffered(carrier, state) {
+  if (!state) return false;
+  const names = [carrier, bvpCarrierDisplay(carrier)];
+  return UW_NOT_OFFERED.some(r => names.some(n => r.match.test(n || '')) &&
+    (r.onlyIn ? !r.onlyIn.includes(state) : (r.states || []).includes(state)));
+}
+
+function initStateOptions() {
+  const sel = document.getElementById('uw-state');
+  BVP_ALL_STATES.slice()
+    .sort((a, b) => (UW_STATE_NAMES[a] || a).localeCompare(UW_STATE_NAMES[b] || b))
+    .forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = `${UW_STATE_NAMES[s] || s} (${s})`; sel.appendChild(o); });
+  try { const saved = localStorage.getItem('bvp_uw_state'); if (saved && BVP_ALL_STATES.includes(saved)) sel.value = saved; } catch (e) {}
+  updateRunHint();
+}
+function onStateChange() {
+  try { localStorage.setItem('bvp_uw_state', document.getElementById('uw-state').value); } catch (e) {}
+  updateRunHint();
+}
+function onAdultsChange() {
+  document.getElementById('hh-adult-age').disabled = document.getElementById('hh-adults').value === '0';
+}
+function setTogether(v) {
+  together12 = v;
+  document.getElementById('hh-12-y').classList.toggle('selected', v);
+  document.getElementById('hh-12-n').classList.toggle('selected', !v);
+}
+
+async function renderCarrierChips() {
+  await bvpLoadCarriers();
+  const grid = document.getElementById('uw-carrier-grid');
+  grid.innerHTML = '';
+  bvpCarrierList({ includeGeneric: false, uwOnly: true }).slice()
+    .sort((a, b) => (a.display_name || a.name).localeCompare(b.display_name || b.name, undefined, { sensitivity: 'base' }))
+    .forEach(c => {
+      const chip = document.createElement('button');
+      chip.type = 'button'; chip.className = 'uw-carrier-chip'; chip.dataset.carrier = c.name;
+      chip.textContent = c.display_name || c.name;
+      chip.onclick = () => toggleCarrier(c.name, chip);
+      grid.appendChild(chip);
+    });
+}
+function toggleCarrier(carrier, chip) {
+  if (selectedCarriers.has(carrier)) { selectedCarriers.delete(carrier); chip.classList.remove('selected'); }
+  else { selectedCarriers.add(carrier); chip.classList.add('selected'); }
+  updateRunHint();
+}
+function selectAllCarriers(all) {
+  selectedCarriers.clear();
+  document.querySelectorAll('.uw-carrier-chip').forEach(chip => {
+    if (all) { selectedCarriers.add(chip.dataset.carrier); chip.classList.add('selected'); } else chip.classList.remove('selected');
+  });
+  updateRunHint();
+}
+function updateRunHint() {
+  const hint = document.getElementById('uw-run-hint'), btn = document.getElementById('btn-run-uw');
+  const st = document.getElementById('uw-state').value;
+  if (!selectedCarriers.size) { hint.textContent = 'Select at least one carrier to continue'; btn.disabled = true; }
+  else if (!st) { hint.textContent = 'Select a state to continue'; btn.disabled = true; }
+  else { hint.textContent = `${selectedCarriers.size} carrier${selectedCarriers.size > 1 ? 's' : ''} selected`; btn.disabled = false; }
+}
+
+async function loadHHRules() {
+  if (hhRules) return hhRules;
+  try {
+    const { data, error } = await bvp.from('uw_household_discounts').select('*');
+    if (error) throw error;
+    hhRules = data || [];
+  } catch (e) { console.warn('uw_household_discounts:', e.message || e); hhRules = []; }
+  return hhRules;
+}
+
+// ── RULE EVALUATION ─────────────────────────────────────────────────
+const _hhEsc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const PARTNER_LABEL = { spouse: 'spouse', civil_union: 'civil union partner', domestic_partner: 'domestic partner' };
+
+// Does the household meet this row's "who lives with you" test?
+function hhMemberOK(r, h) {
+  const fields = ['spouse_qualifies', 'civil_union_qualifies', 'domestic_partner_qualifies', 'other_adults_min', 'other_adults_max', 'other_adult_min_age'];
+  const anyone = fields.every(f => r[f] == null) && !r.spouse_required;   // any household member counts
+  const monthsOK = !r.months_together || h.together12;
+  if (anyone) return (h.partner !== 'none' || h.adults > 0) && monthsOK;
+  const partnerOK = h.partner !== 'none' && !!r[h.partner + '_qualifies'];
+  const minA = Math.max(1, r.other_adults_min || 1);
+  const ageOK = !r.other_adult_min_age || r.other_adult_min_age <= 18 || h.adultAge >= r.other_adult_min_age;
+  const adultsOK = h.adults >= minA && (r.other_adults_max == null || h.adults <= r.other_adults_max) && ageOK;
+  const ok = r.spouse_required ? (partnerOK && (r.other_adults_max == null || h.adults <= r.other_adults_max)) : (partnerOK || adultsOK);
+  return ok && monthsOK;
+}
+function hhPolicyOK(r, h) {
+  if (!r.requires_other_policy) return true;
+  return h.policy === 'same' || (h.policy === 'affiliate' && r.other_policy_scope === 'affiliate');
+}
+function hhWho(r) {
+  const fields = ['spouse_qualifies', 'civil_union_qualifies', 'domestic_partner_qualifies', 'other_adults_min', 'other_adults_max', 'other_adult_min_age'];
+  if (fields.every(f => r[f] == null) && !r.spouse_required) return 'another member of the household';
+  const partners = ['spouse', 'civil_union', 'domestic_partner'].filter(p => r[p + '_qualifies']).map(p => PARTNER_LABEL[p]);
+  const pText = partners.length ? (partners.length > 1 ? partners.slice(0, -1).join(', ') + ' or ' + partners.slice(-1) : partners[0]) : '';
+  let aText = '';
+  if (r.other_adult_min_age) {
+    const n = r.other_adults_max ? `${Math.max(1, r.other_adults_min || 1)}–${r.other_adults_max} adults` : 'another adult';
+    aText = `${n} age ${r.other_adult_min_age}+`;
+  }
+  let who = r.spouse_required
+    ? `your ${pText}${r.other_adults_max ? ` (plus no more than ${r.other_adults_max} other adults ${r.other_adult_min_age || 18}+)` : ''}`
+    : [aText, pText && `your ${pText}`].filter(Boolean).join(', or ');
+  if (r.months_together) who += ` for the past ${r.months_together} months`;
+  return who;
+}
+function hhPolicyText(r) {
+  const co = r.underwriter || bvpCarrierDisplay(r.carrier);
+  return `has (or is applying for) a Medicare Supplement with ${co}${r.other_policy_scope === 'affiliate' ? ' or an affiliate' : ' — same company only'}`;
+}
+function hhTierLabel(r) {
+  return { household: 'Household discount', multi_policy: 'Multi-policy discount', spousal: 'Spousal discount' }[r.tier] || 'Discount';
+}
+function hhTierRule(r) {
+  if (r.tier === 'household') return `Lives with ${hhWho(r)}.`;
+  if (r.tier === 'spousal') return `Your ${hhWho(r)} ${hhPolicyText(r)}.`;
+  if (r.tier === 'multi_policy') {
+    if (r.requires_household_tier) return `Qualifies for the household discount, and that household member ${hhPolicyText(r)}.`;
+    return `${hhWho(r).replace(/^./, c => c.toUpperCase())} ${hhPolicyText(r)}.`;
+  }
+  return '';
+}
+
+function evaluateCarrier(carrier, state, h) {
+  if (uwNotOffered(carrier, state)) return { carrier, status: 'notOffered' };
+  const all = (hhRules || []).filter(r => r.carrier === carrier);
+  const stateRows = all.filter(r => r.state === state);
+  const rows = stateRows.length ? stateRows : all.filter(r => !r.state);
+  if (!rows.length) return { carrier, status: 'noData' };
+  if (rows.every(r => r.tier === 'none' || r.offered === false)) return { carrier, status: 'none', rows };
+  const tiers = rows.filter(r => r.tier !== 'none').map(r => {
+    const household = rows.find(x => x.tier === 'household');
+    const member = r.tier === 'multi_policy' && r.requires_household_tier && household ? hhMemberOK(household, h) : hhMemberOK(r, h);
+    const policy = hhPolicyOK(r, h);
+    return { r, ok: member && policy, member, policy };
+  }).sort((a, b) => (a.r.discount_pct || 0) - (b.r.discount_pct || 0));
+  const best = tiers.filter(t => t.ok).sort((a, b) => (b.r.discount_pct || 0) - (a.r.discount_pct || 0))[0] || null;
+  return { carrier, status: best ? 'qualifies' : 'noQualify', best, tiers, rows, ruleState: stateRows.length ? state : null };
+}
+
+async function runHHCheck() {
+  const state = document.getElementById('uw-state').value;
+  if (!selectedCarriers.size || !state) return;
+  const btn = document.getElementById('btn-run-uw');
+  btn.disabled = true; btn.textContent = 'Checking…';
+  await loadHHRules();
+  const h = {
+    partner: document.getElementById('hh-partner').value,
+    adults: +document.getElementById('hh-adults').value,
+    adultAge: +document.getElementById('hh-adult-age').value,
+    together12,
+    policy: document.getElementById('hh-policy').value,
+  };
+  renderHH([...selectedCarriers].map(c => evaluateCarrier(c, state, h)), state, h);
+  btn.disabled = false; btn.textContent = 'Check discounts →';
+}
+
+function renderHH(results, state, h) {
+  document.getElementById('uw-empty-state').style.display = 'none';
+  const wrap = document.getElementById('uw-results');
+  wrap.style.display = 'flex';
+  const stName = UW_STATE_NAMES[state] || state;
+  const order = { qualifies: 0, noQualify: 1, none: 2, noData: 3, notOffered: 4 };
+  results.sort((a, b) => order[a.status] - order[b.status] || ((b.best && b.best.r.discount_pct) || 0) - ((a.best && a.best.r.discount_pct) || 0));
+  wrap.innerHTML = results.map(res => {
+    const name = bvpCarrierDisplay(res.carrier);
+    const card = (cls, badge, body) => `
+      <div class="result-card ${cls}">
+        <div class="result-header"><span class="result-carrier">${_hhEsc(name)}</span><span class="result-badge ${cls}">${badge}</span></div>
+        <div class="result-body">${body}</div>
+      </div>`;
+    if (res.status === 'notOffered') return card('none', `— Not Offered${uwTip('notOffered')}`, `<div class="result-clean">${_hhEsc(name)} does not currently offer Medicare Supplement in ${stName}.</div>`);
+    if (res.status === 'noData') return card('none', `— Not loaded${uwTip('noData')}`, `<div class="result-clean">Household discount rules for ${_hhEsc(name)} aren't loaded yet.</div>`);
+    const r0 = res.rows[0];
+    const src = res.ruleState
+      ? `Based on ${_hhEsc(name)}'s ${stName} application${r0.form_number || r0.underwriter ? ` (${[r0.form_number && 'form ' + _hhEsc(r0.form_number), r0.underwriter && 'issued by ' + _hhEsc(r0.underwriter)].filter(Boolean).join(', ')})` : ''}.`
+      : `Based on ${_hhEsc(name)}'s underwriting guide.`;
+    const q = r0.question_text ? `<div class="hh-q">${res.ruleState ? 'Application asks' : 'Guide says'}: “${_hhEsc(r0.question_text)}”</div>` : '';
+    if (res.status === 'none') return card('none', `— No household discount${uwTip('noDiscount')}`, `<div class="result-clean">${_hhEsc(name)} has no household discount in ${stName}.</div><div class="result-source">${src}</div>`);
+    const lines = res.tiers.map(t => {
+      const why = !t.member ? 'The household doesn\'t meet this requirement.' : (!t.policy && h.policy === 'affiliate' && t.r.other_policy_scope === 'same_company' ? 'The other policy must be with the same company — an affiliate doesn\'t count here.' : '');
+      return `<div class="hh-tier ${t.ok ? 'yes' : 'no'}"><span class="ri-icon">${t.ok ? '✓' : '–'}</span><span><b>${hhTierLabel(t.r)} — ${t.r.discount_pct != null ? t.r.discount_pct + '%' : '% not stated'}</b><span class="ri-notes">${_hhEsc(hhTierRule(t.r))}${!t.ok && why ? ' ' + why : ''}${t.r.notes && !(t.r.tier === 'multi_policy' && t.r.requires_household_tier) ? '<br>' + _hhEsc(t.r.notes) : ''}</span></span></div>`;
+    }).join('');
+    // Upsell hint: qualifies for a lower tier but a higher one is one step away (household member's policy).
+    const higher = res.tiers.filter(t => !t.ok && t.member && !t.policy && (t.r.discount_pct || 0) > ((res.best && res.best.r.discount_pct) || 0)).pop();
+    const hint = higher && h.policy === 'none' ? `<div class="hh-tier hint"><span class="ri-icon">!</span><span>Up to <b>${higher.r.discount_pct}%</b> if the household member also has, or applies for, a ${_hhEsc(name)} Medicare Supplement.</span></div>` : '';
+    const badge = res.status === 'qualifies' ? `✓ ${res.best.r.discount_pct}% discount${uwTip('qualifies')}` : `– No discount${uwTip('noQualify')}`;
+    return card(res.status === 'qualifies' ? 'accept' : 'none', badge,
+      `<div class="result-list">${lines}${hint}</div>${q}<div class="result-source">${src}</div>`);
+  }).join('');
+}
+
+// ── TOOLTIPS ──────────────────────────────────────────────────────────
+const UW_TIPS = {
+  state:      { title: 'State', body: "Uses the carrier's household discount rules from its application for this state where loaded; otherwise its underwriting guide." },
+  partner:    { title: 'Lives with', body: "Who the client lives with. Some carriers count a spouse only; others also count a civil union or domestic partner." },
+  adults:     { title: 'Other adults in the home', body: "Adults other than a spouse or partner — for example a sibling, friend or roommate. Many carriers allow one to three, and some require them to be 50 or older." },
+  together:   { title: 'Lived together 12+ months', body: "Many carriers require the client to have lived with the household member for the past 12 months." },
+  policy:     { title: "Household member's Med Supp", body: "Larger multi-policy discounts need the household member to have, or be applying for, a Medicare Supplement with the same carrier. Some carriers also accept an affiliated company; others require the same underwriting company." },
+  qualifies:  { title: 'Discount', body: "The largest household discount the client qualifies for with this carrier, based on what you entered. Discounts don't stack — a multi-policy % is the total." },
+  noQualify:  { title: 'No discount', body: "The household as entered doesn't meet this carrier's requirements. The lines below show what each discount needs." },
+  noDiscount: { title: 'No household discount', body: "This carrier doesn't offer a household discount in this state." },
+  notOffered: { title: 'Not Offered', body: "This carrier doesn't currently sell Medicare Supplement in this state." },
+  noData:     { title: 'Not loaded', body: "This carrier's household discount rules haven't been added to BookValuePro yet." },
+};
+function uwTip(key) {
+  const t = UW_TIPS[key];
+  return t ? `<span class="uw-info-btn" data-tip="${key}" tabindex="0" role="button" aria-label="About ${t.title}">i</span>` : '';
+}
+(function initUWTooltips() {
+  const tt = document.getElementById('uw-tooltip');
+  const tTitle = document.getElementById('uw-tt-title');
+  const tBody = document.getElementById('uw-tt-body');
+  let pinned = null;
+  const fill = el => {
+    const t = UW_TIPS[el.dataset.tip]; if (!t) return false;
+    tTitle.textContent = t.title; tBody.textContent = t.body; return true;
+  };
+  const place = (x, y) => {
+    tt.style.left = Math.max(8, Math.min(x, window.innerWidth - 276)) + 'px';
+    tt.style.top  = Math.max(8, Math.min(y, window.innerHeight - tt.offsetHeight - 8)) + 'px';
+  };
+  const showAt = el => {
+    if (!fill(el)) return;
+    const r = el.getBoundingClientRect();
+    tt.classList.add('visible');
+    place(r.left, r.bottom + 8);
+  };
+  const hide = () => { tt.classList.remove('visible'); pinned = null; };
+  document.addEventListener('mouseover', e => {
+    const el = e.target.closest('.uw-info-btn'); if (!el || pinned) return;
+    if (fill(el)) { tt.classList.add('visible'); place(e.clientX + 14, e.clientY + 14); }
+  });
+  document.addEventListener('mousemove', e => {
+    if (!pinned && e.target.closest('.uw-info-btn')) place(e.clientX + 14, e.clientY + 14);
+  });
+  document.addEventListener('mouseout', e => {
+    if (!pinned && e.target.closest('.uw-info-btn')) tt.classList.remove('visible');
+  });
+  document.addEventListener('focusin', e => { const el = e.target.closest('.uw-info-btn'); if (el) showAt(el); });
+  document.addEventListener('focusout', e => { if (e.target.closest('.uw-info-btn')) hide(); });
+  // Click / tap: keep it open (phones have no hover). Inside a <label>, don't jump to the field.
+  document.addEventListener('click', e => {
+    const el = e.target.closest('.uw-info-btn');
+    if (el) { e.preventDefault(); e.stopPropagation(); if (pinned === el) { hide(); } else { showAt(el); pinned = el; } return; }
+    if (pinned) hide();
+  }, true);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
+  window.addEventListener('scroll', () => { if (pinned) hide(); }, { passive: true });
+})();
+
+
+async function initFromSupabase() {
+  bvpSession = await bvpRequireAuth();
+  if (!bvpSession) return;
+  bvpSetAdminNavVisible(bvpSession.user.email);
+  const nameEl = document.getElementById('agent-name');
+  if (nameEl) nameEl.textContent = bvpSession.user.email;
+  const book = await bvpGetActiveBook(bvpSession.user.id);
+  const bnEl = document.getElementById('book-name');
+  if (bnEl) bnEl.textContent = book ? (book.file_name + ' — ' + book.policy_count + ' policies') : 'No book uploaded';
+  loadHHRules();
+}
+
+initStateOptions();
+renderCarrierChips();
+initFromSupabase();
+</script>
+<script src="bvp-chat.js"></script>
+<script>
+(function () {
+  var nav = document.getElementById('bvp-sidenav');
+  if (!nav) return;
+  var hoverCapable = window.matchMedia('(hover: hover)').matches;
+  if (!hoverCapable) {
+    nav.addEventListener('click', function (e) {
+      if (!nav.classList.contains('expanded')) {
+        var link = e.target.closest('a');
+        if (link) { e.preventDefault(); nav.classList.add('expanded'); }
+      }
+    });
+    document.addEventListener('click', function (e) {
+      if (!nav.contains(e.target)) nav.classList.remove('expanded');
+    });
+  }
+})();
+</script>
+</body>
+</html>
