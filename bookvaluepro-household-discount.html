@@ -402,7 +402,8 @@ body { padding-left: 64px; }
         <div class="uw-field">
           <label for="hh-adult-age">Their ages</label>
           <select class="uw-select" id="hh-adult-age" disabled>
-            <option value="50">All 50 or older</option>
+            <option value="60">All 60 or older</option>
+            <option value="50">All 50 or older (some under 60)</option>
             <option value="18">Some are 18–49</option>
           </select>
         </div>
@@ -587,15 +588,18 @@ function hhWho(r) {
   const partners = ['spouse', 'civil_union', 'domestic_partner'].filter(p => r[p + '_qualifies']).map(p => PARTNER_LABEL[p]);
   const pText = partners.length ? (partners.length > 1 ? partners.slice(0, -1).join(', ') + ' or ' + partners.slice(-1) : partners[0]) : '';
   let aText = '';
+  const aMonths = r.other_adult_months ? ` you've lived with for the past ${r.other_adult_months} months` : '';
   if (r.other_adult_min_age) {
     const n = r.other_adults_max ? `${Math.max(1, r.other_adults_min || 1)}–${r.other_adults_max} adults` : 'another adult';
-    aText = `${n} age ${r.other_adult_min_age}+`;
+    aText = `${n} age ${r.other_adult_min_age}+${aMonths}`;
   } else if (r.other_adults_min) {
-    aText = `anyone else you've lived with${r.other_adult_months ? ` for the past ${r.other_adult_months} months` : ''}`;
+    aText = `${r.other_adults_max ? `up to ${r.other_adults_max} other adults` : 'anyone else'}${aMonths || " you've lived with"}`;
   }
+  // partner listed first when a partner qualifies right away and other adults have extra conditions
+  const partnerFirst = !r.other_adult_min_age || r.other_adult_months;
   let who = r.spouse_required
     ? `your ${pText}${r.other_adults_max ? ` (plus no more than ${r.other_adults_max} other adults ${r.other_adult_min_age || 18}+)` : ''}`
-    : (r.other_adult_min_age ? [aText, pText && `your ${pText}`] : [pText && `your ${pText}`, aText]).filter(Boolean).join(', or ');
+    : (partnerFirst ? [pText && `your ${pText}`, aText] : [aText, pText && `your ${pText}`]).filter(Boolean).join(', or ');
   if (r.months_together) who += ` for the past ${r.months_together} months`;
   return who;
 }
@@ -608,7 +612,7 @@ function hhTierLabel(r) {
 }
 function hhTierRule(r) {
   if (r.tier === 'household') return `Lives with ${hhWho(r)}${r.requires_other_policy ? `, and that person ${hhPolicyText(r)}` : ''}.`;
-  if (r.tier === 'spousal') return `Your ${hhWho(r)} ${hhPolicyText(r)}.`;
+  if (r.tier === 'spousal') return `${hhWho(r).replace(/^./, c => c.toUpperCase())} ${hhPolicyText(r)}.`;
   if (r.tier === 'multi_policy') {
     if (r.requires_household_tier) return `Qualifies for the household discount, and that household member ${hhPolicyText(r)}.`;
     return `${hhWho(r).replace(/^./, c => c.toUpperCase())} ${hhPolicyText(r)}.`;
@@ -667,10 +671,11 @@ function renderHH(results, state, h) {
     if (res.status === 'notOffered') return card('none', `— Not Offered${uwTip('notOffered')}`, `<div class="result-clean">${_hhEsc(name)} does not currently offer Medicare Supplement in ${stName}.</div>`);
     if (res.status === 'noData') return card('none', `— Not loaded${uwTip('noData')}`, `<div class="result-clean">Household discount rules for ${_hhEsc(name)} aren't loaded yet.</div>`);
     const r0 = res.rows[0];
-    const src = res.ruleState
+    const fromGuide = r0.source === 'guide';
+    const src = res.ruleState && !fromGuide
       ? `Based on ${_hhEsc(name)}'s ${stName} application${r0.form_number || r0.underwriter ? ` (${[r0.form_number && 'form ' + _hhEsc(r0.form_number), r0.underwriter && 'issued by ' + _hhEsc(r0.underwriter)].filter(Boolean).join(', ')})` : ''}.`
-      : `Based on ${_hhEsc(name)}'s underwriting guide.`;
-    const q = r0.question_text ? `<div class="hh-q">${res.ruleState ? 'Application asks' : 'Guide says'}: “${_hhEsc(r0.question_text)}”</div>` : '';
+      : `Based on ${_hhEsc(name)}'s underwriting guide${res.ruleState ? ` (${stName} rules)` : ''}.`;
+    const q = r0.question_text ? `<div class="hh-q">${res.ruleState && !fromGuide ? 'Application asks' : 'Guide says'}: “${_hhEsc(r0.question_text)}”</div>` : '';
     if (res.status === 'none') return card('none', `— No household discount${uwTip('noDiscount')}`, `<div class="result-clean">${_hhEsc(name)} has no household discount in ${stName}.</div><div class="result-source">${src}</div>`);
     const lines = res.tiers.map(t => {
       const why = !t.member ? 'The household doesn\'t meet this requirement.' : (!t.policy && h.policy === 'affiliate' && t.r.other_policy_scope === 'same_company' ? 'The other policy must be with the same company — an affiliate doesn\'t count here.' : '');
@@ -689,7 +694,7 @@ function renderHH(results, state, h) {
 const UW_TIPS = {
   state:      { title: 'State', body: "Uses the carrier's household discount rules from its application for this state where loaded; otherwise its underwriting guide." },
   partner:    { title: 'Lives with', body: "Who the client lives with. Some carriers count a spouse only; others also count a civil union or domestic partner." },
-  adults:     { title: 'Other adults in the home', body: "Adults other than a spouse or partner — for example a sibling, friend or roommate. Many carriers allow one to three, and some require them to be 50 or older." },
+  adults:     { title: 'Other adults in the home', body: "Adults other than a spouse or partner — for example a sibling, friend or roommate. Many carriers allow one to three, and some require them to be 50 or 60 or older." },
   together:   { title: 'Lived together 12+ months', body: "Many carriers require the client to have lived with the household member for the past 12 months." },
   policy:     { title: "Household member's Med Supp", body: "Larger multi-policy discounts need the household member to have, or be applying for, a Medicare Supplement with the same carrier. Some carriers also accept an affiliated company; others require the same underwriting company." },
   qualifies:  { title: 'Discount', body: "The largest household discount the client qualifies for with this carrier, based on what you entered. Discounts don't stack — a multi-policy % is the total." },
