@@ -400,11 +400,12 @@ body { padding-left: 64px; }
           </select>
         </div>
         <div class="uw-field">
-          <label for="hh-adult-age">Their ages</label>
+          <label for="hh-adult-age">Youngest one's age<span class="uw-info-btn" data-tip="ages" tabindex="0" role="button" aria-label="About ages">i</span></label>
           <select class="uw-select" id="hh-adult-age" disabled>
-            <option value="60">All 60 or older</option>
-            <option value="50">All 50 or older (some under 60)</option>
-            <option value="18">Some are 18–49</option>
+            <option value="" hidden>—</option>
+            <option value="60">60 or older</option>
+            <option value="50">50–59</option>
+            <option value="18">Under 50</option>
           </select>
         </div>
         <div class="uw-field">
@@ -508,7 +509,11 @@ function onStateChange() {
   updateRunHint();
 }
 function onAdultsChange() {
-  document.getElementById('hh-adult-age').disabled = document.getElementById('hh-adults').value === '0';
+  const none = document.getElementById('hh-adults').value === '0';
+  const age = document.getElementById('hh-adult-age');
+  age.disabled = none;
+  if (none) age.value = '';
+  else if (!age.value) age.value = '60';
 }
 function setTogether(v) {
   together12 = v;
@@ -694,6 +699,7 @@ function renderHH(results, state, h) {
 const UW_TIPS = {
   state:      { title: 'State', body: "Uses the carrier's household discount rules from its application for this state where loaded; otherwise its underwriting guide." },
   partner:    { title: 'Lives with', body: "Who the client lives with. Some carriers count a spouse only; others also count a civil union or domestic partner." },
+  ages:       { title: "Youngest one's age", body: "The age of the youngest other adult in the home. Each carrier applies its own cutoff to this one answer — for example Mutual of Omaha needs 60+, HealthSpring 50+ in many states, and Aetna has no age rule — so you can compare carriers side by side." },
   adults:     { title: 'Other adults in the home', body: "Adults other than a spouse or partner — for example a sibling, friend or roommate. Many carriers allow one to three, and some require them to be 50 or 60 or older." },
   together:   { title: 'Lived together 12+ months', body: "Many carriers require the client to have lived with the household member for the past 12 months." },
   policy:     { title: "Household member's Med Supp", body: "Larger multi-policy discounts need the household member to have, or be applying for, a Medicare Supplement with the same carrier. Some carriers also accept an affiliated company; others require the same underwriting company." },
