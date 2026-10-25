@@ -521,13 +521,17 @@ Response guidelines:
       if (!prof.gender && typeof selectedSex !== 'undefined') prof.gender = selectedSex;
     }
     const hasBuild = !!(prof.heightIn && prof.weightLb);
+    const giTopic = /\b(birthday|anniversary|guaranteed[- ]issue|year[- ]round|continuous (?:open|enrollment)|open enrollment rule|switch rules?|plan conversion)\b/i.test(question)
+      || /\bGI\b/.test(question);
+    // A general GI question ("which states have a birthday rule?") needs no carrier rules.
+    const giOnly = giTopic && !now.carriers.length && !conds.length && !drugs.length && !hasBuild;
     const disp = c => bvpCarrierDisplay(c);
     const stName = state ? (UW_CHAT_STATES[state] || state) : null;
     const scoped = bvpScopeUWDataToState(data, state);
     const out = [];
 
     out.push(`QUESTION SCOPE
-- Carriers: ${carriers.map(disp).join(', ')} (${carrierBasis})
+- Carriers: ${giOnly ? 'not needed (general guaranteed-issue question)' : `${carriers.map(disp).join(', ')} (${carrierBasis})`}
 - State: ${stName ? `${stName} (${state})` : 'none given — national rules'}
 - Conditions recognized: ${conds.length ? conds.join(', ') + condBasis : 'none'}
 - Medications recognized: ${drugs.length ? drugs.join(', ') : 'none'}
@@ -542,7 +546,7 @@ Response guidelines:
       const here = state && typeof uwNotOffered === 'function' ? (uwNotOffered(c, state) ? ` — NOT OFFERED in ${state}` : ` — offered in ${state}`) : '';
       return `- ${disp(c)}: ${where}${here}`;
     });
-    out.push('WHERE EACH CARRIER IS SOLD\n' + avail.join('\n'));
+    if (!giOnly) out.push('WHERE EACH CARRIER IS SOLD\n' + avail.join('\n'));
 
     // Which rules apply in this state (state application vs national)
     const basisLines = carriers.map(c => {
@@ -554,7 +558,7 @@ Response guidelines:
       const uw = state && scoped.stateUnderwriter && scoped.stateUnderwriter[c] ? `, issued by ${scoped.stateUnderwriter[c]}` : '';
       return `- ${disp(c)}: ${hasState ? `${stName} state rules (${hasState.join(', ')}${form}${uw})` : 'national rules'}${loaded.length ? ` | states with their own application loaded: ${loaded.join(', ')}` : ''}`;
     });
-    out.push('RULE SOURCE PER CARRIER\n' + basisLines.join('\n'));
+    if (!giOnly) out.push('RULE SOURCE PER CARRIER\n' + basisLines.join('\n'));
 
     // Underwriting check results (the same check the page runs)
     const runEval = (gender) => bvpEvaluateUW({ gender, heightIn: hasBuild ? prof.heightIn : null, weightLb: hasBuild ? prof.weightLb : null, age: prof.age || null, state }, conds, drugs, carriers, data);
@@ -593,7 +597,9 @@ Response guidelines:
     }
 
     // No specific condition/medication/build: summarize each carrier's rules
-    if (!conds.length && !drugs.length && !hasBuild && carriers.length <= 4) {
+    if (giOnly) {
+      /* general GI question — carrier rules not needed */
+    } else if (!conds.length && !drugs.length && !hasBuild && carriers.length <= 4) {
       carriers.forEach(c => {
         const ko = (scoped.knockouts || []).filter(r => r.carrier === c);
         const group = d => [...new Set(ko.filter(r => r.decision === d).map(r => `${r.condition_name}${r.lookback_years ? ` (${r.lookback_years} yr)` : ''}`))];
@@ -618,6 +624,24 @@ Response guidelines:
         if (gi.length) out.push(`${stName.toUpperCase()} STATE GUARANTEED-ISSUE RIGHTS (state_gi_rules)\n` + gi.map(r => '- ' + JSON.stringify(Object.fromEntries(Object.entries(r)
           .filter(([k, v]) => v != null && v !== '' && !['id', 'created_at', 'updated_at', 'is_active', 'needs_review', 'source_document', 'source_page'].includes(k))))).join('\n'));
         else out.push(`${stName.toUpperCase()} STATE GUARANTEED-ISSUE RIGHTS: none loaded for this state.`);
+      } catch (e) { /* GI rules unavailable */ }
+    }
+    // Questions about GI rights in general ("which states have a birthday rule?"):
+    // a one-line summary of every state's rule, plus the guaranteed-issue states.
+    if (giTopic && typeof uwLoadGIRules === 'function') {
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const all = (await uwLoadGIRules()).filter(r => r.state && (!r.rule_end_date || String(r.rule_end_date).slice(0, 10) >= today));
+        const lines = all.slice().sort((a, b) => String(a.state).localeCompare(String(b.state))).map(r =>
+          `- ${r.state} (${UW_CHAT_STATES[r.state] || r.state}) | ${r.rule_name || r.rule_code || ''}${r.rule_code ? ` [${r.rule_code}]` : ''}`
+          + `${r.plan_eligibility ? ` | plans: ${r.plan_eligibility}` : ''}${r.carrier_scope ? ` | carrier: ${r.carrier_scope}` : ''}`
+          + `${r.early_application_days ? ` | apply up to ${r.early_application_days} days early` : ''}`
+          + `${r.rule_effective_date ? ` | effective ${String(r.rule_effective_date).slice(0, 10)}` : ''}`
+          + `${r.notes ? ` | ${_uwStrip(r.notes).slice(0, 220)}` : ''}`);
+        const giStates = (typeof UW_GUARANTEED_ISSUE_STATES !== 'undefined' ? UW_GUARANTEED_ISSUE_STATES : []);
+        out.push(`ALL STATES — STATE-SPECIFIC GUARANTEED-ISSUE RIGHTS (state_gi_rules; ${new Set(all.map(r => r.state)).size} states have a rule; states not listed have none loaded)\n`
+          + (lines.join('\n') || '- none loaded')
+          + (giStates.length ? `\nYear-round guaranteed-issue states (no medical underwriting at all): ${giStates.join(', ')}` : ''));
       } catch (e) { /* GI rules unavailable */ }
     }
 
