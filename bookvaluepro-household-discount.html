@@ -386,7 +386,7 @@ body { padding-left: 64px; }
         </div>
         <div class="uw-field">
           <label for="hh-partner">Lives with<span class="uw-info-btn" data-tip="partner" tabindex="0" role="button" aria-label="About Lives with">i</span></label>
-          <select class="uw-select" id="hh-partner">
+          <select class="uw-select" id="hh-partner" onchange="onAdultsChange()">
             <option value="none">No spouse or partner</option>
             <option value="spouse">Spouse</option>
             <option value="civil_union">Civil union partner</option>
@@ -394,7 +394,7 @@ body { padding-left: 64px; }
           </select>
         </div>
         <div class="uw-field">
-          <label for="hh-adults">Other adults in the home<span class="uw-info-btn" data-tip="adults" tabindex="0" role="button" aria-label="About Other adults">i</span></label>
+          <label for="hh-adults">Relatives or roommates<span class="uw-info-btn" data-tip="adults" tabindex="0" role="button" aria-label="About Other adults">i</span></label>
           <select class="uw-select" id="hh-adults" onchange="onAdultsChange()">
             <option value="0">None</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4 or more</option>
           </select>
@@ -508,12 +508,15 @@ function onStateChange() {
   try { localStorage.setItem('bvp_uw_state', document.getElementById('uw-state').value); } catch (e) {}
   updateRunHint();
 }
+// The age question applies to other adults, and to a civil union or domestic partner
+// (some carriers don't count those as partners and check them as a household adult instead).
 function onAdultsChange() {
-  const none = document.getElementById('hh-adults').value === '0';
+  const adults = document.getElementById('hh-adults').value !== '0';
+  const partner = ['civil_union', 'domestic_partner'].includes(document.getElementById('hh-partner').value);
   const age = document.getElementById('hh-adult-age');
-  age.disabled = none;
-  if (none) age.value = '';
-  else if (!age.value) age.value = '60';
+  age.disabled = !adults && !partner;
+  if (age.disabled) age.value = '';
+  else if (adults && !age.value) age.value = '60';
 }
 function setTogether(v) {
   together12 = v;
@@ -576,10 +579,13 @@ function hhMemberOK(r, h) {
   const monthsOK = !r.months_together || h.together12;
   if (anyone) return (h.partner !== 'none' || h.adults > 0) && monthsOK;
   const partnerOK = h.partner !== 'none' && !!r[h.partner + '_qualifies'];
+  // A partner this carrier doesn't count as a partner (e.g. a domestic partner where only spouses and
+  // civil union partners count) is still a household adult — check them under the adult rules.
+  const nAdults = h.adults + (h.partner !== 'none' && !partnerOK ? 1 : 0);
   const minA = Math.max(1, r.other_adults_min || 1);
   const ageOK = !r.other_adult_min_age || r.other_adult_min_age <= 18 || h.adultAge >= r.other_adult_min_age;
   const adultsCount = r.other_adults_min != null || r.other_adult_min_age != null;   // does this rule let a non-partner adult qualify?
-  const adultsOK = adultsCount && h.adults >= minA && (r.other_adults_max == null || h.adults <= r.other_adults_max) && ageOK && (!r.other_adult_months || h.together12);
+  const adultsOK = adultsCount && nAdults >= minA && (r.other_adults_max == null || nAdults <= r.other_adults_max) && ageOK && (!r.other_adult_months || h.together12);
   const ok = r.spouse_required ? (partnerOK && (r.other_adults_max == null || h.adults <= r.other_adults_max)) : (partnerOK || adultsOK);
   return ok && monthsOK;
 }
@@ -698,9 +704,9 @@ function renderHH(results, state, h) {
 // ── TOOLTIPS ──────────────────────────────────────────────────────────
 const UW_TIPS = {
   state:      { title: 'State', body: "Uses the carrier's household discount rules from its application for this state where loaded; otherwise its underwriting guide." },
-  partner:    { title: 'Lives with', body: "Who the client lives with. Some carriers count a spouse only; others also count a civil union or domestic partner." },
-  ages:       { title: "Youngest one's age", body: "The age of the youngest other adult in the home. Each carrier applies its own cutoff to this one answer — for example Mutual of Omaha needs 60+, HealthSpring 50+ in many states, and Aetna has no age rule — so you can compare carriers side by side." },
-  adults:     { title: 'Other adults in the home', body: "Adults other than a spouse or partner — for example a sibling, friend or roommate. Many carriers allow one to three, and some require them to be 50 or 60 or older." },
+  partner:    { title: 'Lives with', body: "The client's spouse or partner, if any. Spouse = legally married. Civil union partner = a state-registered civil union (offered in only a few states). Domestic partner = a registered domestic partnership. Carriers differ on which they count — if a carrier doesn't count the partner type, the partner is checked as a household adult (age and 12-month rules) instead. Relatives, friends and roommates go in \"Relatives or roommates\"." },
+  ages:       { title: "Youngest one's age", body: "The age of the youngest other adult in the home — including a civil union or domestic partner, since some carriers check them as a household adult. Each carrier applies its own cutoff to this one answer — for example Mutual of Omaha needs 60+, HealthSpring 50+ in many states, and Aetna has no age rule — so you can compare carriers side by side." },
+  adults:     { title: 'Relatives or roommates', body: "Anyone else 18+ living in the home besides a spouse or partner — for example a sister, brother, son, daughter, friend or roommate. Many carriers count one to three of them, usually after living together 12 months, and some require them to be 50 or 60 or older. If the client lives only with a relative or roommate, set \"Lives with\" to \"No spouse or partner\"." },
   together:   { title: 'Lived together 12+ months', body: "Many carriers require the client to have lived with the household member for the past 12 months." },
   policy:     { title: "Household member's Med Supp", body: "Larger multi-policy discounts need the household member to have, or be applying for, a Medicare Supplement with the same carrier. Some carriers also accept an affiliated company; others require the same underwriting company." },
   qualifies:  { title: 'Discount', body: "The largest household discount the client qualifies for with this carrier, based on what you entered. Discounts don't stack — a multi-policy % is the total." },
