@@ -556,12 +556,14 @@ Response guidelines:
       if (!any) return `- ${disp(c)}: NO underwriting rules loaded`;
       const form = state && scoped.stateFormNumber && scoped.stateFormNumber[c] ? `, form ${scoped.stateFormNumber[c]}` : '';
       const uw = state && scoped.stateUnderwriter && scoped.stateUnderwriter[c] ? `, issued by ${scoped.stateUnderwriter[c]}` : '';
-      return `- ${disp(c)}: ${hasState ? `${stName} state rules (${hasState.join(', ')}${form}${uw})` : 'national rules'}${loaded.length ? ` | states with their own application loaded: ${loaded.join(', ')}` : ''}`;
+      const prods = typeof bvpUWStateProducts === 'function' ? bvpUWStateProducts(data, c, state) : [];
+      const prodTxt = prods.length > 1 ? ` | products in ${stName}: ${prods.join(', ')} (separate applications — results are given per product)` : prods.length === 1 ? ` | product: ${prods[0]}` : '';
+      return `- ${disp(c)}: ${hasState ? `${stName} state rules (${hasState.join(', ')}${prods.length > 1 ? '' : form + uw})` : 'national rules'}${prodTxt}${loaded.length ? ` | states with their own application loaded: ${loaded.join(', ')}` : ''}`;
     });
     if (!giOnly) out.push('RULE SOURCE PER CARRIER\n' + basisLines.join('\n'));
 
     // Underwriting check results (the same check the page runs)
-    const runEval = (gender) => bvpEvaluateUW({ gender, heightIn: hasBuild ? prof.heightIn : null, weightLb: hasBuild ? prof.weightLb : null, age: prof.age || null, state }, conds, drugs, carriers, data);
+    const runEval = (gender) => (typeof bvpEvaluateUWByProduct === 'function' ? bvpEvaluateUWByProduct : bvpEvaluateUW)({ gender, heightIn: hasBuild ? prof.heightIn : null, weightLb: hasBuild ? prof.weightLb : null, age: prof.age || null, state }, conds, drugs, carriers, data);
     if (conds.length || drugs.length || hasBuild) {
       const label = { accept: 'Likely Accept', review: 'Needs Review', decline: 'Likely Decline' };
       const sexes = hasBuild && !prof.gender ? ['M', 'F'] : [prof.gender || 'M'];
@@ -570,9 +572,16 @@ Response guidelines:
         const lines = res.map(r => {
           const notOff = state && typeof uwNotOffered === 'function' && uwNotOffered(r.carrier, state);
           if (notOff) return `- ${disp(r.carrier)}: NOT OFFERED in ${stName}`;
-          const items = [...r.reasons.map(x => ['DECLINE', x]), ...r.flags.map(x => ['REVIEW', x]), ...(r.infos || []).map(x => ['INFO', x])]
-            .map(([k, x]) => `    [${k}] ${_uwStrip(x.text)}${x.notes ? ` — ${_uwStrip(x.notes)}` : ''}`);
-          return `- ${disp(r.carrier)}: ${label[r.status] || r.status}${items.length ? '\n' + items.join('\n') : ' (nothing entered matches its rules)'}`;
+          const one = (x0, name, ind) => {
+            const items = [...x0.reasons.map(x => ['DECLINE', x]), ...x0.flags.map(x => ['REVIEW', x]), ...(x0.infos || []).map(x => ['INFO', x])]
+              .map(([k, x]) => `${ind}    [${k}] ${_uwStrip(x.text)}${x.notes ? ` — ${_uwStrip(x.notes)}` : ''}`);
+            return `${ind}- ${name}: ${label[x0.status] || x0.status}${items.length ? '\n' + items.join('\n') : ' (nothing entered matches its rules)'}`;
+          };
+          // Several products loaded for this state (e.g. Humana Traditional and Achieve): one result each.
+          if (r.products && r.products.length > 1)
+            return `- ${disp(r.carrier)}: ${r.products.length} products in ${stName}, each with its own application — give the result for EACH product\n`
+              + r.products.map(p => one(p, `${disp(r.carrier)} ${p.product}${p.ruleFormNumber ? ` (form ${p.ruleFormNumber})` : ''}`, '  ')).join('\n');
+          return one(r, `${disp(r.carrier)}${r.product ? ` ${r.product}` : ''}`, '');
         });
         out.push(`UNDERWRITING CHECK RESULTS${sexes.length > 1 ? ` (if ${sx === 'M' ? 'male' : 'female'})` : ''}\n` + lines.join('\n'));
       });
@@ -583,7 +592,7 @@ Response guidelines:
       const rows = [];
       carriers.forEach(c => conds.forEach(cond => (scoped.knockouts || [])
         .filter(r => r.carrier === c && _bvpUwNamesMatch(r.condition_name, cond))
-        .forEach(r => rows.push(`- ${disp(c)} | ${r.condition_name} | ${r.decision}${r.lookback_years ? ` | lookback ${r.lookback_years} yr` : ''}${r.min_age ? ` | age ${r.min_age}+` : ''} | ${_uwStrip(r.question_text).slice(0, 300)}${r.notes ? ` | note: ${_uwStrip(r.notes).slice(0, 300)}` : ''}`))));
+        .forEach(r => rows.push(`- ${disp(c)}${r.product ? ` ${r.product}` : ''} | ${r.condition_name} | ${r.decision}${r.lookback_years ? ` | lookback ${r.lookback_years} yr` : ''}${r.min_age ? ` | age ${r.min_age}+` : ''} | ${_uwStrip(r.question_text).slice(0, 300)}${r.notes ? ` | note: ${_uwStrip(r.notes).slice(0, 300)}` : ''}`))));
       out.push('CONDITION RULES (exact matches)\n' + (rows.length ? rows.slice(0, 120).join('\n') : '- none of the selected carriers lists these conditions by name (see the check results for related rules)'));
     }
     if (drugs.length) {

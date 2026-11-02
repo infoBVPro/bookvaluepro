@@ -1490,6 +1490,46 @@ function bvpScopeUWDataToState(data, state) {
   return scoped;
 }
 
+// ── PRODUCT LINES (e.g. Humana Traditional / Achieve) ──────────────
+// uw_knockout_questions has an optional `product` column. When a carrier has
+// state rows for MORE THAN ONE product in the chosen state, each product is
+// checked on its own (that product's state rows + nothing from the other
+// product) and the carrier's result carries `products: [result per product]`.
+// The carrier-level fields (status, reasons, ...) are the most favorable
+// product's, so sorting and "best" badges still work. One product (or none)
+// -> the normal single result, with `product` set to that product's name.
+function bvpUWStateProducts(data, carrier, state) {
+  const st = state ? String(state).trim().toUpperCase() : null;
+  if (!st) return [];
+  return [...new Set((data && data.knockouts || [])
+    .filter(r => r.carrier === carrier && _bvpUwRowState(r) === st && r.product)
+    .map(r => String(r.product).trim()))].sort();
+}
+
+function bvpEvaluateUWByProduct(profile, conditions, drugs, carriers, data) {
+  const st = profile && profile.state ? String(profile.state).trim().toUpperCase() : null;
+  const rank = { accept: 0, review: 1, decline: 2 };
+  return (carriers || []).map(carrier => {
+    const prods = bvpUWStateProducts(data, carrier, st);
+    if (prods.length < 2) {
+      const r = bvpEvaluateUW(profile, conditions, drugs, [carrier], data)[0];
+      r.product = prods[0] || null;
+      return r;
+    }
+    const parts = prods.map(p => {
+      const d = Object.assign({}, data, {
+        knockouts: (data.knockouts || []).filter(r => !(r.carrier === carrier && _bvpUwRowState(r) === st
+          && r.product && String(r.product).trim() !== p)),
+      });
+      const r = bvpEvaluateUW(profile, conditions, drugs, [carrier], d)[0];
+      r.product = p;
+      return r;
+    });
+    const best = parts.reduce((a, c) => (rank[c.status] ?? 9) < (rank[a.status] ?? 9) ? c : a);
+    return Object.assign({}, best, { product: null, products: parts });
+  });
+}
+
 function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
   // Scope carrier rules to the applicant's state (national rules when none).
   data = bvpScopeUWDataToState(data, profile && profile.state);

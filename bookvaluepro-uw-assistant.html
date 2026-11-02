@@ -199,6 +199,12 @@ body { font-family: var(--sans); color: var(--text); background: var(--light-bg)
 .result-badge.none { background: var(--light-bg); color: var(--slate); border: 1px solid var(--border); }
 
 .result-body { padding: 0 20px 18px; }
+.result-products-intro { font-size: 13px; color: var(--text-muted); margin-bottom: 10px; }
+.result-product { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
+.result-product:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+.result-product-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.result-product-name { font-size: 14px; font-weight: 600; color: var(--deep); }
+.result-product-head .result-badge { font-size: 12px; }
 .result-list { display: flex; flex-direction: column; gap: 8px; }
 .result-item {
   display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.5;
@@ -847,7 +853,7 @@ async function runUWCheck() {
 
   if (!uwData) uwData = await bvpLoadUWData();
 
-  const results = bvpEvaluateUW(profile, selectedConditions, selectedDrugs, carriers, uwData)
+  const results = (typeof bvpEvaluateUWByProduct === 'function' ? bvpEvaluateUWByProduct : bvpEvaluateUW)(profile, selectedConditions, selectedDrugs, carriers, uwData)
     .map(r => uwNotOffered(r.carrier, state) ? notOfferedResult(r.carrier) : r);
   renderResults(results, carriers);
 
@@ -978,7 +984,7 @@ function ruleSourceText(r) {
   if (r.ruleSource === 'state') {
     const who = r.ruleUnderwriter || name;
     const extra = [r.ruleFormNumber && `form ${r.ruleFormNumber}`, r.ruleUnderwriter && `issued by ${r.ruleUnderwriter}`].filter(Boolean).join(', ');
-    const appText = `${name}'s ${stName} application${extra ? ` (${extra})` : ''}`;
+    const appText = `${name}'s ${stName}${r.product ? ' ' + r.product : ''} application${extra ? ` (${extra})` : ''}`;
     const b = r.basis || {};
     const guideParts = [b.guide && (b.app ? 'other conditions' : 'conditions'), b.drug && 'medications', b.build && 'height/weight'].filter(Boolean);
     const guideText = `${name}'s underwriting guide`;
@@ -1040,12 +1046,46 @@ function renderResults(results, carriers) {
       </div>`;
     }
     const hasData = carrierHasAnyData(r.carrier);
-    ['reasons', 'flags', 'infos'].forEach(k => { if (r[k]) r[k] = r[k].map(x => uwStripOtherStateQuote(r, x)); });
-    const items = [
-      ...r.reasons.map(x => `<div class="result-item reason"><span class="ri-icon">✕</span><span>${x.text}${x.notes ? `<span class="ri-notes">${x.notes}</span>` : ''}</span></div>`),
-      ...r.flags.map(x => `<div class="result-item flag"><span class="ri-icon">!</span><span>${x.text}${x.notes ? `<span class="ri-notes">${x.notes}</span>` : ''}</span></div>`),
-      ...(r.infos || []).map(x => `<div class="result-item info"><span class="ri-icon">ℹ</span><span>${x.text}${x.notes ? `<span class="ri-notes">${x.notes}</span>` : ''}</span></div>`),
-    ];
+    // Items + clean/source lines for one result (a carrier, or one of its products).
+    const bodyHTML = (x0, showNote) => {
+      ['reasons', 'flags', 'infos'].forEach(k => { if (x0[k]) x0[k] = x0[k].map(x => uwStripOtherStateQuote(x0, x)); });
+      const items = [
+        ...x0.reasons.map(x => `<div class="result-item reason"><span class="ri-icon">✕</span><span>${x.text}${x.notes ? `<span class="ri-notes">${x.notes}</span>` : ''}</span></div>`),
+        ...x0.flags.map(x => `<div class="result-item flag"><span class="ri-icon">!</span><span>${x.text}${x.notes ? `<span class="ri-notes">${x.notes}</span>` : ''}</span></div>`),
+        ...(x0.infos || []).map(x => `<div class="result-item info"><span class="ri-icon">ℹ</span><span>${x.text}${x.notes ? `<span class="ri-notes">${x.notes}</span>` : ''}</span></div>`),
+      ];
+      return `
+          ${(x0.reasons.length + x0.flags.length) ? '' : `<div class="result-clean">No flags found based on what you entered.</div>`}
+          ${items.length ? `<div class="result-list">${items.join('')}</div>` : ''}
+          ${showNote && uwCarrierNote(x0.carrier)?.note ? `<div class="result-note">${uwCarrierNote(x0.carrier).note}</div>` : ''}
+          ${hasData ? `<div class="result-source">${ruleSourceText(x0)}</div>` : ''}
+          ${!hasData ? `<div class="result-nodata">No underwriting data has been loaded yet for ${bvpCarrierDisplay(x0.carrier)} — this result only reflects what's entered above, not ${bvpCarrierDisplay(x0.carrier)}'s actual rules.</div>` : ''}`;
+    };
+    // More than one product loaded for this state (e.g. Humana Traditional and Achieve): one
+    // section per product, each with its own badge; the header badge is the best of them.
+    if (r.products && r.products.length > 1) {
+      const stName = UW_STATE_NAMES[r.ruleState] || r.ruleState;
+      const parts = r.products.map(p => `
+          <div class="result-product">
+            <div class="result-product-head">
+              <span class="result-product-name">${bvpCarrierDisplay(r.carrier)} ${p.product}</span>
+              <span class="result-badge ${p.status}">${badgeIcon[p.status]} ${badgeLabel[p.status]}</span>
+            </div>
+            ${bodyHTML(p, false)}
+          </div>`).join('');
+      return `
+      <div class="result-card ${r.status}">
+        <div class="result-header">
+          <span class="result-carrier">${bvpCarrierDisplay(r.carrier)}</span>
+          <span class="result-badge ${r.status}">${badgeIcon[r.status]} Best: ${badgeLabel[r.status]}${uwTip(r.status)}</span>
+        </div>
+        <div class="result-body">
+          <div class="result-products-intro">${bvpCarrierDisplay(r.carrier)} sells ${r.products.length} Medicare Supplement products in ${stName}, each with its own application — results for each:</div>
+          ${parts}
+          ${uwCarrierNote(r.carrier)?.note ? `<div class="result-note">${uwCarrierNote(r.carrier).note}</div>` : ''}
+        </div>
+      </div>`;
+    }
     return `
       <div class="result-card ${r.status}">
         <div class="result-header">
@@ -1053,11 +1093,7 @@ function renderResults(results, carriers) {
           <span class="result-badge ${r.status}">${badgeIcon[r.status]} ${badgeLabel[r.status]}${uwTip(r.status)}</span>
         </div>
         <div class="result-body">
-          ${(r.reasons.length + r.flags.length) ? '' : `<div class="result-clean">No flags found based on what you entered.</div>`}
-          ${items.length ? `<div class="result-list">${items.join('')}</div>` : ''}
-          ${uwCarrierNote(r.carrier)?.note ? `<div class="result-note">${uwCarrierNote(r.carrier).note}</div>` : ''}
-          ${hasData ? `<div class="result-source">${ruleSourceText(r)}</div>` : ''}
-          ${!hasData ? `<div class="result-nodata">No underwriting data has been loaded yet for ${bvpCarrierDisplay(r.carrier)} — this result only reflects what's entered above, not ${bvpCarrierDisplay(r.carrier)}'s actual rules.</div>` : ''}
+          ${bodyHTML(r, true)}
         </div>
       </div>`;
   }).join('');
