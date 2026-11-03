@@ -361,7 +361,7 @@ body { padding-left: 64px; }
 <div class="page">
   <div class="page-header">
     <div class="page-title">Household Discount Assistant</div>
-    <div class="page-sub">Pick the carrier(s) and state, describe the client's household, and see which household discounts the client qualifies for — the % and the rule behind it, from each carrier's state application or underwriting guide.</div>
+    <div class="page-sub">Pick the carrier(s) and state, describe the client's household, and see which household discounts the client qualifies for — the % and the rule behind it, from each carrier's state application, Outline of Coverage or underwriting guide.</div>
   </div>
 
   <div class="uw-card">
@@ -683,10 +683,11 @@ function renderHH(results, state, h) {
     if (res.status === 'noData') return card('none', `— Not loaded${uwTip('noData')}`, `<div class="result-clean">Household discount rules for ${_hhEsc(name)} aren't loaded yet.</div>`);
     const r0 = res.rows[0];
     const fromGuide = r0.source === 'guide';
+    const fromOutline = r0.source === 'outline';
     const src = res.ruleState && !fromGuide
-      ? `Based on ${_hhEsc(name)}'s ${stName} application${r0.form_number || r0.underwriter ? ` (${[r0.form_number && 'form ' + _hhEsc(r0.form_number), r0.underwriter && 'issued by ' + _hhEsc(r0.underwriter)].filter(Boolean).join(', ')})` : ''}.`
+      ? `Based on ${_hhEsc(name)}'s ${stName} ${fromOutline ? 'Outline of Coverage' : 'application'}${r0.form_number || r0.underwriter ? ` (${[r0.form_number && 'form ' + _hhEsc(r0.form_number), r0.underwriter && 'issued by ' + _hhEsc(r0.underwriter)].filter(Boolean).join(', ')})` : ''}.`
       : `Based on ${_hhEsc(name)}'s underwriting guide${res.ruleState ? ` (${stName} rules)` : ''}.`;
-    const q = r0.question_text ? `<div class="hh-q">${res.ruleState && !fromGuide ? 'Application asks' : 'Guide says'}: “${_hhEsc(r0.question_text)}”</div>` : '';
+    const q = r0.question_text ? `<div class="hh-q">${res.ruleState && !fromGuide ? (fromOutline ? 'Outline of Coverage says' : 'Application asks') : 'Guide says'}: “${_hhEsc(r0.question_text)}”</div>` : '';
     if (res.status === 'none') return card('none', `— No household discount${uwTip('noDiscount')}`, `<div class="result-clean">${_hhEsc(name)} has no household discount in ${stName}.</div><div class="result-source">${src}</div>`);
     const lines = res.tiers.map(t => {
       const why = !t.member ? 'The household doesn\'t meet this requirement.' : (!t.policy && h.policy === 'affiliate' && t.r.other_policy_scope === 'same_company' ? 'The other policy must be with the same company — an affiliate doesn\'t count here.' : '');
@@ -703,7 +704,7 @@ function renderHH(results, state, h) {
 
 // ── TOOLTIPS ──────────────────────────────────────────────────────────
 const UW_TIPS = {
-  state:      { title: 'State', body: "Uses the carrier's household discount rules from its application for this state where loaded; otherwise its underwriting guide." },
+  state:      { title: 'State', body: "Uses the carrier's household discount rules from its application or Outline of Coverage for this state where loaded; otherwise its underwriting guide." },
   partner:    { title: 'Lives with', body: "The client's spouse or partner, if any. Spouse = legally married. Civil union partner = a state-registered civil union (offered in only a few states). Domestic partner = a registered domestic partnership. Carriers differ on which they count — if a carrier doesn't count the partner type, the partner is checked as a household adult (age and 12-month rules) instead. Relatives, friends and roommates go in \"Relatives or roommates\"." },
   ages:       { title: "Oldest one's age", body: "The age of the oldest other adult in the home — including a civil union or domestic partner, since some carriers check them as a household adult. Carriers need only one qualifying person, so each applies its own cutoff to this one answer — for example Mutual of Omaha needs one who is 60+ (and lived with you 12 months), HealthSpring 50+ in many states, and Aetna has no age rule — so you can compare carriers side by side." },
   adults:     { title: 'Relatives or roommates', body: "Anyone else 18+ living in the home besides a spouse or partner — for example a sister, brother, son, daughter, friend or roommate. Many carriers count one to three of them, usually after living together 12 months, and some require them to be 50 or 60 or older. If the client lives only with a relative or roommate, set \"Lives with\" to \"No spouse or partner\"." },
