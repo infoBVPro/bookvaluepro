@@ -21,6 +21,7 @@ body{font-family:'DM Sans',sans-serif;color:var(--text);background:var(--light-b
 .head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:1.5rem;}
 .eyebrow{font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--emerald);text-transform:uppercase;margin-bottom:0.5rem;}
 h1{font-family:'DM Serif Display',serif;font-size:34px;color:var(--deep);font-weight:400;}
+.head-actions{display:flex;gap:8px;flex-wrap:wrap;}
 .head-actions a{font-size:13px;color:var(--forest);font-weight:600;text-decoration:none;border:1.5px solid var(--border);background:white;padding:9px 16px;border-radius:9px;}
 .head-actions a:hover{border-color:var(--emerald);}
 
@@ -156,7 +157,7 @@ body { padding-left: 64px; }
       <div class="eyebrow">Agency Overview</div>
       <h1 id="agency-name">Your agency</h1>
     </div>
-    <div class="head-actions"><a href="bookvaluepro-agency-team.html">Manage team →</a></div>
+    <div class="head-actions"><a href="bookvaluepro-agency-clients.html">All clients</a> <a href="bookvaluepro-agency-pipeline.html">Pipeline</a> <a href="bookvaluepro-outreach.html?view=agency">Outreach</a> <a href="bookvaluepro-agency-team.html" id="manage-team" class="hidden">Manage team →</a></div>
   </div>
 
   <div class="tiles">
@@ -313,11 +314,11 @@ function renderRows() {
       ? `<td>${num(r.policies)}</td><td>${money(r.premium)}</td><td>${money(r.curr)}</td><td>${money(r.opp)}</td><td>${num(r.renewals)}</td>`
       : `<td colspan="5" class="nobook" style="text-align:center;">No book uploaded yet</td>`;
     return `<tr>
-      <td class="agent">${esc(r.email)}${r.role === 'owner' ? '<span class="role">Owner</span>' : ''}${r.isMe ? '<span class="role">(you)</span>' : ''}</td>
+      <td class="agent">${esc(bvpMemberLabel(r))}${r.display_name ? `<span class="role">${esc(r.email)}</span>` : ''}${r.role === 'owner' ? '<span class="role">Owner</span>' : r.role === 'admin' ? '<span class="role">Admin</span>' : ''}${r.isMe ? '<span class="role">(you)</span>' : ''}</td>
       ${book}
       <td>${num(r.emails)}</td><td>${num(r.touches)}</td><td>${num(r.openLeads)}</td><td>${num(r.won)}</td>
       <td><a class="view" href="${link}">${r.isMe ? 'Open' : 'View'}</a></td></tr>`;
-  }).join('') || '<tr><td colspan="11" class="loading">No agents yet. <a href="bookvaluepro-agency-team.html">Invite your first agent →</a></td></tr>';
+  }).join('') || '<tr><td colspan="11" class="loading">No agents yet.</td></tr>';
 }
 
 document.getElementById('sort-row').addEventListener('click', e => {
@@ -335,8 +336,9 @@ document.getElementById('sort-row').addEventListener('click', e => {
   document.getElementById('agent-email').textContent = session.user.email;
   bvpSetAdminNavVisible(session.user.email);
 
-  const access = await bvpGetAccess();
-  if (access.reason !== 'agency_owner') { window.location.replace(BVP_ACCOUNT_PAGE); return; }
+  const access = await bvpRequireAgencyManager();
+  if (!access) return;
+  if (bvpIsAgencyOwner(access)) document.getElementById('manage-team').classList.remove('hidden');
   const agency = await bvpGetAgency(access.agency_id);
   if (agency) document.getElementById('agency-name').textContent = agency.name;
 

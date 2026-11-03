@@ -281,20 +281,45 @@ function _bvpNavLink(id, href, label, svgPaths) {
   a.className = 'bvp-sidenav-item';
   a.id = id;
   a.innerHTML = '<span class="bvp-sidenav-node"><svg viewBox="0 0 24 24">' + svgPaths + '</svg></span><span class="bvp-sidenav-label">' + label + '</span>';
-  const page = location.pathname.split('/').pop();
-  if (page === href) a.classList.add('active');
+  // Match on page + its ?view= (so "Agency Outreach" and "Renewal Outreach" light up separately).
+  const here = location.pathname.split('/').pop() + (new URLSearchParams(location.search).get('view') === 'agency' ? '?view=agency' : '');
+  if (here === href) a.classList.add('active');
   return a;
 }
+
+// Agency roles. Managers (owner + admins) see the team's books and can send
+// outreach for any team client; only the owner changes the team or billing.
+function bvpAgencyRole(access) { return (access && access.agency_id && access.role) || null; }
+function bvpIsAgencyManager(access) { return ['owner', 'admin'].includes(bvpAgencyRole(access)); }
+function bvpIsAgencyOwner(access) { return bvpAgencyRole(access) === 'owner'; }
 
 function bvpAddAccountNav(access) {
   const bottom = document.querySelector('.bvp-sidenav-bottom');
   if (!bottom) return;
   const first = bottom.firstChild;
-  if (access && access.reason === 'agency_owner' && !document.getElementById('bvp-sidenav-agency')) {
-    bottom.insertBefore(_bvpNavLink('bvp-sidenav-agency', BVP_AGENCY_PAGE, 'Agency Overview',
-      '<path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6"/>'), first);
-    bottom.insertBefore(_bvpNavLink('bvp-sidenav-team', BVP_TEAM_PAGE, 'Team',
-      '<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"/><path d="M17 11v6M14 14h6"/>'), first);
+  if (bvpIsAgencyManager(access) && !document.getElementById('bvp-sidenav-agency')) {
+    // An "Agency" group at the end of the main menu.
+    const steps = document.querySelector('.bvp-sidenav-steps') || bottom;
+    const sep = document.createElement('div');
+    sep.className = 'bvp-sidenav-group';
+    sep.style.cssText = 'margin:10px 21px 4px;padding-top:10px;border-top:1px solid rgba(61,162,114,0.15);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:rgba(122,191,154,.55);white-space:nowrap;height:24px;';
+    sep.innerHTML = '<span class="bvp-sidenav-label" style="font-size:10px;">Agency</span>'; // hidden until the menu expands
+    steps.appendChild(sep);
+    steps.appendChild(_bvpNavLink('bvp-sidenav-agency', BVP_AGENCY_PAGE, 'Agency Overview',
+      '<path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6"/>'));
+    steps.appendChild(_bvpNavLink('bvp-sidenav-agency-clients', BVP_AGENCY_CLIENTS_PAGE, 'Agency Clients',
+      '<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"/><circle cx="17" cy="8.5" r="2.4"/><path d="M15.5 14.7c2.6.3 4.5 2.3 4.5 5.3"/>'));
+    steps.appendChild(_bvpNavLink('bvp-sidenav-agency-pipeline', BVP_AGENCY_PIPELINE_PAGE, 'Agency Pipeline',
+      '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>'));
+    steps.appendChild(_bvpNavLink('bvp-sidenav-agency-outreach', BVP_AGENCY_OUTREACH_PAGE, 'Agency Outreach',
+      '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/>'));
+    if (bvpIsAgencyOwner(access)) {
+      steps.appendChild(_bvpNavLink('bvp-sidenav-team', BVP_TEAM_PAGE, 'Team',
+        '<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"/><path d="M17 11v6M14 14h6"/>'));
+    }
+    // On short screens the longer menu may need to scroll.
+    const nav = document.getElementById('bvp-sidenav');
+    if (nav) nav.style.overflowY = 'auto';
   }
   if (!document.getElementById('bvp-sidenav-account')) {
     bottom.insertBefore(_bvpNavLink('bvp-sidenav-account', BVP_ACCOUNT_PAGE, 'Account',
@@ -306,6 +331,53 @@ function bvpAddAccountNav(access) {
 const BVP_AGENCY_PAGE = 'bookvaluepro-agency.html';
 const BVP_TEAM_PAGE   = 'bookvaluepro-agency-team.html';
 const BVP_JOIN_PAGE   = 'bookvaluepro-join.html';
+const BVP_AGENCY_CLIENTS_PAGE  = 'bookvaluepro-agency-clients.html';
+const BVP_AGENCY_PIPELINE_PAGE = 'bookvaluepro-agency-pipeline.html';
+const BVP_AGENCY_OUTREACH_PAGE = 'bookvaluepro-outreach.html?view=agency';
+
+// A team member's name for display: their sender-profile name, else their email.
+function bvpMemberLabel(m) { return (m && (m.display_name || m.email)) || 'Agent'; }
+
+// Loads every team member's active book, enriched with their OWN commission
+// rates and assumptions (the same numbers each agent sees on their dashboard).
+// Returns [{ member, book, policies, savingsPct, discountPct, error }].
+// onAgent(result, done, total) is called as each agent finishes.
+async function bvpLoadTeamBooks(roster, onAgent = null, concurrency = 4) {
+  const results = [];
+  const queue = [...roster];
+  let done = 0;
+  await bvpLoadCarriers().catch(() => {});
+  const worker = async () => {
+    while (queue.length) {
+      const member = queue.shift();
+      const r = { member, book: null, policies: [], savingsPct: 10, discountPct: 10, error: null };
+      try {
+        r.book = await bvpGetActiveBook(member.user_id);
+        if (r.book) {
+          r.discountPct = Number(r.book.discount_rate) || 10;
+          r.savingsPct = Number(r.book.savings_pct) || 10;
+          const raw = await bvpGetPolicies(r.book.id);
+          if (raw.length) r.policies = await bvpEnrichPolicies(member.user_id, raw, r.discountPct, r.savingsPct);
+        }
+      } catch (err) {
+        console.error('bvpLoadTeamBooks', member.email, err);
+        r.error = err.message || String(err);
+      }
+      results.push(r);
+      done += 1;
+      if (onAgent) onAgent(r, done, roster.length);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(concurrency, queue.length)) }, worker));
+  return results;
+}
+
+// Sends non-managers away from agency pages. Returns the access object, or null.
+async function bvpRequireAgencyManager() {
+  const access = await bvpGetAccess();
+  if (!bvpIsAgencyManager(access)) { window.location.replace(BVP_ACCOUNT_PAGE); return null; }
+  return access;
+}
 
 // Calls the agency-team server function. Throws an Error with a readable message.
 async function bvpAgencyAction(action, payload = {}) {
@@ -379,6 +451,7 @@ function bvpShowReadOnlyBar(member) {
   bar.innerHTML = `<span>👁 Viewing <strong>${safe}</strong>'s book: <strong>view only</strong></span>
     <a href="bookvaluepro-dashboard.html?agent=${id}">Dashboard</a>
     <a href="bookvaluepro-clients.html?agent=${id}">Clients</a>
+    <a href="${BVP_AGENCY_OUTREACH_PAGE}&agent=${id}">Outreach</a>
     <span class="sp"></span>
     <a href="${BVP_AGENCY_PAGE}">← Back to Agency Overview</a>`;
   const header = document.querySelector('.bvp-header');

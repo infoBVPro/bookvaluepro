@@ -286,8 +286,10 @@ function renderPaidPlan(sub, agency) {
     <dl class="rows">${rows}</dl>
     <div class="actions">
       <button class="btn btn-primary" onclick="manageBilling(this)">Manage billing</button>
+      ${!isAgency && !sub.cancel_at_period_end ? `<button class="btn btn-outline" onclick="document.getElementById('upgrade-box').classList.toggle('hidden')">Upgrade to Agency</button>` : ''}
     </div>
-    <p class="muted-note">Update your card, view invoices${isAgency ? '' : ', switch between monthly and annual'}, or cancel. Opens Stripe's secure billing page.</p>`;
+    <p class="muted-note">Update your card, view invoices${isAgency ? '' : ', switch between monthly and annual'}, or cancel. Opens Stripe's secure billing page.</p>
+    ${!isAgency && !sub.cancel_at_period_end ? upgradeBox(sub) : ''}`;
 
   if (isAgency) {
     const included = BVP_PRICING.agency.includedLicenses;
@@ -303,6 +305,44 @@ function renderPaidPlan(sub, agency) {
         <a class="btn btn-outline" href="${BVP_AGENCY_PAGE}">Agency Overview</a>
       </div>`;
     document.getElementById('agency-card').classList.remove('hidden');
+  }
+}
+
+// "Upgrade to Agency": switches this same subscription to the Agency plan.
+// One-way. Trial days carry over; on a paid plan Stripe credits unused time.
+function upgradeBox(sub) {
+  const a = BVP_PRICING.agency;
+  const when = sub.status === 'trialing'
+    ? `Your free trial carries over: nothing is charged until <strong>${fmtDate(sub.trial_ends_at)}</strong>, then ${fmtMoney(a.amount)}/month.`
+    : `You'll move to ${fmtMoney(a.amount)}/month right away. Stripe credits the unused part of your current plan against the first Agency invoice.`;
+  return `<div id="upgrade-box" class="hidden" style="margin-top:18px;padding:16px 18px;border:1.5px solid var(--border);border-radius:12px;background:#fbfdfc;">
+    <div style="font-weight:600;color:var(--deep);margin-bottom:6px;">Upgrade to Agency</div>
+    <p class="muted-note" style="margin:0 0 12px;">${fmtMoney(a.amount)}/month includes ${a.includedLicenses} licenses (you plus ${a.includedLicenses - 1} agents or staff), then ${fmtMoney(a.extraLicense)}/month each. ${when} Your book, clients and settings stay as they are. You can't switch back to Individual afterwards.</p>
+    <label for="up-name" style="font-size:13px;font-weight:600;color:var(--slate);">Agency name</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+      <input id="up-name" maxlength="100" placeholder="e.g. Jordan Insurance Group" style="flex:1;min-width:220px;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;font-size:14px;">
+      <button class="btn btn-primary" id="up-go" onclick="upgradeToAgency()">Upgrade</button>
+    </div>
+    <div class="err" id="up-err"></div>
+  </div>`;
+}
+
+async function upgradeToAgency() {
+  const name = document.getElementById('up-name').value.trim();
+  const err = document.getElementById('up-err'), btn = document.getElementById('up-go');
+  err.classList.remove('show');
+  if (!name) { err.textContent = "Please enter your agency's name."; err.classList.add('show'); return; }
+  btn.disabled = true; btn.textContent = 'Upgrading…';
+  try {
+    await bvpCallFunction('create-checkout-session', { action: 'upgrade_to_agency', agencyName: name });
+    const { data: { session } } = await bvp.auth.getSession();
+    _bvpAccessCache = null;
+    await render(session);
+    showBanner('info', `You're now on the Agency plan. <a href="${BVP_TEAM_PAGE}" style="color:inherit;font-weight:600;">Invite your team →</a>`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (e) {
+    err.textContent = e.message; err.classList.add('show');
+    btn.disabled = false; btn.textContent = 'Upgrade';
   }
 }
 
@@ -336,6 +376,13 @@ async function render(session) {
           ? `Thanks for testing BookValuePro. Your free access runs through <strong>${fmtDate(access.beta_ends_on)}</strong>.`
           : 'Thanks for testing BookValuePro. You have free access to every tool, with no card needed.');
       return access;
+    case 'agency_admin': {
+      const { data: agency } = await bvp.from('agencies').select('name').eq('id', access.agency_id).maybeSingle();
+      renderSimple(esc(agency?.name || 'Agency plan'), '<span class="chip green">Agency admin</span>',
+        'You\'re an admin on your agency\'s plan: you can see every agent\'s clients and send renewal outreach for the team. Billing and team changes are handled by your agency owner.',
+        `<a class="btn btn-primary" href="${BVP_AGENCY_PAGE}">Agency Overview</a>`);
+      return access;
+    }
     case 'agency_member': {
       const { data: agency } = await bvp.from('agencies').select('name').eq('id', access.agency_id).maybeSingle();
       renderSimple(esc(agency?.name || 'Agency plan'), '<span class="chip green">Agency license</span>',

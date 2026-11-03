@@ -429,6 +429,12 @@ body { padding-left: 64px; }
 .filter-hint{font-size:11px;color:var(--ink-3);margin-left:4px}
 
 /* ── LAST EMAILED TAGS ── */
+.agent-control{display:flex;align-items:center;gap:8px;background:var(--white);border:1.5px solid var(--cream-2);border-radius:10px;padding:6px 10px 6px 14px}
+.agent-control label{font-size:12px;color:var(--ink-2);font-weight:500;white-space:nowrap}
+.agent-control select{font-family:var(--sans);font-size:13px;border:none;outline:none;background:transparent;color:var(--accent);font-weight:500;max-width:220px}
+.agent-cell{font-size:11.5px;color:var(--ink-2);white-space:nowrap}
+.agency-banner{font-size:12.5px;line-height:1.55;color:var(--ink-2);background:var(--accent-l);border:1px solid var(--accent-2);border-radius:10px;padding:10px 14px;margin:-12px 0 20px}
+.eh-by{font-size:11px;color:var(--accent);font-weight:500}
 .em-tag{display:inline-block;margin-left:8px;font-family:var(--mono);font-size:10px;padding:1px 6px;border-radius:4px;vertical-align:1px;font-weight:500}
 .em-tag.sent{background:var(--accent-l);color:var(--accent)}
 .em-tag.sched{background:var(--blue-l);color:var(--blue-2)}
@@ -546,6 +552,10 @@ body { padding-left: 64px; }
       <p class="page-sub" id="outreach-page-sub">Policies shown in the month the agent should reach out · Save &amp; Switch listed first · <span id="savings-indicator" style="font-family:var(--mono);font-size:11px;background:var(--accent-l);color:var(--accent);padding:2px 8px;border-radius:4px;border:1px solid var(--accent-2)"></span></p>
     </div>
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:0">
+      <div class="agent-control hidden-agency" id="agent-control" style="display:none">
+        <label for="agent-filter">Agent</label>
+        <select id="agent-filter" onchange="setAgentFilter(this.value)"><option value="">All agents</option></select>
+      </div>
       <div class="lead-control" id="renewals-lead-control">
         <label for="lead-months">Reach out</label>
         <input class="lead-input" id="lead-months" type="number" min="1" max="6" value="3">
@@ -560,6 +570,7 @@ body { padding-left: 64px; }
     </div>
   </div>
 
+  <div class="agency-banner" id="agency-banner" style="display:none"></div>
   <!-- ── RENEWALS TAB ── -->
   <div id="renewals-tab">
     <div class="summary-strip" id="summary-strip"></div>
@@ -627,7 +638,30 @@ body { padding-left: 64px; }
 <div class="copy-toast" id="copy-toast">Copied to clipboard ✓</div>
 
 <script>
-const POLICIES = []; // Populated from Supabase
+const POLICIES = []; // Populated from Supabase (in agency mode: the agents picked in the Agent filter)
+// ── AGENCY MODE (?view=agency) ──────────────────────────────────────
+// The owner or an admin works every team member's clients on one screen.
+// Each email still goes out under the client's agent of record (their name,
+// reply-to, signature and do-not-email list); the batch records who sent it.
+const AGENCY_MODE = new URLSearchParams(location.search).get('view') === 'agency';
+const ALL_POLICIES = [];           // agency mode: every team client
+let agencyRoster = [];
+let agentFilter = '';
+let AGENCY_NAME = '';
+const senderProfiles = new Map();  // agency mode: agent id -> agent_profiles row
+function agentLabel(id) { return bvpMemberLabel(agencyRoster.find(m => m.user_id === id)); }
+function profileFor(p) { return AGENCY_MODE ? (senderProfiles.get(p.agentId) || null) : senderProfile; }
+function suppressionKey(p) { return AGENCY_MODE ? p.agentId + '|' + clientEmail(p) : clientEmail(p); }
+function setAgentFilter(id) {
+  agentFilter = id || '';
+  POLICIES.length = 0;
+  ALL_POLICIES.filter(p => !agentFilter || p.agentId === agentFilter).forEach(p => POLICIES.push(p));
+  selectedIdxs.clear(); monthSelectUsed = false; updateBulkBar();
+  const url = new URL(location.href);
+  if (agentFilter) url.searchParams.set('agent', agentFilter); else url.searchParams.delete('agent');
+  history.replaceState(null, '', url);
+  renderAll();
+}
 // ── SYNC SAVINGS % FROM DASHBOARD ───────────────────────────────────
 // Reads the value saved by the dashboard slider so both screens stay in sync.
 const SAVINGS_PCT = +(localStorage.getItem('bvp_savings_pct') || 10);
@@ -678,7 +712,8 @@ function giUnderwriteCell(gi){
 }
 
 // Recompute monthly savings using live savings %
-function liveMonSav(p){ return p.currPrem * (SAVINGS_PCT / 100); }
+function savPct(p){ return p.savPct != null ? p.savPct : SAVINGS_PCT; } // agency mode: each agent's own assumption
+function liveMonSav(p){ return p.currPrem * (savPct(p) / 100); }
 function liveOppNPV(p){ return p.renNPV; } // ren_npv already calculated at current SAVINGS_PCT
 const fmtK=v=>'$'+(Math.abs(v)>=1000?(Math.abs(v)/1000).toFixed(1)+'K':Math.round(Math.abs(v)));
 
@@ -762,13 +797,14 @@ function renderCalendar(){
 
 function buildTable(m){
   const vis=filtered(m);
-  if(!vis.length) return`<table><tbody><tr class="no-policies-row"><td colspan="15">No policies match the current filter.</td></tr></tbody></table>`;
+  const COLS = AGENCY_MODE ? 16 : 15;
+  if(!vis.length) return`<table><tbody><tr class="no-policies-row"><td colspan="${COLS}">No policies match the current filter.</td></tr></tbody></table>`;
   const ss=vis.filter(p=>p.priority===1).sort((a,b)=>a.rank-b.rank);
   const sb=vis.filter(p=>p.priority===2).sort((a,b)=>a.rank-b.rank);
   const lw=vis.filter(p=>p.priority===3).sort((a,b)=>a.rank-b.rank);
   const thead=`<thead><tr>
     <th class="row-check"><input type="checkbox" title="Select everyone shown in this month (sends one personalized template)" ${vis.every(p=>selectedIdxs.has(p.idx))?'checked':''} onchange="toggleMonthSelect(${m},this.checked)"></th>
-    <th>Client</th><th>Carrier</th><th>State</th>
+    <th>Client</th>${AGENCY_MODE?'<th>Agent</th>':''}<th>Carrier</th><th>State</th>
     <th title="State guaranteed-issue right">State GI Right</th>
     <th class="num">Age</th>
     <th class="num">Current premium</th><th class="num">Current LTV</th>
@@ -779,11 +815,12 @@ function buildTable(m){
   </tr></thead>`;
   const rows=(policies,cls,label)=>{
     if(!policies.length)return'';
-    return`<tr><td colspan="15" style="padding:0">
+    return`<tr><td colspan="${COLS}" style="padding:0">
       <div class="cohort-section-header ${cls}">${label}<span class="cohort-count">${policies.length} client${policies.length>1?'s':''}</span></div>
     </td></tr>`+policies.map(p=>`<tr data-idx="${p.idx}" class="${selectedIdxs.has(p.idx)?'selected':''}">
       <td class="row-check"><input type="checkbox" data-idx="${p.idx}" ${selectedIdxs.has(p.idx)?'checked':''} onchange="toggleRowSelect(${p.idx},this.checked)"></td>
       <td class="name-cell"><span class="client-name-link" onclick="openScriptModal(${p.idx})" style="cursor:pointer;border-bottom:1px dashed var(--accent-2);color:var(--ink)">${p.name}</span>${emailTag(p)}${isGIContact(p,m)?'<span class="gi-tag" title="Scheduled here to get underwritten before the GI window opens">GI</span>':''}</td>
+      ${AGENCY_MODE?`<td class="agent-cell">${escH(p.agentLabel)}</td>`:''}
       <td><span class="carrier-badge">${p.company}</span></td>
       <td><span class="carrier-badge">${p.state || '—'}</span></td>
       <td>${giRightCell(p.gi)}</td>
@@ -813,7 +850,7 @@ function toggleMonth(m){
 
 function renderAll(){
   const ind = document.getElementById('savings-indicator');
-  if(ind) ind.textContent = SAVINGS_PCT + '% avg. savings assumption';
+  if(ind) ind.textContent = AGENCY_MODE ? "each agent's own savings assumption" : SAVINGS_PCT + '% avg. savings assumption';
   renderSummary();
   renderCalendar();
 }
@@ -880,8 +917,8 @@ function updateBulkBar() {
 const COHORT_LABELS = { 1:'Save & Switch', 2:'Steady Book', 3:'Loyalty Watch' };
 
 function clientContext(p) {
-  const moSav = (p.currPrem * SAVINGS_PCT / 100).toFixed(2);
-  const annSav = (p.currPrem * SAVINGS_PCT / 100 * 12).toFixed(0);
+  const moSav = (p.currPrem * savPct(p) / 100).toFixed(2);
+  const annSav = (p.currPrem * savPct(p) / 100 * 12).toFixed(0);
   const cohort = COHORT_LABELS[p.priority] || '';
   return `Client: ${p.name}
 Carrier: ${p.company}, State: ${p.state || 'N/A'}, Age: ${p.age ?? 'N/A'}
@@ -917,7 +954,7 @@ let compose = null;                // the email being written right now
 const MERGE_FIELDS = [
   ['first_name', 'First name'], ['carrier', 'Carrier'], ['monthly_premium', 'Monthly premium'],
   ['monthly_savings', 'Est. monthly savings'], ['annual_savings', 'Est. annual savings'],
-  ['renewal_month', 'Renewal month'], ['agent_name', 'Your name'], ['agent_phone', 'Your phone'],
+  ['renewal_month', 'Renewal month'], ['agent_name', AGENCY_MODE ? "Agent's name" : 'Your name'], ['agent_phone', AGENCY_MODE ? "Agent's phone" : 'Your phone'],
 ];
 
 const escH = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -928,7 +965,8 @@ function clientEmail(p) { return (p.email || '').trim().toLowerCase(); }
 function emailBlocker(p) {
   const e = clientEmail(p);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return 'No email address';
-  if (suppressedEmails.has(e)) return 'Unsubscribed';
+  if (suppressedEmails.has(suppressionKey(p))) return 'Unsubscribed';
+  if (AGENCY_MODE && !profileFor(p)) return 'Agent has no sender details';
   return null;
 }
 
@@ -941,8 +979,8 @@ function mergeValues(p) {
     monthly_savings: fmt$(sav),
     annual_savings: fmt$(sav * 12),
     renewal_month: MONTHS[((p.month || 1) - 1 + 12) % 12],
-    agent_name: (senderProfile && senderProfile.display_name) || 'Your agent',
-    agent_phone: (senderProfile && senderProfile.phone) || '',
+    agent_name: (profileFor(p) && profileFor(p).display_name) || 'Your agent',
+    agent_phone: (profileFor(p) && profileFor(p).phone) || '',
   };
 }
 function fillTemplate(text, p) {
@@ -1043,15 +1081,24 @@ function setModal(title, sub, bodyHtml, footerHtml) {
 
 function recipientSummary() {
   const c = compose;
-  const noEmail = c.blocked.filter(p => emailBlocker(p) === 'No email address').length;
-  const unsub = c.blocked.length - noEmail;
   const parts = [`<strong>${c.sendable.length}</strong> client${c.sendable.length === 1 ? '' : 's'} will get this email`];
-  if (noEmail) parts.push(`${noEmail} skipped: no email address`);
-  if (unsub) parts.push(`${unsub} skipped: unsubscribed`);
+  const reasons = {};
+  c.blocked.forEach(p => { const r = emailBlocker(p); reasons[r] = (reasons[r] || 0) + 1; });
+  Object.entries(reasons).forEach(([r, n]) => parts.push(`${n} skipped: ${r.toLowerCase()}`));
+  if (AGENCY_MODE) {
+    const agents = new Set(c.sendable.map(p => p.agentId));
+    if (agents.size) parts.push(`from ${agents.size} agent${agents.size === 1 ? '' : 's'}`);
+  }
   return `<div class="cmp-recipients">${parts.join(' · ')}</div>`;
 }
 
 function profileNotice() {
+  if (AGENCY_MODE) {
+    const missing = [...new Set(((compose && compose.policies) || []).filter(p => !profileFor(p)).map(p => p.agentLabel))];
+    const who = `<div class="cmp-notice">Each email goes out under the client's own agent: their name, reply-to address and signature${AGENCY_NAME ? `, with ${escH(AGENCY_NAME)} in the footer` : ''}. Replies go to that agent.</div>`;
+    if (!missing.length) return who;
+    return who + `<div class="cmp-notice warn">${missing.map(escH).join(', ')} ${missing.length === 1 ? "hasn't" : "haven't"} added sender details yet, so ${missing.length === 1 ? 'their' : 'those'} clients are skipped. Each agent adds them on their own Account page.</div>`;
+  }
   if (senderProfile) return '';
   return `<div class="cmp-notice warn">Before you can send, add your sender details (name, phone, reply-to email and mailing address) on your
     <a href="bookvaluepro-account.html#sender-profile">Account page</a>. You can still draft emails now.</div>`;
@@ -1125,7 +1172,7 @@ async function draftWithAI() {
   if (!instr) { document.getElementById('cmp-error').textContent = 'Tell the AI what the email should say, or pick a suggestion.'; return; }
   c.instructions = instr;
   c.busy = true;
-  const agent = `Agent name: ${(senderProfile && senderProfile.display_name) || '{{agent_name}}'}\nAgent phone: ${(senderProfile && senderProfile.phone) || '{{agent_phone}}'}`;
+  const agentFor = p => `Agent name: ${(profileFor(p) && profileFor(p).display_name) || '{{agent_name}}'}\nAgent phone: ${(profileFor(p) && profileFor(p).phone) || '{{agent_phone}}'}`;
   try {
     if (c.mode === 'template') {
       showGenerating('Writing your email template…');
@@ -1145,7 +1192,7 @@ ${EMAIL_RULES}`;
       for (let i = 0; i < c.sendable.length; i++) {
         const p = c.sendable[i];
         showGenerating(c.sendable.length > 1 ? `Writing email ${i + 1} of ${c.sendable.length}…` : 'Writing your email…');
-        const raw = await callClaude(system, `Agent's instructions: ${instr}\n\n${agent}\n\nClient:\n${emailContext(p)}`);
+        const raw = await callClaude(system, `Agent's instructions: ${instr}\n\n${agentFor(p)}\n\nClient:\n${emailContext(p)}`);
         const d = parseDraft(raw, `Your ${p.company || 'Medicare Supplement'} plan`);
         c.drafts.push({ idx: p.idx, include: true, subject: fillTemplate(d.subject, p), body: fillTemplate(d.body, p) });
       }
@@ -1177,7 +1224,9 @@ function sendControls(count) {
         <input type="datetime-local" id="cmp-at" min="${local(min)}" max="${local(max)}" value="${local(def)}" disabled>
       </div>
       <label class="cmp-attest"><input type="checkbox" id="cmp-attest">
-        These are my clients, and this message follows my carriers' and CMS marketing rules.</label>
+        ${AGENCY_MODE
+          ? "I'm sending on behalf of each client's agent of record with our agency's authorization, and this message follows our carriers' and CMS marketing rules."
+          : "These are my clients, and this message follows my carriers' and CMS marketing rules."}</label>
       <div class="cmp-error" id="cmp-error"></div>
     </div>`;
 }
@@ -1225,10 +1274,12 @@ function insertField(k) {
   renderPreview();
 }
 
-function footerPreview() {
-  const sp = senderProfile;
-  if (!sp) return '<em>Your name, phone, mailing address and an unsubscribe link are added here.</em>';
-  return `You're receiving this email because you're a client of ${escH(sp.display_name)}.<br>${escH(sp.display_name)}${sp.phone ? ' · ' + escH(sp.phone) : ''}<br>${escH(sp.mailing_address).replace(/\n/g, ', ')}<br><u>Unsubscribe</u>`;
+function footerPreview(p) {
+  const sp = p ? profileFor(p) : senderProfile;
+  if (!sp) return AGENCY_MODE ? "<em>The agent's name, phone, mailing address and an unsubscribe link are added here.</em>"
+                              : '<em>Your name, phone, mailing address and an unsubscribe link are added here.</em>';
+  const ag = AGENCY_NAME ? ` · ${escH(AGENCY_NAME)}` : '';
+  return `You're receiving this email because you're a client of ${escH(sp.display_name)}${ag}.<br>${escH(sp.display_name)}${ag}${sp.phone ? ' · ' + escH(sp.phone) : ''}<br>${escH(sp.mailing_address).replace(/\n/g, ', ')}<br><u>Unsubscribe</u>`;
 }
 
 function renderPreview() {
@@ -1237,11 +1288,11 @@ function renderPreview() {
   const el = document.getElementById('cmp-preview');
   if (!el || !p) return;
   const subj = fillTemplate(c.template.subject, p), body = fillTemplate(c.template.body, p);
-  const fromName = (senderProfile && senderProfile.display_name) || 'Your name';
+  const fromName = (profileFor(p) && profileFor(p).display_name) || (AGENCY_MODE ? "Agent's name" : 'Your name');
   el.innerHTML = `<div class="pv-meta"><span>From</span> ${escH(fromName)} · <span>To</span> ${escH(p.email || '')}</div>
     <div class="pv-subject">${escH(subj)}</div>
     <div class="pv-body">${escH(body).replace(/\n/g, '<br>')}</div>
-    <div class="pv-footer">${footerPreview()}</div>`;
+    <div class="pv-footer">${footerPreview(p)}</div>`;
 }
 
 function renderIndividualReview() {
@@ -1257,13 +1308,13 @@ function renderIndividualReview() {
   setModal(n === 1 ? `Email ${p.name}` : `Email ${n} clients`, 'Written individually · review before sending', `
     ${profileNotice()}
     ${tabs}
-    <div class="cmp-to"><span>To <strong>${escH(p.name)}</strong> · ${escH(p.email || '')}</span>
+    <div class="cmp-to"><span>To <strong>${escH(p.name)}</strong> · ${escH(p.email || '')}${AGENCY_MODE ? ` · from <strong>${escH(p.agentLabel)}</strong>` : ''}</span>
       ${n > 1 ? `<label class="cmp-include"><input type="checkbox" ${d.include ? 'checked' : ''} onchange="compose.drafts[${c.active}].include=this.checked;renderIndividualReview()"> Include in this send</label>` : ''}</div>
     <label class="cmp-label" for="cmp-subject">Subject</label>
     <input class="cmp-input" id="cmp-subject" value="${escH(d.subject)}" maxlength="200" oninput="compose.drafts[${c.active}].subject=this.value">
     <label class="cmp-label" for="cmp-body">Message</label>
     <textarea class="cmp-textarea tall" id="cmp-body" oninput="compose.drafts[${c.active}].body=this.value">${escH(d.body)}</textarea>
-    <div class="pv-footer standalone">${footerPreview()}</div>
+    <div class="pv-footer standalone">${footerPreview(p)}</div>
     ${sendControls(count)}`,
     `<div class="cmp-actions">
        <button class="cmp-btn link" onclick="renderCompose()">← Change instructions</button>
@@ -1291,7 +1342,7 @@ async function sendEmails() {
   const c = compose;
   const err = document.getElementById('cmp-error');
   err.textContent = '';
-  if (!senderProfile) { err.innerHTML = 'Add your sender details on the <a href="bookvaluepro-account.html#sender-profile">Account page</a> first.'; return; }
+  if (!AGENCY_MODE && !senderProfile) { err.innerHTML = 'Add your sender details on the <a href="bookvaluepro-account.html#sender-profile">Account page</a> first.'; return; }
   if (!document.getElementById('cmp-attest').checked) { err.textContent = 'Please tick the box to confirm before sending.'; return; }
 
   let items;
@@ -1317,6 +1368,7 @@ async function sendEmails() {
   try {
     const result = await bvpCallFunction('outreach-email', {
       action: 'send', mode: c.mode, items, scheduledAt, audience: audienceLabel(c.sendable), returnBase: bvpSiteBase(),
+      agency: AGENCY_MODE,
     });
     c.busy = false;
     renderResult(result);
@@ -1334,17 +1386,21 @@ function renderResult(r) {
     ? `<div class="cmp-done">🕒 ${r.scheduled} email${r.scheduled === 1 ? '' : 's'} scheduled for <strong>${fmtWhen(r.scheduledAt)}</strong></div>
        <p class="cmp-muted">You can cancel this batch under "Sent &amp; scheduled emails" until it goes out.</p>`
     : `<div class="cmp-done">✓ ${r.sent} email${r.sent === 1 ? '' : 's'} sent</div>
-       <p class="cmp-muted">Replies go straight to ${escH(senderProfile.reply_to_email)}.</p>`;
+       <p class="cmp-muted">${AGENCY_MODE ? "Replies go straight to each client's agent." : `Replies go straight to ${escH(senderProfile.reply_to_email)}.`}</p>`;
   const skipped = (r.skipped || []).length
     ? `<div class="cmp-label">Skipped (${r.skipped.length})</div><ul class="cmp-list">${r.skipped.slice(0, 30).map(s => `<li>${escH(s.name || 'Client')}: ${escH(s.reason)}</li>`).join('')}</ul>` : '';
   const failed = r.failed
     ? `<div class="cmp-notice warn">${r.failed} email${r.failed === 1 ? '' : 's'} couldn't be sent: ${escH((r.failures[0] || {}).error || 'email service error')}. Try those again later.</div>` : '';
-  setModal('Done', '', `${done}${failed}${skipped}`,
+  const agents = (AGENCY_MODE && (r.byAgent || []).filter(a => a.sent || a.scheduled).length)
+    ? `<div class="cmp-label">Sent under each client's agent</div><ul class="cmp-list">${r.byAgent.filter(a => a.sent || a.scheduled)
+        .map(a => `<li>${escH(a.agentName || agentLabel(a.agentId))}: ${a.sent || a.scheduled} ${a.scheduled ? 'scheduled' : 'sent'}</li>`).join('')}</ul>` : '';
+  setModal('Done', '', `${done}${agents}${failed}${skipped}`,
     `<span></span><button class="cmp-btn primary" onclick="closeEmailModal()">Close</button>`);
 }
 
 // ── SENT & SCHEDULED HISTORY, LAST-EMAILED TAGS ──
 async function loadOutreachData() {
+  if (AGENCY_MODE) return loadAgencyOutreachData();
   const uid = bvpSession.user.id;
   const [prof, supp, emails, camps] = await Promise.all([
     bvp.from('agent_profiles').select('display_name, phone, reply_to_email, mailing_address').eq('user_id', uid).maybeSingle(),
@@ -1360,8 +1416,31 @@ async function loadOutreachData() {
   renderCalendar();
 }
 
+// Agency mode: every team member's profiles, unsubscribes and history.
+async function loadAgencyOutreachData() {
+  const ids = agencyRoster.map(m => m.user_id);
+  const [prof, supp, emails, camps] = await Promise.all([
+    bvp.from('agent_profiles').select('user_id, display_name, phone, reply_to_email, mailing_address').in('user_id', ids),
+    bvp.from('email_suppressions').select('agent_id, email').in('agent_id', ids),
+    bvp.from('outreach_emails').select('policy_id, status, sent_at').in('agent_id', ids).in('status', ['sent', 'scheduled']).order('sent_at', { ascending: false }).limit(10000),
+    bvp.from('outreach_campaigns').select('*').in('agent_id', ids).order('created_at', { ascending: false }).limit(25),
+  ]);
+  senderProfiles.clear();
+  (prof.data || []).forEach(r => senderProfiles.set(r.user_id, r));
+  suppressedEmails = new Set((supp.data || []).map(s => s.agent_id + '|' + s.email));
+  lastEmailed = new Map();
+  (emails.data || []).forEach(e => { if (!lastEmailed.has(e.policy_id)) lastEmailed.set(e.policy_id, { at: e.sent_at, status: e.status }); });
+  renderHistory(camps.data || []);
+  renderCalendar();
+  const missing = agencyRoster.filter(m => !senderProfiles.has(m.user_id) && ALL_POLICIES.some(p => p.agentId === m.user_id));
+  const banner = document.getElementById('agency-banner');
+  banner.style.display = 'block';
+  banner.innerHTML = `You're working every agent's renewals${AGENCY_NAME ? ' for <strong>' + escH(AGENCY_NAME) + '</strong>' : ''}. Emails go out under each client's agent of record, with their name, reply-to and signature, and skip anyone who unsubscribed from that agent.`
+    + (missing.length ? ` <strong>${missing.length} agent${missing.length === 1 ? '' : 's'}</strong> (${missing.map(m => escH(bvpMemberLabel(m))).join(', ')}) still need to add sender details on their Account page before their clients can be emailed.` : '');
+}
+
 function emailTag(p) {
-  if (p.email && suppressedEmails.has(clientEmail(p))) return '<span class="em-tag unsub" title="This client unsubscribed from your emails">Unsubscribed</span>';
+  if (p.email && suppressedEmails.has(suppressionKey(p))) return '<span class="em-tag unsub" title="This client unsubscribed from your emails">Unsubscribed</span>';
   const le = lastEmailed.get(String(p.id));
   if (!le) return '';
   const future = new Date(le.at) > new Date();
@@ -1387,7 +1466,7 @@ function renderHistory(camps) {
     const canCancel = c.status === 'scheduled' && c.scheduled_at && new Date(c.scheduled_at) > now;
     return `<div class="eh-row">
       <div class="eh-main"><div class="eh-subj">${escH(c.subject || '(no subject)')}</div>
-        <div class="eh-meta">${escH(c.audience || '')} · ${c.mode === 'template' ? 'Template' : 'Individual'} · ${fmtWhen(when)}</div></div>
+        <div class="eh-meta">${AGENCY_MODE ? escH(agentLabel(c.agent_id)) + ' · ' : ''}${escH(c.audience || '')} · ${c.mode === 'template' ? 'Template' : 'Individual'} · ${fmtWhen(when)}${c.sent_by && c.sent_by !== c.agent_id ? ` · <span class="eh-by">Sent by ${escH(c.sent_by === (bvpSession && bvpSession.user.id) ? 'you' : (c.sent_by_email || 'agency'))}</span>` : ''}</div></div>
       <div class="eh-counts">${c.sent_count} ${canCancel ? 'scheduled' : 'sent'}${c.skipped_count ? ` · ${c.skipped_count} skipped` : ''}${c.failed_count ? ` · ${c.failed_count} failed` : ''}</div>
       ${label(c)}
       ${canCancel ? `<button class="eh-cancel" data-id="${escH(c.id)}" onclick="cancelCampaign(this)">Cancel</button>` : '<span class="eh-cancel-spacer"></span>'}
@@ -1434,8 +1513,8 @@ async function openScriptModal(idx) {
   currentScriptText = '';
   overlay.classList.add('open');
 
-  const moSav = (p.currPrem * SAVINGS_PCT / 100).toFixed(2);
-  const annSav = Math.round(p.currPrem * SAVINGS_PCT / 100 * 12).toLocaleString();
+  const moSav = (p.currPrem * savPct(p) / 100).toFixed(2);
+  const annSav = Math.round(p.currPrem * savPct(p) / 100 * 12).toLocaleString();
 
   const SYSTEM = `You are a Medicare Supplement insurance agent assistant. Generate a concise phone call script in JSON.
 Return ONLY a JSON object with these keys: "opener", "value_prop", "objection_handler", "close".
@@ -1517,6 +1596,16 @@ async function initFromSupabase() {
 
   showLoadingState();
 
+  const myAccess = await bvpGetAccess();
+  if (myAccess.agency_id) {
+    const ag = await bvpGetAgency(myAccess.agency_id);
+    AGENCY_NAME = (ag && ag.name) || '';
+  }
+  if (AGENCY_MODE) {
+    if (!bvpIsAgencyManager(myAccess)) { location.replace('bookvaluepro-outreach.html'); return; }
+    return initAgencyMode();
+  }
+
   bvpBook = await bvpGetActiveBook(bvpSession.user.id);
 
   if (bvpBook) {
@@ -1569,6 +1658,83 @@ async function initFromSupabase() {
   } else {
     showNoDataState();
   }
+}
+
+async function initAgencyMode() {
+  document.querySelector('.page-title').textContent = 'Agency Outreach';
+  document.getElementById('outreach-page-sub').innerHTML = "Every agent's clients, in the month to reach out · emails go out under each client's own agent";
+  document.getElementById('agent-control').style.display = 'flex';
+  // The side menu's "Renewal Outreach" goes back to your own book.
+  const own = document.querySelector('.bvp-sidenav-item.active');
+  if (own && own.tagName === 'DIV') {
+    const a = document.createElement('a');
+    a.href = 'bookvaluepro-outreach.html'; a.className = 'bvp-sidenav-item'; a.innerHTML = own.innerHTML;
+    own.replaceWith(a);
+  }
+
+  agencyRoster = await bvpGetAgencyRoster();
+  const sel = document.getElementById('agent-filter');
+  agencyRoster.forEach(m => {
+    const o = document.createElement('option');
+    o.value = m.user_id;
+    o.textContent = bvpMemberLabel(m) + (m.user_id === bvpSession.user.id ? ' (you)' : '');
+    sel.appendChild(o);
+  });
+  const preset = new URLSearchParams(location.search).get('agent');
+  if (preset && agencyRoster.some(m => m.user_id === preset)) { sel.value = preset; agentFilter = preset; }
+
+  let idx = 0;
+  const results = await bvpLoadTeamBooks(agencyRoster, (r, done, total) => {
+    const el = document.querySelector('#bvp-loading div:last-child');
+    if (el) el.textContent = `Loading your team's outreach schedule… ${done} of ${total} agents`;
+  });
+  results.sort((a, b) => bvpMemberLabel(a.member).localeCompare(bvpMemberLabel(b.member)));
+  results.forEach(r => r.policies.forEach(p => {
+    ALL_POLICIES.push({
+      idx:      ++idx,                       // unique across agents
+      id:       String(p.id),
+      agentId:  r.member.user_id,
+      agentLabel: bvpMemberLabel(r.member),
+      savPct:   r.savingsPct,
+      firstName: p.first_name || null,
+      lastName:  p.last_name || null,
+      name:     [p.first_name, p.last_name].filter(Boolean).join(' ') || ('Policy #' + p.policy_idx),
+      company:  p.company,
+      state:    p.issued_state,
+      age:      p.attained_age,
+      month:    p.eff_month,
+      rank:     p.policy_idx,
+      priority: p.priority,
+      currPrem: p.curr_prem,
+      newPrem:  p.curr_prem * (1 - (r.savingsPct / 100)),
+      moSav:    p.curr_prem * (r.savingsPct / 100),
+      annSav:   p.curr_prem * (r.savingsPct / 100) * 12,
+      duration: p.duration_yr,
+      currNPV:  p.curr_npv,
+      renNPV:   p.ren_npv,
+      email:    p.email,
+      phone:    p.phone,
+      dob:      p.dob,
+      gi:       p.gi,
+      giRenNPV: p.gi_ren_npv,
+    });
+  }));
+
+  const withBooks = results.filter(r => r.policies.length).length;
+  const bnEl = document.getElementById('book-name');
+  if (bnEl) bnEl.textContent = `${AGENCY_NAME || 'Agency'} — ${withBooks} agent${withBooks === 1 ? '' : 's'} · ${ALL_POLICIES.length} policies`;
+  const ind = document.getElementById('savings-indicator');
+  if (ind) ind.style.display = 'none'; // each agent's own savings % is used
+
+  if (!ALL_POLICIES.length) {
+    showNoDataState();
+    const nd = document.getElementById('bvp-no-data');
+    if (nd) nd.innerHTML = '<div style="font-size:22px;font-family:var(--serif);margin-bottom:10px;">No client books yet</div><div style="color:var(--ink-3)">Agents\' clients show up here once they upload a book.</div>';
+    return;
+  }
+  hideLoadingState();
+  setAgentFilter(agentFilter);
+  loadOutreachData().catch(err => console.warn('loadAgencyOutreachData:', err));
 }
 
 function showLoadingState() {

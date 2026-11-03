@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BookValuePro — Agency Clients</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="bvp-supabase.js"></script>
+<style>
+:root{--forest:#1a5c3a;--emerald:#3da272;--deep:#0d2e1e;--slate:#5a6472;--mist:#e6f5ee;--sage:#7abf9a;--light-bg:#f7faf8;--border:#dde8e2;--text:#1a1a1a;--text-muted:#556b5e;--danger:#c0392b;--blue:#2f6db5;--gold:#b7862c;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;color:var(--text);background:var(--light-bg);min-height:100vh;}
+
+.bvp-header{background:#0d2e1e;min-height:64px;display:flex;align-items:center;justify-content:flex-end;padding:0 2rem;border-bottom:1px solid rgba(61,162,114,0.15);position:sticky;top:0;z-index:100;gap:16px;}
+.bvp-agent-email{font-size:12px;color:#7abf9a;white-space:nowrap;}
+.bvp-signout{font-size:12px;color:#7abf9a;background:transparent;border:1px solid rgba(122,191,154,0.3);padding:6px 14px;border-radius:6px;cursor:pointer;font-family:inherit;}
+.bvp-signout:hover{border-color:#3da272;color:white;}
+
+.page{max-width:1400px;margin:0 auto;padding:32px 36px 80px;}
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:1.25rem;}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--emerald);text-transform:uppercase;margin-bottom:0.5rem;}
+h1{font-family:'DM Serif Display',serif;font-size:32px;color:var(--deep);font-weight:400;}
+.head-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.btn-out{font-size:13px;color:var(--forest);font-weight:600;text-decoration:none;border:1.5px solid var(--border);background:white;padding:9px 16px;border-radius:9px;cursor:pointer;font-family:inherit;}
+.btn-out:hover{border-color:var(--emerald);}
+
+.tiles{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px;}
+.tile{background:white;border:1px solid var(--border);border-radius:14px;padding:14px 16px;}
+.tile-label{font-size:10.5px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:var(--slate);margin-bottom:6px;}
+.tile-val{font-family:'DM Serif Display',serif;font-size:24px;color:var(--deep);font-variant-numeric:tabular-nums;}
+.tile-sub{font-size:11.5px;color:var(--text-muted);margin-top:4px;}
+
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:white;border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:12px;}
+.filters input,.filters select{font-family:inherit;font-size:13px;padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;background:white;color:var(--text);outline:none;}
+.filters input:focus,.filters select:focus{border-color:var(--emerald);}
+.filters input[type=search]{flex:1;min-width:200px;}
+.filters .clear{font-size:12px;color:var(--forest);background:none;border:none;cursor:pointer;font-family:inherit;font-weight:600;padding:6px;}
+.countline{font-size:12.5px;color:var(--text-muted);margin:0 4px 8px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+
+.card{background:white;border:1px solid var(--border);border-radius:16px;overflow:hidden;}
+.table-wrap{overflow:auto;max-height:calc(100vh - 200px);}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:1250px;}
+th{position:sticky;top:0;background:#fbfdfc;z-index:1;text-align:left;font-size:10.5px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--slate);padding:10px 10px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap;}
+th.num,td.num{text-align:right;}
+th.sorted{color:var(--forest);}
+td{padding:10px 10px;border-bottom:1px solid var(--border);white-space:nowrap;font-variant-numeric:tabular-nums;}
+tbody tr{cursor:pointer;}
+tbody tr:hover td{background:#f5faf7;}
+.client{font-weight:500;color:var(--deep);}
+.muted{color:var(--text-muted);}
+.agent-chip{font-size:11.5px;background:var(--mist);color:var(--forest);border:1px solid #c8e6d4;padding:2px 8px;border-radius:10px;}
+.tag{font-size:11px;background:#f1f4f2;border:1px solid var(--border);padding:2px 7px;border-radius:6px;}
+.coh{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;}
+.coh.c1{background:#e6f5ee;color:#1a5c3a;}
+.coh.c2{background:#e8f0fa;color:var(--blue);}
+.coh.c3{background:#fbf2e0;color:#8a5a00;}
+.em{font-size:11px;color:var(--text-muted);}
+.em.unsub{color:var(--danger);}
+.contact a{color:var(--forest);text-decoration:none;}
+.contact a:hover{text-decoration:underline;}
+.pager{display:flex;justify-content:center;gap:6px;padding:12px;}
+.pager button{font-family:inherit;font-size:12px;border:1px solid var(--border);background:white;border-radius:7px;padding:6px 11px;cursor:pointer;}
+.pager button.on{background:var(--forest);color:white;border-color:var(--forest);}
+.pager button:disabled{opacity:.4;cursor:default;}
+.loading{padding:40px;text-align:center;color:var(--text-muted);font-size:14px;}
+.note{font-size:12px;color:var(--text-muted);line-height:1.6;margin:10px 4px 0;}
+.hidden{display:none !important;}
+
+/* ── SIDE NAVIGATION (canonical — same across all pages) ── */
+.bvp-sidenav {
+  position: fixed; top: 0; left: 0; bottom: 0; width: 64px;
+  background: #0d2e1e; border-right: 1px solid rgba(61,162,114,0.15);
+  display: flex; flex-direction: column; z-index: 500;
+  overflow: hidden; transition: width .18s ease;
+  font-family: 'DM Sans', sans-serif;
+}
+.bvp-sidenav:hover, .bvp-sidenav.expanded { width: 218px; box-shadow: 6px 0 28px rgba(0,0,0,.18); }
+.bvp-sidenav-logo {
+  display: flex; align-items: center; gap: 10px; text-decoration: none;
+  height: 64px; padding: 0 15px; flex-shrink: 0;
+  border-bottom: 1px solid rgba(61,162,114,0.12);
+}
+.bvp-sidenav-mark {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+  background: #1a5c3a; border: 1.5px solid #3da272;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; color: white; font-family: 'DM Sans', sans-serif;
+}
+.bvp-sidenav-word {
+  font-family: 'DM Serif Display', serif; font-size: 16px; color: white;
+  white-space: nowrap; opacity: 0; transition: opacity .12s;
+}
+.bvp-sidenav-word em { color: #3da272; font-style: normal; }
+.bvp-sidenav:hover .bvp-sidenav-word, .bvp-sidenav.expanded .bvp-sidenav-word { opacity: 1; transition-delay: .06s; }
+.bvp-sidenav-steps { position: relative; padding: 14px 0; }
+
+.bvp-sidenav-item {
+  position: relative; display: flex; align-items: center; gap: 14px;
+  height: 44px; padding: 0 21px; color: #7abf9a; text-decoration: none;
+  white-space: nowrap; cursor: pointer; transition: color .15s, background .15s;
+}
+.bvp-sidenav-item:hover { color: white; background: rgba(61,162,114,0.08); }
+.bvp-sidenav-item.active { color: white; font-weight: 500; background: rgba(61,162,114,0.14); cursor: default; }
+.bvp-sidenav-item.locked { color: rgba(122,191,154,0.3); cursor: not-allowed; pointer-events: none; }
+.bvp-sidenav-node {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center;
+  position: relative; z-index: 1;
+}
+.bvp-sidenav-node svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.bvp-sidenav-item.active .bvp-sidenav-node { background: #3da272; color: white; }
+.bvp-sidenav-item.done .bvp-sidenav-node { background: #1a5c3a; color: #3da272; }
+.bvp-sidenav-item.locked .bvp-sidenav-node { background: rgba(255,255,255,0.05); color: rgba(122,191,154,0.3); }
+.bvp-sidenav-label { font-size: 13px; opacity: 0; transition: opacity .12s; }
+.bvp-sidenav:hover .bvp-sidenav-label, .bvp-sidenav.expanded .bvp-sidenav-label { opacity: 1; transition-delay: .06s; }
+.bvp-sidenav-bottom { border-top: 1px solid rgba(61,162,114,0.12); padding: 10px 0; flex-shrink: 0; }
+#bvp-sidenav-admin { display: none; }
+body { padding-left: 64px; }
+@media (max-width: 640px) {
+  .bvp-sidenav.expanded { width: 200px; }
+}
+
+
+
+@media (max-width:1000px){ .tiles{grid-template-columns:repeat(3,1fr);} }
+@media (max-width:640px){
+  .page{padding:22px 14px 60px;}
+  .tiles{grid-template-columns:1fr 1fr;}
+  .bvp-header{padding:10px 1rem;}
+  .bvp-agent-email{display:none;}
+}
+</style>
+</head>
+<body>
+<nav class="bvp-sidenav" id="bvp-sidenav">
+  <a href="bookvaluepro-dashboard.html" class="bvp-sidenav-logo">
+    <div class="bvp-sidenav-mark">BV</div>
+    <span class="bvp-sidenav-word">Book<em>Value</em>Pro</span>
+  </a>
+  <div class="bvp-sidenav-steps">
+    <a href="bookvaluepro-upload.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M12 16V4M12 4l-5 5M12 4l5 5"/><path d="M4 16v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg></span><span class="bvp-sidenav-label">Upload</span></a>
+    <a href="bookvaluepro-dashboard.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.3"/><rect x="14" y="3" width="7" height="7" rx="1.3"/><rect x="3" y="14" width="7" height="7" rx="1.3"/><rect x="14" y="14" width="7" height="7" rx="1.3"/></svg></span><span class="bvp-sidenav-label">Dashboard</span></a>
+    <a href="bookvaluepro-clients.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"/><circle cx="17" cy="8.5" r="2.4"/><path d="M15.5 14.7c2.6.3 4.5 2.3 4.5 5.3"/></svg></span><span class="bvp-sidenav-label">Clients</span></a>
+    <a href="bookvaluepro-outreach.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 00-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0014.3 4.9L20 16"/><path d="M20 21v-5h-5"/></svg></span><span class="bvp-sidenav-label">Renewal Outreach</span></a>
+    <a href="bookvaluepro-leads.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="3.5"/><path d="M3 20c0-3.6 2.7-6 6-6s6 2.4 6 6"/><path d="M18 8v6M21 11h-6"/></svg></span><span class="bvp-sidenav-label">Leads</span></a>
+    <a href="bookvaluepro-lead-outreach.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4 18-7z"/></svg></span><span class="bvp-sidenav-label">Lead Outreach</span></a>
+    <a href="bookvaluepro-commissions.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6.5v11M15 9.2c0-1.4-1.3-2.2-3-2.2s-3 .9-3 2.2c0 1.4 1.3 1.8 3 2.2 1.7.4 3 1 3 2.4 0 1.3-1.3 2.2-3 2.2s-3-.8-3-2.2"/></svg></span><span class="bvp-sidenav-label">Commissions</span></a>
+    <a href="bookvaluepro-uw-assistant.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg></span><span class="bvp-sidenav-label">Underwriting Assistant</span></a>
+  <a href="bookvaluepro-household-discount.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg></span><span class="bvp-sidenav-label">Household Discount</span></a>
+  </div>
+  <div class="bvp-sidenav-bottom">
+    <a href="bookvaluepro-admin.html" class="bvp-sidenav-item" id="bvp-sidenav-admin"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg></span><span class="bvp-sidenav-label">Admin</span></a>
+  </div>
+</nav>
+
+<header class="bvp-header">
+  <span class="bvp-agent-email" id="agent-email"></span>
+  <button class="bvp-signout" onclick="bvpSignOut()">Sign out</button>
+</header>
+
+<main class="page">
+  <div class="head">
+    <div>
+      <div class="eyebrow" id="agency-name">Agency</div>
+      <h1>All clients</h1>
+    </div>
+    <div class="head-actions">
+      <button class="btn-out" onclick="exportCsv()">Export CSV</button>
+      <a class="btn-out" id="outreach-link" href="bookvaluepro-outreach.html?view=agency">Send outreach →</a>
+    </div>
+  </div>
+
+  <div class="tiles">
+    <div class="tile"><div class="tile-label">Clients shown</div><div class="tile-val" id="t-count">—</div><div class="tile-sub" id="t-count-sub">—</div></div>
+    <div class="tile"><div class="tile-label">Annual premium</div><div class="tile-val" id="t-prem">—</div><div class="tile-sub">Clients shown</div></div>
+    <div class="tile"><div class="tile-label">Current LTV</div><div class="tile-val" id="t-curr">—</div><div class="tile-sub">Clients shown</div></div>
+    <div class="tile"><div class="tile-label">Save &amp; Switch</div><div class="tile-val" id="t-ss">—</div><div class="tile-sub" id="t-ss-sub">—</div></div>
+    <div class="tile"><div class="tile-label">Reachable by email</div><div class="tile-val" id="t-email">—</div><div class="tile-sub">Valid address, not unsubscribed</div></div>
+  </div>
+
+  <div class="filters">
+    <input type="search" id="f-search" placeholder="Search name, email or phone" oninput="applyFilters()"/>
+    <select id="f-agent" onchange="applyFilters()"><option value="">All agents</option></select>
+    <select id="f-cohort" onchange="applyFilters()">
+      <option value="">All cohorts</option><option value="1">Save &amp; Switch</option><option value="2">Steady Book</option><option value="3">Loyalty Watch</option>
+    </select>
+    <select id="f-carrier" onchange="applyFilters()"><option value="">All carriers</option></select>
+    <select id="f-state" onchange="applyFilters()"><option value="">All states</option></select>
+    <select id="f-month" onchange="applyFilters()"><option value="">Any renewal month</option></select>
+    <select id="f-email" onchange="applyFilters()">
+      <option value="">Any email status</option><option value="yes">Has email</option><option value="no">No email</option><option value="unsub">Unsubscribed</option>
+    </select>
+    <button class="clear" onclick="clearFilters()">Clear</button>
+  </div>
+  <div class="countline"><span id="countline">Loading…</span><span id="progress"></span></div>
+
+  <section class="card">
+    <div class="table-wrap">
+      <table>
+        <thead><tr id="sort-row">
+          <th data-key="name">Client</th>
+          <th data-key="agentLabel">Agent</th>
+          <th data-key="priority">Cohort</th>
+          <th data-key="carrier">Carrier</th>
+          <th data-key="plan">Plan</th>
+          <th data-key="state">State</th>
+          <th data-key="age" class="num">Age</th>
+          <th data-key="month">Renews</th>
+          <th data-key="prem" class="num">Premium / mo.</th>
+          <th data-key="curr" class="num">Current LTV</th>
+          <th data-key="opp" class="num">Opportunity LTV</th>
+          <th data-key="lastEmailed">Last emailed</th>
+          <th data-key="contact" style="cursor:default">Contact</th>
+        </tr></thead>
+        <tbody id="rows"><tr><td colspan="13" class="loading">Loading your team's clients…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="pager" id="pager"></div>
+  </section>
+  <p class="note">View only. Click a client to open their full record in their agent's client list. Book values use each agent's own commission rates and assumptions, the same numbers they see on their dashboard, so Current LTV totals match Agency Overview and Opportunity LTV matches Renewal Outreach.</p>
+</main>
+
+<script>
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const COHORTS = { 1: 'Save & Switch', 2: 'Steady Book', 3: 'Loyalty Watch' };
+const PAGE = 100;
+let all = [], view = [], page = 1, sortKey = 'name', sortDir = 1;
+let lastEmailed = new Map(), suppressed = new Set();
+let meId = null;
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const money = v => '$' + Math.round(v || 0).toLocaleString('en-US');
+const money2 = v => v == null ? '—' : '$' + Number(v).toFixed(2);
+const moneyShort = v => { const n = Math.round(v || 0); if (Math.abs(n) >= 1e6) return '$' + (n / 1e6).toFixed(2).replace(/\.?0+$/, '') + 'M'; if (Math.abs(n) >= 1e4) return '$' + Math.round(n / 1e3).toLocaleString('en-US') + 'K'; return '$' + n.toLocaleString('en-US'); };
+const fmtDay = iso => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
+const validEmail = e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e || '');
+
+// Same formula as the dashboard and Agency Overview.
+function oppLTV(p, savPct, discount) {
+  const rr = p._renRates || [];
+  let v = 0;
+  for (let i = 0; i < rr.length; i++) v += (rr[i] * (p.curr_prem || 0) * (1 - savPct / 100) * 12) / Math.pow(1 + discount, i + 1);
+  return v;
+}
+
+function toRow(r, p) {
+  const email = (p.email || '').trim().toLowerCase();
+  return {
+    id: String(p.id), agentId: r.member.user_id, agentLabel: bvpMemberLabel(r.member), agentEmail: r.member.email,
+    name: [p.first_name, p.last_name].filter(Boolean).join(' ') || ('Policy #' + p.policy_idx),
+    priority: p.priority || 9, carrier: p.company ? bvpCarrierDisplay(p.company) : '', carrierRaw: p.company || '',
+    plan: p.plan_type || '', state: p.issued_state || '', age: p.attained_age ?? null, month: p.eff_month || null,
+    prem: p.curr_prem || 0, annualPrem: p._annualCurrPrem || 0, curr: p.curr_npv || 0,
+    opp: p.ren_npv || 0, // same Opportunity LTV as Renewal Outreach
+    email, phone: p.phone || '', hasEmail: validEmail(email),
+  };
+}
+
+function emailState(c) {
+  if (c.hasEmail && suppressed.has(c.agentId + '|' + c.email)) return 'unsub';
+  return c.hasEmail ? 'yes' : 'no';
+}
+
+function applyFilters() {
+  const q = document.getElementById('f-search').value.trim().toLowerCase();
+  const agent = document.getElementById('f-agent').value;
+  const cohort = document.getElementById('f-cohort').value;
+  const carrier = document.getElementById('f-carrier').value;
+  const state = document.getElementById('f-state').value;
+  const month = document.getElementById('f-month').value;
+  const em = document.getElementById('f-email').value;
+  const digits = q.replace(/\D/g, '');
+  view = all.filter(c =>
+    (!agent || c.agentId === agent) &&
+    (!cohort || String(c.priority) === cohort) &&
+    (!carrier || c.carrierRaw === carrier) &&
+    (!state || c.state === state) &&
+    (!month || String(c.month) === month) &&
+    (!em || emailState(c) === em) &&
+    (!q || c.name.toLowerCase().includes(q) || c.email.includes(q) || (digits.length >= 3 && c.phone.replace(/\D/g, '').includes(digits))));
+  document.getElementById('outreach-link').href = 'bookvaluepro-outreach.html?view=agency' + (agent ? '&agent=' + encodeURIComponent(agent) : '');
+  sortView();
+  page = 1;
+  render();
+}
+
+function sortView() {
+  view.sort((a, b) => {
+    let av = a[sortKey], bv = b[sortKey];
+    if (sortKey === 'lastEmailed') { av = (lastEmailed.get(a.id) || {}).at || ''; bv = (lastEmailed.get(b.id) || {}).at || ''; }
+    if (av == null) av = typeof bv === 'number' ? -Infinity : '';
+    if (bv == null) bv = typeof av === 'number' ? -Infinity : '';
+    if (typeof av === 'string') return av.localeCompare(bv) * sortDir || a.name.localeCompare(b.name);
+    return ((av || 0) - (bv || 0)) * sortDir;
+  });
+}
+
+function clearFilters() {
+  ['f-search', 'f-agent', 'f-cohort', 'f-carrier', 'f-state', 'f-month', 'f-email'].forEach(id => document.getElementById(id).value = '');
+  applyFilters();
+}
+
+function emailCell(c) {
+  if (emailState(c) === 'unsub') return '<span class="em unsub">Unsubscribed</span>';
+  const le = lastEmailed.get(c.id);
+  if (!le) return '<span class="em">—</span>';
+  return new Date(le.at) > new Date() ? `<span class="em">🕒 ${fmtDay(le.at)}</span>` : `<span class="em">✉ ${fmtDay(le.at)}</span>`;
+}
+
+function render() {
+  const t = view.reduce((s, c) => { s.prem += c.annualPrem; s.curr += c.curr; if (c.priority === 1) { s.ss++; s.ssLift += Math.max(0, c.opp - c.curr); } if (emailState(c) === 'yes') s.em++; return s; }, { prem: 0, curr: 0, ss: 0, ssLift: 0, em: 0 });
+  const agents = new Set(view.map(c => c.agentId)).size;
+  document.getElementById('t-count').textContent = view.length.toLocaleString();
+  document.getElementById('t-count-sub').textContent = `${agents} agent${agents === 1 ? '' : 's'}`;
+  document.getElementById('t-prem').textContent = moneyShort(t.prem);
+  document.getElementById('t-curr').textContent = moneyShort(t.curr);
+  document.getElementById('t-ss').textContent = t.ss.toLocaleString();
+  document.getElementById('t-ss-sub').textContent = t.ss ? `+${moneyShort(t.ssLift)} LTV if acted on` : 'None in this view';
+  document.getElementById('t-email').textContent = t.em.toLocaleString();
+  document.getElementById('countline').textContent = view.length === all.length
+    ? `${all.length.toLocaleString()} clients across the agency`
+    : `${view.length.toLocaleString()} of ${all.length.toLocaleString()} clients match`;
+
+  document.querySelectorAll('#sort-row th[data-key]').forEach(th => {
+    const on = th.dataset.key === sortKey;
+    th.classList.toggle('sorted', on);
+    if (!th.dataset.label) th.dataset.label = th.textContent;
+    th.textContent = th.dataset.label + (on ? (sortDir > 0 ? ' ▲' : ' ▼') : '');
+  });
+
+  const rows = view.slice((page - 1) * PAGE, page * PAGE);
+  document.getElementById('rows').innerHTML = rows.map(c => `
+    <tr data-id="${esc(c.id)}" data-agent="${esc(c.agentId)}">
+      <td class="client">${esc(c.name)}</td>
+      <td><span class="agent-chip" title="${esc(c.agentEmail)}">${esc(c.agentLabel)}</span></td>
+      <td>${COHORTS[c.priority] ? `<span class="coh c${c.priority}">${COHORTS[c.priority]}</span>` : '—'}</td>
+      <td>${c.carrier ? `<span class="tag">${esc(c.carrier)}</span>` : '—'}</td>
+      <td>${esc(c.plan) || '—'}</td>
+      <td>${esc(c.state) || '—'}</td>
+      <td class="num">${c.age ?? '—'}</td>
+      <td>${c.month ? MONTHS[c.month - 1] : '—'}</td>
+      <td class="num">${money2(c.prem)}</td>
+      <td class="num">${money(c.curr)}</td>
+      <td class="num">${money(c.opp)}</td>
+      <td>${emailCell(c)}</td>
+      <td class="contact">${[c.phone ? `<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>` : '', c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : ''].filter(Boolean).join(' · ') || '<span class="muted">—</span>'}</td>
+    </tr>`).join('') || `<tr><td colspan="13" class="loading">${all.length ? 'No clients match these filters.' : 'No clients yet. Agents\' clients appear here once they upload a book.'}</td></tr>`;
+
+  const pages = Math.ceil(view.length / PAGE);
+  const pager = document.getElementById('pager');
+  if (pages <= 1) { pager.innerHTML = ''; return; }
+  const nums = [];
+  for (let i = 1; i <= pages; i++) if (i === 1 || i === pages || Math.abs(i - page) <= 2) nums.push(i); else if (nums[nums.length - 1] !== '…') nums.push('…');
+  pager.innerHTML = `<button ${page === 1 ? 'disabled' : ''} onclick="goPage(${page - 1})">‹</button>` +
+    nums.map(n => n === '…' ? '<button disabled>…</button>' : `<button class="${n === page ? 'on' : ''}" onclick="goPage(${n})">${n}</button>`).join('') +
+    `<button ${page === pages ? 'disabled' : ''} onclick="goPage(${page + 1})">›</button>`;
+}
+
+function goPage(n) { page = n; render(); document.querySelector('.table-wrap').scrollTop = 0; }
+
+document.getElementById('rows').addEventListener('click', e => {
+  if (e.target.closest('a')) return;
+  const tr = e.target.closest('tr[data-id]');
+  if (!tr) return;
+  const agent = tr.dataset.agent;
+  location.href = `bookvaluepro-clients.html?${agent === meId ? '' : 'agent=' + encodeURIComponent(agent) + '&'}client=${encodeURIComponent(tr.dataset.id)}`;
+});
+
+document.getElementById('sort-row').addEventListener('click', e => {
+  const th = e.target.closest('th[data-key]');
+  if (!th || th.dataset.key === 'contact') return;
+  const key = th.dataset.key;
+  sortDir = key === sortKey ? -sortDir : (['curr', 'opp', 'prem', 'lastEmailed'].includes(key) ? -1 : 1);
+  sortKey = key;
+  sortView(); render();
+});
+
+function exportCsv() {
+  const cell = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const head = ['Client', 'Agent', 'Agent email', 'Cohort', 'Carrier', 'Plan', 'State', 'Age', 'Renewal month', 'Monthly premium', 'Current LTV', 'Opportunity LTV', 'Email', 'Phone', 'Email status', 'Last emailed'];
+  const lines = view.map(c => [c.name, c.agentLabel, c.agentEmail, COHORTS[c.priority] || '', c.carrier, c.plan, c.state, c.age ?? '',
+    c.month ? MONTHS[c.month - 1] : '', c.prem.toFixed(2), Math.round(c.curr), Math.round(c.opp), c.email, c.phone,
+    { yes: 'Has email', no: 'No email', unsub: 'Unsubscribed' }[emailState(c)], (lastEmailed.get(c.id) || {}).at?.slice(0, 10) || ''].map(cell).join(','));
+  const blob = new Blob([[head.join(','), ...lines].join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `agency-clients-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function fillSelect(id, values, label = v => v) {
+  const sel = document.getElementById(id);
+  values.forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = label(v); sel.appendChild(o); });
+}
+
+async function loadEmailInfo(ids) {
+  const [emails, supp] = await Promise.all([
+    bvp.from('outreach_emails').select('policy_id, sent_at').in('agent_id', ids).in('status', ['sent', 'scheduled']).order('sent_at', { ascending: false }).limit(10000),
+    bvp.from('email_suppressions').select('agent_id, email').in('agent_id', ids),
+  ]);
+  (emails.data || []).forEach(e => { if (e.policy_id && !lastEmailed.has(e.policy_id)) lastEmailed.set(e.policy_id, { at: e.sent_at }); });
+  (supp.data || []).forEach(s => suppressed.add(s.agent_id + '|' + s.email));
+}
+
+(async () => {
+  const session = await bvpRequireAuth();
+  if (!session) return;
+  meId = session.user.id;
+  document.getElementById('agent-email').textContent = session.user.email;
+  bvpSetAdminNavVisible(session.user.email);
+  const access = await bvpRequireAgencyManager();
+  if (!access) return;
+  const agency = await bvpGetAgency(access.agency_id);
+  if (agency) document.getElementById('agency-name').textContent = agency.name;
+
+  const roster = await bvpGetAgencyRoster();
+  fillSelect('f-agent', roster.map(m => m.user_id), id => bvpMemberLabel(roster.find(m => m.user_id === id)) + (id === meId ? ' (you)' : ''));
+  const preset = new URLSearchParams(location.search).get('agent');
+  if (preset && roster.some(m => m.user_id === preset)) document.getElementById('f-agent').value = preset;
+
+  const emailInfo = loadEmailInfo(roster.map(m => m.user_id)).catch(e => console.warn('email info:', e));
+  const progress = document.getElementById('progress');
+  const results = await bvpLoadTeamBooks(roster, (r, done, total) => {
+    r.policies.forEach(p => all.push(toRow(r, p)));
+    progress.textContent = done < total ? `Loading ${done} of ${total} agents…` : '';
+    applyFilters();
+  });
+  await emailInfo;
+  const failed = results.filter(r => r.error).length;
+  progress.textContent = failed ? `${failed} agent book${failed === 1 ? '' : 's'} couldn't load. Refresh to try again.` : '';
+
+  fillSelect('f-carrier', [...new Set(all.map(c => c.carrierRaw).filter(Boolean))].sort(), v => bvpCarrierDisplay(v));
+  fillSelect('f-state', [...new Set(all.map(c => c.state).filter(Boolean))].sort());
+  fillSelect('f-month', [1,2,3,4,5,6,7,8,9,10,11,12].map(String), m => 'Renews in ' + MONTHS[m - 1]);
+  applyFilters();
+})();
+
+(function () {
+  var nav = document.getElementById('bvp-sidenav');
+  if (!nav) return;
+  if (!window.matchMedia('(hover: hover)').matches) {
+    nav.addEventListener('click', function (e) {
+      if (!nav.classList.contains('expanded')) {
+        var link = e.target.closest('a');
+        if (link) { e.preventDefault(); nav.classList.add('expanded'); }
+      }
+    });
+    document.addEventListener('click', function (e) {
+      if (!nav.contains(e.target)) nav.classList.remove('expanded');
+    });
+  }
+})();
+
+</script>
+</body>
+</html>

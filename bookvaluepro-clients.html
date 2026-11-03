@@ -1027,6 +1027,10 @@ let bvpBook = null;
     document.getElementById('loading-state').style.display = 'none';
     document.getElementById('clients-table').style.display = 'table';
     document.getElementById('client-count').textContent = allClients.length + ' policies';
+    // Opened from Agency Clients with ?client=<id>: show that client's record.
+    const wantClient = new URLSearchParams(location.search).get('client');
+    const match = wantClient && allClients.find(c => String(c.id) === wantClient);
+    if (match) openPanel(match.id);
   } else {
     document.getElementById('loading-state').innerHTML = '<div>📂</div><div>No book uploaded yet. <a href="bookvaluepro-upload.html" style="color:var(--emerald)">Upload your book →</a></div>';
   }
