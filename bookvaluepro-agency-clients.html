@@ -56,6 +56,10 @@ tbody tr:hover td{background:#f5faf7;}
 .coh.c2{background:#e8f0fa;color:var(--blue);}
 .coh.c3{background:#fbf2e0;color:#8a5a00;}
 .em{font-size:11px;color:var(--text-muted);}
+.gi{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:#fdf4e7;color:#8a5a00;border:1px solid #f0d9a6;}
+.gi.open,.gi.due{background:#fdecea;color:#a3271b;border-color:#f3c4bf;}
+.gi.same{background:#f1f4f2;color:var(--slate);border-color:var(--border);}
+.gi-sub{display:block;font-size:10.5px;color:var(--text-muted);margin-top:2px;}
 .em.unsub{color:var(--danger);}
 .contact a{color:var(--forest);text-decoration:none;}
 .contact a:hover{text-decoration:underline;}
@@ -188,6 +192,9 @@ body { padding-left: 64px; }
     <select id="f-carrier" onchange="applyFilters()"><option value="">All carriers</option></select>
     <select id="f-state" onchange="applyFilters()"><option value="">All states</option></select>
     <select id="f-month" onchange="applyFilters()"><option value="">Any renewal month</option></select>
+    <select id="f-gi" onchange="applyFilters()">
+      <option value="">Any State GI</option><option value="any">Has a GI right</option><option value="soon">Underwrite by in 90 days</option><option value="open">GI window open now</option><option value="none">No GI right</option>
+    </select>
     <select id="f-email" onchange="applyFilters()">
       <option value="">Any email status</option><option value="yes">Has email</option><option value="no">No email</option><option value="unsub">Unsubscribed</option>
     </select>
@@ -210,10 +217,11 @@ body { padding-left: 64px; }
           <th data-key="prem" class="num">Premium / mo.</th>
           <th data-key="curr" class="num">Current LTV</th>
           <th data-key="opp" class="num">Opportunity LTV</th>
+          <th data-key="giSort" title="State guaranteed-issue right. Goal: an underwritten app before the GI window (higher commission).">State GI</th>
           <th data-key="lastEmailed">Last emailed</th>
           <th data-key="contact" style="cursor:default">Contact</th>
         </tr></thead>
-        <tbody id="rows"><tr><td colspan="13" class="loading">Loading your team's clients…</td></tr></tbody>
+        <tbody id="rows"><tr><td colspan="14" class="loading">Loading your team's clients…</td></tr></tbody>
       </table>
     </div>
     <div class="pager" id="pager"></div>
@@ -254,6 +262,9 @@ function toRow(r, p) {
     prem: p.curr_prem || 0, annualPrem: p._annualCurrPrem || 0, curr: p.curr_npv || 0,
     opp: p.ren_npv || 0, // same Opportunity LTV as Renewal Outreach
     email, phone: p.phone || '', hasEmail: validEmail(email),
+    gi: p.gi || null,
+    // Sort: year-round, then open, then soonest underwrite-by; no right last.
+    giSort: !p.gi || !p.gi.hasRight ? 1e6 : p.gi.yearRound ? -2 : p.gi.status === 'open' ? -1 : p.gi.daysUntilUnderwriteBy,
   };
 }
 
@@ -270,6 +281,15 @@ function applyFilters() {
   const state = document.getElementById('f-state').value;
   const month = document.getElementById('f-month').value;
   const em = document.getElementById('f-email').value;
+  const giF = document.getElementById('f-gi').value;
+  const giOk = c => {
+    const g = c.gi && c.gi.hasRight ? c.gi : null;
+    if (giF === 'any') return !!g;
+    if (giF === 'none') return !g;
+    if (giF === 'open') return !!g && g.status === 'open';
+    if (giF === 'soon') return !!g && !g.yearRound && g.status !== 'open' && g.daysUntilUnderwriteBy <= 90;
+    return true;
+  };
   const digits = q.replace(/\D/g, '');
   view = all.filter(c =>
     (!agent || c.agentId === agent) &&
@@ -277,7 +297,7 @@ function applyFilters() {
     (!carrier || c.carrierRaw === carrier) &&
     (!state || c.state === state) &&
     (!month || String(c.month) === month) &&
-    (!em || emailState(c) === em) &&
+    (!em || emailState(c) === em) && giOk(c) &&
     (!q || c.name.toLowerCase().includes(q) || c.email.includes(q) || (digits.length >= 3 && c.phone.replace(/\D/g, '').includes(digits))));
   document.getElementById('outreach-link').href = 'bookvaluepro-outreach.html?view=agency' + (agent ? '&agent=' + encodeURIComponent(agent) : '');
   sortView();
@@ -297,7 +317,7 @@ function sortView() {
 }
 
 function clearFilters() {
-  ['f-search', 'f-agent', 'f-cohort', 'f-carrier', 'f-state', 'f-month', 'f-email'].forEach(id => document.getElementById(id).value = '');
+  ['f-search', 'f-agent', 'f-cohort', 'f-carrier', 'f-state', 'f-month', 'f-gi', 'f-email'].forEach(id => document.getElementById(id).value = '');
   applyFilters();
 }
 
@@ -306,6 +326,17 @@ function emailCell(c) {
   const le = lastEmailed.get(c.id);
   if (!le) return '<span class="em">—</span>';
   return new Date(le.at) > new Date() ? `<span class="em">🕒 ${fmtDay(le.at)}</span>` : `<span class="em">✉ ${fmtDay(le.at)}</span>`;
+}
+
+function giCell(c) {
+  const g = c.gi;
+  if (!g || !g.hasRight) return '<span class="em">—</span>';
+  const tip = esc(bvpGIStatusText(g));
+  if (g.sameCommission) return `<span class="gi same" title="${tip}">${g.yearRound ? 'Year-round' : 'Window ' + esc(bvpGIWindowLabel(g))}</span><span class="gi-sub">Same commission</span>`;
+  if (g.yearRound) return `<span class="gi" title="${tip}">Year-round</span><span class="gi-sub">Aim for underwritten</span>`;
+  if (g.status === 'open') return `<span class="gi open" title="${tip}">Window open</span><span class="gi-sub">Until ${esc(bvpGIFmtDate(g.windowClose))}</span>`;
+  const due = g.status === 'uw_passed' || g.daysUntilUnderwriteBy <= 30;
+  return `<span class="gi${due ? ' due' : ''}" title="${tip}">UW by ${esc(bvpGIFmtDate(g.underwriteBy))}</span><span class="gi-sub">Window ${esc(bvpGIWindowLabel(g))}</span>`;
 }
 
 function render() {
@@ -343,9 +374,10 @@ function render() {
       <td class="num">${money2(c.prem)}</td>
       <td class="num">${money(c.curr)}</td>
       <td class="num">${money(c.opp)}</td>
+      <td>${giCell(c)}</td>
       <td>${emailCell(c)}</td>
       <td class="contact">${[c.phone ? `<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>` : '', c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : ''].filter(Boolean).join(' · ') || '<span class="muted">—</span>'}</td>
-    </tr>`).join('') || `<tr><td colspan="13" class="loading">${all.length ? 'No clients match these filters.' : 'No clients yet. Agents\' clients appear here once they upload a book.'}</td></tr>`;
+    </tr>`).join('') || `<tr><td colspan="14" class="loading">${all.length ? 'No clients match these filters.' : 'No clients yet. Agents\' clients appear here once they upload a book.'}</td></tr>`;
 
   const pages = Math.ceil(view.length / PAGE);
   const pager = document.getElementById('pager');
@@ -378,10 +410,12 @@ document.getElementById('sort-row').addEventListener('click', e => {
 
 function exportCsv() {
   const cell = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  const head = ['Client', 'Agent', 'Agent email', 'Cohort', 'Carrier', 'Plan', 'State', 'Age', 'Renewal month', 'Monthly premium', 'Current LTV', 'Opportunity LTV', 'Email', 'Phone', 'Email status', 'Last emailed'];
+  const head = ['Client', 'Agent', 'Agent email', 'Cohort', 'Carrier', 'Plan', 'State', 'Age', 'Renewal month', 'Monthly premium', 'Current LTV', 'Opportunity LTV', 'Email', 'Phone', 'Email status', 'Last emailed', 'State GI rule', 'GI window', 'Underwrite by', 'GI commission at stake'];
   const lines = view.map(c => [c.name, c.agentLabel, c.agentEmail, COHORTS[c.priority] || '', c.carrier, c.plan, c.state, c.age ?? '',
     c.month ? MONTHS[c.month - 1] : '', c.prem.toFixed(2), Math.round(c.curr), Math.round(c.opp), c.email, c.phone,
-    { yes: 'Has email', no: 'No email', unsub: 'Unsubscribed' }[emailState(c)], (lastEmailed.get(c.id) || {}).at?.slice(0, 10) || ''].map(cell).join(','));
+    { yes: 'Has email', no: 'No email', unsub: 'Unsubscribed' }[emailState(c)], (lastEmailed.get(c.id) || {}).at?.slice(0, 10) || '',
+    c.gi && c.gi.hasRight ? c.gi.ruleName : '', c.gi && c.gi.hasRight ? bvpGIWindowLabel(c.gi) : '',
+    c.gi && c.gi.underwriteBy ? bvpGIFmtDate(c.gi.underwriteBy) : '', c.gi && c.gi.hasRight ? Math.round(c.gi.commissionAtStake || 0) : ''].map(cell).join(','));
   const blob = new Blob([[head.join(','), ...lines].join('\n')], { type: 'text/csv' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);

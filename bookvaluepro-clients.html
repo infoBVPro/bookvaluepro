@@ -1229,11 +1229,14 @@ function giPanelSection(c) {
       <div class="field-group"><div class="field-label">Rule</div><div class="field-value">${gi.state} — ${gi.ruleName}</div></div>
       <div class="field-group"><div class="field-label">GI Window</div><div class="field-value mono">${bvpGIWindowLabel(gi)}</div></div>
       ${dated ? `<div class="field-group"><div class="field-label">Underwrite By</div><div class="field-value mono">${bvpGIFmtDate(gi.underwriteBy)}</div></div>` : ''}
-      <div class="field-group"><div class="field-label">GI-only Renewal LTV</div><div class="field-value mono">${fmtNPV(c.gi_ren_npv)}</div></div>
+      <div class="field-group"><div class="field-label">Renewal LTV if written as GI</div><div class="field-value mono">${fmtNPV(c.gi_ren_npv)}</div></div>
+      <div class="field-group"><div class="field-label">Commission at stake</div><div class="field-value mono">${gi.sameCommission ? 'None (same commission)' : fmtNPV(gi.commissionAtStake)}</div></div>
       <div class="field-group"><div class="field-label">Plans</div><div class="field-value">${gi.planNote}</div></div>
       <div class="field-group"><div class="field-label">Carriers</div><div class="field-value">${gi.scopeNote}</div></div>
     </div>
     <div class="gi-panel-note">${bvpGIStatusText(gi)}${gi.requirements.length ? '<br>Requirements: ' + gi.requirements.join(' · ') : ''}${gi.approximate ? '<br>Window estimated from the effective month (day not on file).' : ''}</div>
+    ${(gi.rights || []).length > 1 ? `<div class="gi-panel-note"><strong>All GI rules that apply in ${gi.state}:</strong><br>${gi.rights.map(r =>
+      `${r.ruleName}: ${bvpGIWindowLabel(r)}${r.yearRound ? '' : ` · underwrite by ${bvpGIFmtDate(r.underwriteBy)}`} · ${r.planNote}`).join('<br>')}</div>` : ''}
   </div>`;
 }
 

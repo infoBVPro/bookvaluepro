@@ -801,7 +801,31 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
 
   const VALUATION_MONTH = new Date().getMonth() + 1;
 
-  return policies.map(p => {
+  // State GI rules (loaded once per page; null if the table can't be read).
+  const giRules = await bvpLoadStateGIRules().catch(() => null);
+
+  // GI commission schedule: exact enrollment-type match only, and a 0% schedule
+  // stays 0% (it must not fall back to open-enrollment rates). None → 0%.
+  function getGIRates(carrier, state, plan) {
+    const T = 'StateGuaranteedIssue';
+    const attempts = [
+      r => r.carrier === carrier && r.issued_state === state && r.plan === plan && r.enrollment_type === T,
+      r => r.carrier === carrier && r.plan === plan && r.enrollment_type === T,
+      r => generic && r.carrier === generic && r.issued_state === state && r.plan === plan && r.enrollment_type === T,
+      r => generic && r.carrier === generic && r.plan === plan && r.enrollment_type === T,
+    ];
+    for (const match of attempts) {
+      const rows = comms.filter(match);
+      if (rows.length) {
+        const rates = Array(11).fill(0);
+        rows.forEach(r => { const i = (r.duration_yr || 1) - 1; if (i >= 0 && i < 11) rates[i] = parseFloat(r.rate) || 0; });
+        return rates;
+      }
+    }
+    return Array(11).fill(0);
+  }
+
+  const enriched = policies.map(p => {
     const carrier      = p.company      || generic;
     const state        = p.issued_state || null;
     const durYr        = p.duration_yr  || 1;
@@ -810,6 +834,9 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
     const currPrem     = p.curr_prem    || 0;
     const plan         = bvpNormalizePlan(p.plan_type);
     const enrollType   = 'OpenEnrollment'; // enrollment type stored on policy; default to OE
+    // A replacement policy is assumed to be UNDERWRITTEN (Josh, 2026-11-02): carriers pay more
+    // for underwritten business than GI, and the agent's goal is to get the client approved.
+    const renEnrollType = 'Underwritten';
 
     const premMulti      = p.prem_mode === 'monthly' ? 12 : p.prem_mode === 'quarterly' ? 4 : 1;
     const annualCurrPrem = currPrem * premMulti;
@@ -823,7 +850,7 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
     // Renewal restarts at duration 1 rates, same plan and enrollment type.
     let ren_npv;
     if (p.ren_carrier && p.ren_prem != null) {
-      const renRates      = getRates(p.ren_carrier, state, plan, enrollType);
+      const renRates      = getRates(p.ren_carrier, state, plan, renEnrollType);
       const alreadyRenewed = effMonth !== null && effMonth <= VALUATION_MONTH;
       const r = discountPct / 100;
       let npv = 0;
@@ -835,7 +862,7 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
       }
       ren_npv = npv * 12;
     } else {
-      const renRates = getRates(carrier, state, plan, enrollType);
+      const renRates = getRates(carrier, state, plan, renEnrollType);
       ren_npv = bvpCalcRenewalNPV(annualCurrPrem, savingsPct, effMonth, renRates, discountPct);
     }
 
@@ -845,8 +872,8 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
 
     // renRatesForOffset: use agent-set renewal carrier if available, else current carrier
     const renRatesForOffset = (p.ren_carrier && p.ren_prem != null)
-      ? getRates(p.ren_carrier, state, plan, enrollType)
-      : getRates(carrier, state, plan, enrollType);
+      ? getRates(p.ren_carrier, state, plan, renEnrollType)
+      : getRates(carrier, state, plan, renEnrollType);
 
     const offsetCurrRates = Array(11).fill(0).map((_, i) => {
       if (alreadyRenewed) {
@@ -864,13 +891,336 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
     });
 
     // Expose annualized prems for dashboard/outreach calcs
-    return { ...p, curr_npv, ren_npv,
+    // State GI rights + what the same switch would be worth if written as GI.
+    let gi, gi_ren_npv = null;
+    if (giRules) {
+      gi = bvpEvaluateGI(p, giRules);
+      if (gi.hasRight) {
+        if (p.ren_carrier && p.ren_prem != null) {
+          // Same math as ren_npv's agent-entered branch, on the GI schedule.
+          const giRates = getGIRates(p.ren_carrier, state, plan);
+          const alreadyRenewed = effMonth !== null && effMonth <= VALUATION_MONTH;
+          const r = discountPct / 100;
+          let npv = 0;
+          for (let i = 0; i < 11; i++) {
+            const rate = alreadyRenewed ? (i === 0 ? 0 : (giRates[Math.min(i - 1, 10)] || 0)) : (giRates[Math.min(i, 10)] || 0);
+            npv += (p.ren_prem * rate) / Math.pow(1 + r, i + 1);
+          }
+          gi_ren_npv = npv * 12;
+        } else {
+          gi_ren_npv = bvpCalcRenewalNPV(annualCurrPrem, savingsPct, effMonth, getGIRates(carrier, state, plan), discountPct);
+        }
+        // What's lost if the switch is written as GI instead of underwritten. Zero where the
+        // carrier's GI schedule matches its underwritten one (e.g. CA and NV in the base table).
+        gi.commissionAtStake = Math.max(0, (ren_npv || 0) - (gi_ren_npv || 0));
+        gi.sameCommission = gi.commissionAtStake < 1;
+      }
+    }
+
+    return { ...p, curr_npv, ren_npv, gi, gi_ren_npv,
       _annualCurrPrem: annualCurrPrem,
       _annualCommPrem: annualCommPrem,
       _currRates: offsetCurrRates,
       _renRates: offsetRenRates };
   });
+  return enriched;
 }
+
+// ── STATE GI RIGHTS ENGINE ─────────────────────────────────────
+// Rebuilt 2026-11-02. Fully driven by the `state_gi_rules` table
+// (claude/state_gi_rules_migration.sql): nothing about any state is
+// hard-coded here. Add, edit or switch off a rule in Supabase and every page
+// picks it up on the next load.
+//
+// For each policy, EVERY active rule for its issued state is evaluated (a
+// state can have several, e.g. Maine). Each rule that applies becomes a
+// "right" with its own window and status. The most pressing right is the
+// primary one, and its fields sit at the top level of policy.gi (that's what
+// the GI columns show); all of them are in policy.gi.rights.
+//
+// policy.gi = {
+//   hasRight, reason (when none), state, ruleName, ruleCode, yearRound,
+//   windowOpen, windowClose (Date), daysUntilOpen, status, underwriteBy,
+//   daysUntilUnderwriteBy, planNote, scopeNote, requirements[], approximate,
+//   rights[] (every applicable right, primary first), notApplicable[] ({ruleName, reason})
+// }
+// status: 'year_round' | 'open' | 'upcoming' | 'uw_passed'
+//   upcoming  = window ahead; an underwritten app can still go in first
+//   uw_passed = window ahead, but the underwrite-by date has gone by
+//
+// Underwrite By = the window opens minus BVP_GI_UNDERWRITE_LEAD_DAYS (30):
+// the last day to submit an underwritten application before the GI window.
+//
+// Business rule (Josh, 2026-11-02): a replacement is assumed to be UNDERWRITTEN
+// (ren_npv uses the Underwritten schedule). Carriers usually pay less, often 0%,
+// on GI business, so the guidance always steers the agent to get the client
+// through underwriting, with the GI right as the fallback. gi_ren_npv is the
+// fallback value; gi.commissionAtStake = ren_npv − gi_ren_npv (0 where a state's
+// GI and underwritten schedules match, e.g. CA/NV today).
+// TODO (later): model states that REQUIRE equal commission for GI and
+// underwritten enrollees as a rule-level flag, not just via the rate table.
+
+const BVP_GI_UNDERWRITE_LEAD_DAYS = 30;
+let _bvpGIRulesPromise = null;
+
+// Active rules from state_gi_rules, grouped by state: { 'CA': [row, ...], ... }
+async function bvpLoadStateGIRules(force = false) {
+  if (_bvpGIRulesPromise && !force) return _bvpGIRulesPromise;
+  _bvpGIRulesPromise = (async () => {
+    const { data, error } = await bvp.from('state_gi_rules').select('*').eq('is_active', true);
+    if (error) {
+      console.error('bvpLoadStateGIRules: could not load state_gi_rules —', error);
+      _bvpGIRulesPromise = null; // allow a retry
+      return null;
+    }
+    const byState = {};
+    (data || []).forEach(r => {
+      const st = String(r.state || '').trim().toUpperCase();
+      (byState[st] ||= []).push(r);
+    });
+    return byState;
+  })();
+  return _bvpGIRulesPromise;
+}
+
+// ── date helpers (local calendar days) ──
+function _bvpDay(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
+function _bvpAddDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+function _bvpDaysBetween(a, b) { return Math.round((_bvpDay(b) - _bvpDay(a)) / 864e5); }
+function _bvpParseDate(s) {
+  if (!s) return null;
+  if (s instanceof Date) return isNaN(s) ? null : _bvpDay(s);
+  const m = String(s).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+  const d = new Date(s);
+  return isNaN(d) ? null : _bvpDay(d);
+}
+// Birthday (or other month/day) in a given year; Feb 29 → Feb 28 in other years.
+function _bvpDateInYear(month0, day, year) {
+  const last = new Date(year, month0 + 1, 0).getDate();
+  return new Date(year, month0, Math.min(day, last));
+}
+
+// Plan letter as written on the policy (A–N), or null. "HD F"/"High deductible G" → F/G.
+function bvpPlanLetter(planType) {
+  if (!planType) return null;
+  let s = String(planType).toUpperCase().replace(/PLAN/g, '').replace(/HIGH\s*DEDUCTIBLE|HD/g, '').replace(/[^A-Z]/g, '');
+  return /^[A-N]$/.test(s) ? s : null;
+}
+
+const _BVP_GI_PLAN_NOTES = {
+  equal_or_lesser: 'Equal or lesser benefits',
+  same_plan: 'Same plan letter',
+  any_plan: 'Any plan',
+  plan_a_only: 'Plan A only',
+  crosswalk: 'Set plan switches',
+};
+const _BVP_GI_SCOPE_NOTES = {
+  any_carrier: 'Any carrier',
+  same_carrier_group: 'Same carrier group only',
+  same_carrier_group_then_any_fallback: 'Current carrier group first; any carrier if the group doesn\'t sell the plan',
+};
+
+// The [start, end] window of `rule` for the anniversary/birthday falling in `year`.
+// Returns { start, end, anchor, approximate } or null when the client's data can't place it.
+function _bvpGIWindowForYear(rule, p, year) {
+  const off = Number(rule.window_start_offset_days) || 0;
+  const len = Math.max(1, Number(rule.window_length_days) || 1);
+  let anchor, approximate = false, eventDay = null; // eventDay = the actual birthday/anniversary
+  switch (rule.window_anchor) {
+    case 'birthday': {
+      const dob = _bvpParseDate(p.dob);
+      if (!dob) return null;
+      anchor = _bvpDateInYear(dob.getMonth(), dob.getDate(), year);
+      break;
+    }
+    case 'birth_month_start': {
+      const dob = _bvpParseDate(p.dob);
+      if (!dob) return null;
+      anchor = new Date(year, dob.getMonth(), 1);
+      eventDay = _bvpDateInYear(dob.getMonth(), dob.getDate(), year);
+      break;
+    }
+    case 'policy_anniversary': {
+      // Only the effective MONTH is stored, so the 1st of that month stands in for the day.
+      const m = Number(p.eff_month);
+      if (!(m >= 1 && m <= 12)) return null;
+      anchor = new Date(year, m - 1, 1);
+      approximate = true;
+      break;
+    }
+    case 'fixed_month': {
+      const m = Number(rule.fixed_month);
+      if (!(m >= 1 && m <= 12)) return null;
+      anchor = new Date(year, m - 1, 1);
+      break;
+    }
+    default:
+      return null;
+  }
+  const start = _bvpAddDays(anchor, off);
+  return { start, end: _bvpAddDays(start, len - 1), anchor, eventDay: eventDay || anchor, approximate };
+}
+
+// Months the current policy will have been in force on `date` (from duration year + effective month).
+function _bvpMonthsInForce(p, date) {
+  const dur = Number(p.duration_yr) || 1;
+  const m = Number(p.eff_month);
+  if (!(m >= 1 && m <= 12)) return (dur - 1) * 12;
+  // Most recent anniversary on or before today starts policy year `dur`.
+  const today = _bvpDay(new Date());
+  let lastAnn = new Date(today.getFullYear(), m - 1, 1);
+  if (lastAnn > today) lastAnn = new Date(today.getFullYear() - 1, m - 1, 1);
+  const months = (date.getFullYear() - lastAnn.getFullYear()) * 12 + (date.getMonth() - lastAnn.getMonth());
+  return (dur - 1) * 12 + months;
+}
+
+// Evaluates ONE rule for ONE policy. Returns { right } or { reason }.
+function _bvpEvaluateGIRule(rule, p, today) {
+  const name = rule.rule_name || rule.rule_code;
+  const letter = bvpPlanLetter(p.plan_type);
+  const endDate = _bvpParseDate(rule.rule_end_date);
+  if (endDate && endDate < today) return { reason: 'Rule has ended' };
+
+  // Age limits (attained age today).
+  const age = Number(p.attained_age);
+  if (rule.min_age != null && age && age < rule.min_age) return { reason: `Only for ages ${rule.min_age}${rule.max_age != null ? '–' + rule.max_age : '+'}` };
+  if (rule.max_age != null && age && age > rule.max_age) return { reason: `Only for ages ${rule.min_age != null ? rule.min_age + '–' : 'up to '}${rule.max_age}` };
+
+  // Which plans the client can move to.
+  const cw = rule.plan_crosswalk && typeof rule.plan_crosswalk === 'object' ? rule.plan_crosswalk : null;
+  let planNote = _BVP_GI_PLAN_NOTES[rule.plan_eligibility] || rule.plan_eligibility || '';
+  if (rule.plan_eligibility === 'crosswalk') {
+    if (!letter) return { reason: 'Plan letter not on file' };
+    if (!cw || !cw[letter]) return { reason: `Plan ${letter} isn't covered by this rule` };
+    planNote = `Plan ${letter} → ${cw[letter].join(', ')}`;
+  } else if (rule.plan_eligibility === 'same_plan') {
+    planNote = letter ? `Same plan (${letter})` : 'Same plan letter';
+    if (cw && letter && cw[letter]) planNote += `, or ${cw[letter].join(', ')}`;
+  } else if (rule.plan_eligibility === 'equal_or_lesser' && letter) {
+    planNote = `Plan ${letter} or lesser benefits`;
+  }
+  // Plan conversions apply only to the older plan letters listed in the crosswalk;
+  // with no crosswalk, to the 1990-only letters (E, H, I, J).
+  if (rule.rule_code === 'plan_conversion') {
+    const eligible = cw ? Object.keys(cw) : ['E', 'H', 'I', 'J'];
+    if (!letter || !eligible.includes(letter)) return { reason: 'Only for older (pre-2010) plans' };
+  }
+
+  const requirements = [];
+  if (rule.min_continuous_coverage_months) requirements.push(`Current policy in force ${rule.min_continuous_coverage_months}+ months`);
+  if (rule.max_coverage_gap_days) requirements.push(`No coverage gap over ${rule.max_coverage_gap_days} days`);
+  if (rule.early_application_days) requirements.push(`Apps accepted ${rule.early_application_days} days before the window`);
+  if (rule.effective_not_before === 'first_of_next_month') requirements.push('Effective the 1st of the month after the app');
+  else if (rule.effective_not_before === 'birthday') requirements.push('Not effective before the birthday');
+  else if (rule.effective_not_before === 'birthday_minus_30') requirements.push('Not effective earlier than 30 days before the birthday');
+  if (rule.max_effective_days_after_app) requirements.push(`Effective within ${rule.max_effective_days_after_app} days of the app`);
+  if (rule.documentation_required) requirements.push(rule.documentation_required);
+
+  const base = {
+    state: rule.state, ruleName: name, ruleCode: rule.rule_code, rule,
+    planNote, scopeNote: _BVP_GI_SCOPE_NOTES[rule.carrier_scope] || rule.carrier_scope || '',
+    requirements, exclusions: rule.exclusions || null, approximate: false,
+  };
+
+  if (rule.window_anchor === 'year_round') {
+    if (rule.min_continuous_coverage_months && _bvpMonthsInForce(p, today) < rule.min_continuous_coverage_months) {
+      return { reason: `Needs ${rule.min_continuous_coverage_months} months in force` };
+    }
+    return { right: { ...base, hasRight: true, yearRound: true, status: 'year_round', windowOpen: null, windowClose: null,
+      daysUntilOpen: 0, underwriteBy: null, daysUntilUnderwriteBy: null } };
+  }
+
+  // Dated window: the first window (this year or the next few) that hasn't closed yet,
+  // that starts after the rule took effect, and where the coverage-length rule is met.
+  const ruleStart = _bvpParseDate(rule.rule_effective_date);
+  let lastReason = 'No upcoming window';
+  for (let y = today.getFullYear() - 1; y <= today.getFullYear() + 3; y++) {
+    const w = _bvpGIWindowForYear(rule, p, y);
+    if (!w) {
+      return { reason: rule.window_anchor === 'policy_anniversary' ? 'Effective month not on file' : 'Birth date not on file' };
+    }
+    if (w.end < today) continue;
+    // A rule that started mid-year covers birthdays/anniversaries on or after its start date.
+    if (ruleStart && w.eventDay < ruleStart) { lastReason = 'Before the rule takes effect'; continue; }
+    if (rule.min_continuous_coverage_months && _bvpMonthsInForce(p, w.start) < rule.min_continuous_coverage_months) {
+      lastReason = `Needs ${rule.min_continuous_coverage_months} months in force`; continue;
+    }
+    const open = w.start <= today;
+    const underwriteBy = _bvpAddDays(w.start, -BVP_GI_UNDERWRITE_LEAD_DAYS);
+    return { right: { ...base, hasRight: true, yearRound: false, approximate: w.approximate,
+      windowOpen: w.start, windowClose: w.end,
+      daysUntilOpen: open ? 0 : _bvpDaysBetween(today, w.start),
+      status: open ? 'open' : (underwriteBy < today ? 'uw_passed' : 'upcoming'),
+      underwriteBy, daysUntilUnderwriteBy: _bvpDaysBetween(today, underwriteBy) } };
+  }
+  return { reason: lastReason };
+}
+
+// All of a policy's GI rights. `rulesByState` comes from bvpLoadStateGIRules().
+function bvpEvaluateGI(p, rulesByState, today = new Date()) {
+  today = _bvpDay(today);
+  const state = String(p.issued_state || '').trim().toUpperCase();
+  const rules = (rulesByState && rulesByState[state]) || [];
+  if (!rules.length) {
+    return { hasRight: false, state, reason: state ? `No state GI rule for ${state}` : 'No state on file', rights: [], notApplicable: [] };
+  }
+  const rights = [], notApplicable = [];
+  rules.forEach(r => {
+    const res = _bvpEvaluateGIRule(r, p, today);
+    if (res.right) rights.push(res.right);
+    else notApplicable.push({ ruleName: r.rule_name || r.rule_code, reason: res.reason });
+  });
+  if (!rights.length) {
+    return { hasRight: false, state, reason: notApplicable.map(n => `${n.ruleName}: ${n.reason}`).join('; '), rights, notApplicable };
+  }
+  // Most pressing first: a year-round right (switching is GI any time), then a
+  // window open now, then the soonest window to open.
+  const rank = r => r.yearRound ? -2 : r.status === 'open' ? -1 : r.daysUntilOpen;
+  rights.sort((a, b) => rank(a) - rank(b));
+  return { ...rights[0], rights, notApplicable };
+}
+
+// ── display helpers used by the pages ──
+function bvpGIFmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+function bvpGIWindowLabel(gi) {
+  if (!gi || !gi.hasRight) return '';
+  if (gi.yearRound) return 'Year-round';
+  const f = d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const y = new Date(gi.windowClose).getFullYear() !== new Date().getFullYear() ? ` ${new Date(gi.windowClose).getFullYear()}` : '';
+  return `${gi.approximate ? '~' : ''}${f(gi.windowOpen)} – ${f(gi.windowClose)}${y}`;
+}
+// Guidance for the agent. The goal is always an UNDERWRITTEN replacement
+// (higher commission); the GI right is the fallback if the client can't pass.
+function bvpGIStatusText(gi) {
+  if (!gi || !gi.hasRight) return (gi && gi.reason) || 'No state GI right';
+  const more = gi.rights && gi.rights.length > 1 ? ` (+${gi.rights.length - 1} more GI rule${gi.rights.length > 2 ? 's' : ''} in ${gi.state})` : '';
+  const same = gi.sameCommission ? ' The carrier pays the same commission either way here, so no commission is at stake.' : '';
+  const fallback = gi.sameCommission ? '' : ' A GI policy usually pays a lower commission, so use the GI right only if they can\'t pass underwriting.';
+  if (gi.yearRound) {
+    return `${gi.ruleName}: this client can switch without underwriting at any time. Aim for an underwritten application first.${fallback}${same}${more}`;
+  }
+  if (gi.status === 'open') {
+    return `${gi.ruleName}: GI window is open now through ${bvpGIFmtDate(gi.windowClose)}. If they can pass, submit an underwritten application.${fallback}${same}${more}`;
+  }
+  if (gi.status === 'uw_passed') {
+    return `${gi.ruleName}: GI window opens ${bvpGIFmtDate(gi.windowOpen)}, and the underwrite-by date (${bvpGIFmtDate(gi.underwriteBy)}) has passed. Get an underwritten application in as soon as possible.${fallback}${same}${more}`;
+  }
+  return `${gi.ruleName}: GI window opens ${bvpGIFmtDate(gi.windowOpen)} (in ${gi.daysUntilOpen} days). Submit an underwritten application by ${bvpGIFmtDate(gi.underwriteBy)}; the GI window is the fallback if they don't pass.${same}${more}`;
+}
+
+// When to start the conversation so an underwritten app can go in before
+// Underwrite By: that date minus the outreach lead time (months).
+function bvpGIContactDate(gi, leadMonths = 3) {
+  if (!gi || !gi.underwriteBy) return null;
+  const d = new Date(gi.underwriteBy);
+  d.setMonth(d.getMonth() - (Number(leadMonths) || 0));
+  return d;
+}
+
 
 // ── PRIORITY OVERRIDES ────────────────────────────────────────
 // Saves a manual priority override for a single policy.
