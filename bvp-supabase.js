@@ -309,8 +309,6 @@ function bvpAddAccountNav(access) {
       '<path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6"/>'));
     steps.appendChild(_bvpNavLink('bvp-sidenav-agency-clients', BVP_AGENCY_CLIENTS_PAGE, 'Agency Clients',
       '<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"/><circle cx="17" cy="8.5" r="2.4"/><path d="M15.5 14.7c2.6.3 4.5 2.3 4.5 5.3"/>'));
-    steps.appendChild(_bvpNavLink('bvp-sidenav-agency-pipeline', BVP_AGENCY_PIPELINE_PAGE, 'Agency Pipeline',
-      '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>'));
     steps.appendChild(_bvpNavLink('bvp-sidenav-agency-outreach', BVP_AGENCY_OUTREACH_PAGE, 'Agency Outreach',
       '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/>'));
     if (bvpIsAgencyOwner(access)) {
@@ -332,7 +330,6 @@ const BVP_AGENCY_PAGE = 'bookvaluepro-agency.html';
 const BVP_TEAM_PAGE   = 'bookvaluepro-agency-team.html';
 const BVP_JOIN_PAGE   = 'bookvaluepro-join.html';
 const BVP_AGENCY_CLIENTS_PAGE  = 'bookvaluepro-agency-clients.html';
-const BVP_AGENCY_PIPELINE_PAGE = 'bookvaluepro-agency-pipeline.html';
 const BVP_AGENCY_OUTREACH_PAGE = 'bookvaluepro-outreach.html?view=agency';
 
 // A team member's name for display: their sender-profile name, else their email.

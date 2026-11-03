@@ -8,7 +8,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="bvp-supabase.js"></script>
 <style>
-:root{--forest:#1a5c3a;--emerald:#3da272;--deep:#0d2e1e;--slate:#5a6472;--mist:#e6f5ee;--sage:#7abf9a;--light-bg:#f7faf8;--border:#dde8e2;--text:#1a1a1a;--text-muted:#556b5e;--danger:#c0392b;}
+:root{--forest:#1a5c3a;--emerald:#3da272;--deep:#0d2e1e;--slate:#5a6472;--mist:#e6f5ee;--sage:#7abf9a;--light-bg:#f7faf8;--border:#dde8e2;--text:#1a1a1a;--text-muted:#556b5e;--danger:#c0392b;
+  --c1:#3da272;--c2:#2f6db5;--c3:#c8943a;--surface:#ffffff;}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'DM Sans',sans-serif;color:var(--text);background:var(--light-bg);min-height:100vh;}
 
@@ -17,47 +18,79 @@ body{font-family:'DM Sans',sans-serif;color:var(--text);background:var(--light-b
 .bvp-signout{font-size:12px;color:#7abf9a;background:transparent;border:1px solid rgba(122,191,154,0.3);padding:6px 14px;border-radius:6px;cursor:pointer;font-family:inherit;}
 .bvp-signout:hover{border-color:#3da272;color:white;}
 
-.page{max-width:1200px;margin:0 auto;padding:36px 40px 80px;}
-.head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:1.5rem;}
+.page{max-width:1300px;margin:0 auto;padding:32px 36px 80px;}
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:1.25rem;}
 .eyebrow{font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--emerald);text-transform:uppercase;margin-bottom:0.5rem;}
-h1{font-family:'DM Serif Display',serif;font-size:34px;color:var(--deep);font-weight:400;}
-.head-actions{display:flex;gap:8px;flex-wrap:wrap;}
-.head-actions a{font-size:13px;color:var(--forest);font-weight:600;text-decoration:none;border:1.5px solid var(--border);background:white;padding:9px 16px;border-radius:9px;}
-.head-actions a:hover{border-color:var(--emerald);}
+h1{font-family:'DM Serif Display',serif;font-size:32px;color:var(--deep);font-weight:400;}
+.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.ctl{display:flex;align-items:center;gap:8px;background:white;border:1.5px solid var(--border);border-radius:10px;padding:7px 12px;font-size:12.5px;color:var(--slate);}
+.ctl select,.ctl input{font-family:inherit;font-size:13px;border:none;outline:none;background:transparent;color:var(--forest);font-weight:600;}
+.ctl input{width:38px;text-align:center;}
 
-.tiles{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:18px;}
-.tile{background:white;border:1px solid var(--border);border-radius:14px;padding:16px 18px;}
+.tiles{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px;}
+.tile{background:white;border:1px solid var(--border);border-radius:14px;padding:14px 16px;}
 .tile.feature{background:var(--deep);border-color:var(--deep);}
-.tile-label{font-size:11px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:var(--slate);margin-bottom:8px;}
+.tile-label{font-size:10.5px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:var(--slate);margin-bottom:6px;}
 .tile.feature .tile-label{color:var(--sage);}
-.tile-val{font-family:'DM Serif Display',serif;font-size:28px;color:var(--deep);line-height:1.1;font-variant-numeric:tabular-nums;}
+.tile-val{font-family:'DM Serif Display',serif;font-size:26px;color:var(--deep);font-variant-numeric:tabular-nums;}
 .tile.feature .tile-val{color:white;}
-.tile-sub{font-size:12px;color:var(--text-muted);margin-top:6px;}
+.tile-sub{font-size:11.5px;color:var(--text-muted);margin-top:4px;}
 .tile.feature .tile-sub{color:var(--sage);}
 
-.card{background:white;border:1px solid var(--border);border-radius:16px;padding:1.25rem 1.25rem 0.5rem;margin-bottom:16px;}
-.card-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;padding:0 0.25rem 0.75rem;}
+.card{background:white;border:1px solid var(--border);border-radius:16px;padding:1.1rem 1.25rem 1rem;margin-bottom:16px;}
+.card-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
 .card-label{font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--slate);}
 .card-note{font-size:12px;color:var(--text-muted);}
+.legend{display:flex;gap:16px;font-size:12px;color:var(--text-muted);}
+.legend span{display:inline-flex;align-items:center;gap:6px;}
+.legend i{width:10px;height:10px;border-radius:3px;display:inline-block;}
+
+.chart{position:relative;height:240px;display:grid;grid-template-columns:repeat(12,1fr);gap:10px;align-items:end;padding:8px 0 0;border-bottom:1px solid var(--border);}
+.gridline{position:absolute;left:0;right:0;border-top:1px dashed #e8eeea;font-size:10px;color:#9aa7a0;}
+.gridline span{position:absolute;left:0;top:-14px;}
+.col{position:relative;display:flex;flex-direction:column-reverse;gap:2px;height:100%;justify-content:flex-start;cursor:pointer;padding:0 10%;}
+.col:hover .seg{filter:brightness(1.06);}
+.col .top{position:absolute;left:0;right:0;text-align:center;font-size:11px;color:var(--text-muted);font-variant-numeric:tabular-nums;}
+.seg{width:100%;min-height:0;}
+.seg.last{border-radius:4px 4px 0 0;}
+.xlabels{display:grid;grid-template-columns:repeat(12,1fr);gap:10px;margin-top:6px;}
+.xlabels div{text-align:center;font-size:11px;color:var(--text-muted);}
+.xlabels div.now{color:var(--forest);font-weight:600;}
+.tip{position:fixed;pointer-events:none;background:var(--deep);color:white;font-size:12px;line-height:1.55;padding:9px 12px;border-radius:9px;box-shadow:0 6px 22px rgba(0,0,0,.18);z-index:600;display:none;min-width:170px;}
+.tip b{font-weight:600;}
+.tip .row{display:flex;justify-content:space-between;gap:14px;}
+.tip i{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:6px;}
+
 .table-wrap{overflow-x:auto;}
-table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:820px;}
-th{text-align:right;font-size:10.5px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--slate);padding:9px 8px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;line-height:1.35;vertical-align:bottom;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{text-align:right;font-size:10.5px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--slate);padding:9px 8px;border-bottom:1px solid var(--border);white-space:nowrap;vertical-align:bottom;line-height:1.35;}
 th:first-child,td:first-child{text-align:left;}
-th.sorted{color:var(--forest);}
-th .arrow{font-size:9px;margin-left:3px;}
-th.group{cursor:default;text-align:center;border-bottom:none;padding-bottom:0;color:var(--text-muted);font-size:10px;}
-td{padding:12px 8px;border-bottom:1px solid var(--border);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
-tbody tr:hover td{background:#fafcfb;}
+td{padding:10px 8px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}
+tbody tr.link{cursor:pointer;}
+tbody tr.link:hover td{background:#f5faf7;}
 tfoot td{font-weight:600;color:var(--deep);border-top:2px solid var(--border);border-bottom:none;}
+td.mo{font-weight:500;color:var(--deep);}
+td.now{color:var(--forest);}
+.zero{color:#b8c4be;}
+td.cell{cursor:pointer;}
+td.cell:hover{background:#eef7f2;}
+.ss-n{font-size:11px;color:var(--forest);margin-left:3px;}
+.loading{color:var(--text-muted);font-size:14px;padding:20px 4px;}
+.seg-toggle{display:inline-flex;border:1.5px solid var(--border);border-radius:9px;overflow:hidden;}
+.seg-toggle button{font-family:inherit;font-size:12px;font-weight:600;border:none;background:white;color:var(--slate);padding:7px 12px;cursor:pointer;}
+.seg-toggle button.on{background:var(--forest);color:white;}
+th.sortable{cursor:pointer;user-select:none;}
+th.sorted{color:var(--forest);}
 td.agent{font-weight:500;color:var(--deep);}
 td.agent .role{font-size:11px;color:var(--text-muted);font-weight:400;margin-left:6px;}
-td.muted{color:var(--text-muted);}
 .view{font-size:12px;color:var(--forest);font-weight:600;text-decoration:none;border:1px solid var(--border);padding:5px 10px;border-radius:7px;}
 .view:hover{border-color:var(--emerald);}
-.nobook{font-size:12px;color:var(--text-muted);}
-.loading{color:var(--text-muted);font-size:14px;padding:12px 4px;}
-.foot-note{font-size:12px;color:var(--text-muted);line-height:1.6;margin:10px 4px 0;}
+.nobook{font-size:12px;color:var(--text-muted);text-align:center !important;}
+.head-links{display:flex;gap:8px;flex-wrap:wrap;}
+.head-links a{font-size:13px;color:var(--forest);font-weight:600;text-decoration:none;border:1.5px solid var(--border);background:white;padding:8px 14px;border-radius:9px;}
+.head-links a:hover{border-color:var(--emerald);}
 .hidden{display:none !important;}
+.note{font-size:12px;color:var(--text-muted);line-height:1.6;margin:10px 2px 0;}
 
 /* ── SIDE NAVIGATION (canonical — same across all pages) ── */
 .bvp-sidenav {
@@ -114,11 +147,13 @@ body { padding-left: 64px; }
 }
 
 
+
 @media (max-width:1000px){ .tiles{grid-template-columns:repeat(3,1fr);} }
 @media (max-width:640px){
-  .page{padding:24px 16px 60px;}
+  .page{padding:22px 14px 60px;}
   .tiles{grid-template-columns:1fr 1fr;}
   .tile.feature{grid-column:1 / -1;}
+  .chart,.xlabels{gap:4px;}
   .bvp-header{padding:10px 1rem;}
   .bvp-agent-email{display:none;}
 }
@@ -157,213 +192,319 @@ body { padding-left: 64px; }
       <div class="eyebrow">Agency Overview</div>
       <h1 id="agency-name">Your agency</h1>
     </div>
-    <div class="head-actions"><a href="bookvaluepro-agency-clients.html">All clients</a> <a href="bookvaluepro-agency-pipeline.html">Pipeline</a> <a href="bookvaluepro-outreach.html?view=agency">Outreach</a> <a href="bookvaluepro-agency-team.html" id="manage-team" class="hidden">Manage team →</a></div>
+    <div class="controls">
+      <label class="ctl">Agent <select id="f-agent" onchange="render()"><option value="">All agents</option></select></label>
+      <label class="ctl">Reach out <input id="lead" type="number" min="1" max="6" value="3" onchange="setLead(this.value)"> months before</label>
+      <div class="head-links"><a href="bookvaluepro-agency-clients.html" id="lnk-clients">All clients</a><a href="bookvaluepro-outreach.html?view=agency" id="lnk-outreach">Outreach</a><a href="bookvaluepro-agency-team.html" id="manage-team" class="hidden">Manage team →</a></div>
+    </div>
   </div>
 
   <div class="tiles">
-    <div class="tile feature"><div class="tile-label">Current LTV</div><div class="tile-val" id="t-curr">—</div><div class="tile-sub" id="t-curr-sub">Across all agents</div></div>
-    <div class="tile"><div class="tile-label">Opportunity LTV</div><div class="tile-val" id="t-opp">—</div><div class="tile-sub">If Save &amp; Switch is acted on</div></div>
-    <div class="tile"><div class="tile-label">Policies</div><div class="tile-val" id="t-pol">—</div><div class="tile-sub" id="t-prem">—</div></div>
-    <div class="tile"><div class="tile-label">Renewals, next 3 mo.</div><div class="tile-val" id="t-ren">—</div><div class="tile-sub">Policies with an anniversary coming up</div></div>
+    <div class="tile feature"><div class="tile-label">Current LTV</div><div class="tile-val" id="t-curr">—</div><div class="tile-sub" id="t-curr-sub">—</div></div>
+    <div class="tile"><div class="tile-label">Save &amp; Switch lift, 12 mo.</div><div class="tile-val" id="t-lift">—</div><div class="tile-sub" id="t-lift-sub">—</div></div>
+    <div class="tile"><div class="tile-label">Renewals, next 3 mo.</div><div class="tile-val" id="t-ren3">—</div><div class="tile-sub" id="t-ren3-sub">—</div></div>
+    <div class="tile"><div class="tile-label">To contact this month</div><div class="tile-val" id="t-due">—</div><div class="tile-sub" id="t-due-sub">—</div></div>
     <div class="tile"><div class="tile-label">Agents</div><div class="tile-val" id="t-agents">—</div><div class="tile-sub" id="t-agents-sub">—</div></div>
   </div>
 
   <section class="card">
     <div class="card-head">
       <div class="card-label">By agent</div>
-      <div class="card-note" id="progress">Loading…</div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+        <span class="card-note" id="progress">Loading…</span>
+        <div class="seg-toggle" role="tablist">
+          <button id="tg-book" class="on" onclick="setAgentView('book')">Book &amp; activity</button>
+          <button id="tg-months" onclick="setAgentView('months')">Renewals by month</button>
+        </div>
+      </div>
     </div>
+    <div class="table-wrap"><table id="agents"><tbody><tr><td class="loading">Loading your team's books…</td></tr></tbody></table></div>
+    <p class="note" id="agents-note"></p>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div class="card-label">Renewals by anniversary month</div>
+      <div class="legend"><span><i style="background:var(--c1)"></i>Save &amp; Switch</span><span><i style="background:var(--c2)"></i>Steady Book</span><span><i style="background:var(--c3)"></i>Loyalty Watch</span></div>
+    </div>
+    <div class="chart" id="chart"></div>
+    <div class="xlabels" id="xlabels"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><div class="card-label">By month</div><div class="card-note">Click a month to open its outreach list</div></div>
     <div class="table-wrap">
       <table>
-        <thead>
-          <tr id="sort-row">
-            <th data-key="email">Agent</th>
-            <th data-key="policies">Policies</th>
-            <th data-key="premium">Annual<br>premium</th>
-            <th data-key="curr">Current<br>LTV</th>
-            <th data-key="opp">Opportunity<br>LTV</th>
-            <th data-key="renewals" title="Policies with an anniversary in the next 3 months">Renewals<br>next 3 mo.</th>
-            <th data-key="emails" title="Outreach emails sent to clients from the Renewal Outreach page in the last 30 days">Emails sent<br>last 30 days</th>
-            <th data-key="touches" title="Calls, emails, notes and stage changes logged on leads in the last 30 days">Lead touches<br>last 30 days</th>
-            <th data-key="openLeads">Open<br>leads</th>
-            <th data-key="won">Leads won<br>last 30 days</th>
-            <th style="cursor:default"></th>
-          </tr>
-        </thead>
-        <tbody id="rows"><tr><td colspan="11" class="loading">Loading your team's books…</td></tr></tbody>
-        <tfoot id="totals"></tfoot>
+        <thead><tr>
+          <th>Anniversary month</th><th>Renewals</th><th>Save &amp;<br>Switch</th><th>Steady<br>Book</th><th>Loyalty<br>Watch</th>
+          <th>Annual premium<br>renewing</th><th>Current LTV<br>renewing</th><th title="Opportunity LTV minus current LTV for Save &amp; Switch clients">Save &amp; Switch<br>LTV lift</th><th title="Clients whose reach-out month this is">Reach out<br>in this month</th>
+        </tr></thead>
+        <tbody id="months"></tbody>
+        <tfoot id="months-foot"></tfoot>
       </table>
     </div>
-    <p class="foot-note">Book values use each agent's own commission rates and assumptions, the same numbers they see on their dashboard. "Emails sent" counts outreach emails sent from the Renewal Outreach page. "Lead touches" counts logged calls, emails, notes and stage changes on leads. Click any column to sort.</p>
   </section>
+  <p class="note">Book values use each agent's own commission rates and assumptions, the same numbers they see on their dashboard and on Renewal Outreach. "Save &amp; Switch lift" is Opportunity LTV minus Current LTV for Save &amp; Switch clients. "Renewals" are policies whose anniversary falls in that month. "Reach out in this month" follows the lead time set above, which is the same setting Renewal Outreach uses.</p>
 </main>
+<div class="tip" id="tip"></div>
 
 <script>
-let rows = [];
-let sortKey = 'curr', sortDir = -1;
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const NOW = new Date();
+const CUR = NOW.getMonth() + 1;
+// The next 12 anniversary months, starting with this one.
+const SLOTS = Array.from({ length: 12 }, (_, i) => { const m = ((CUR - 1 + i) % 12) + 1; return { m, year: NOW.getFullYear() + (CUR - 1 + i >= 12 ? 1 : 0) }; });
+let rows = [], roster = [], meId = null;
+let agentStats = {};          // agent id -> { hasBook, emails, touches, openLeads, won }
+let agentView = 'book', sortKey = 'curr', sortDir = -1;
+let lead = Math.max(1, Math.min(6, +(localStorage.getItem('bvp_lead_months') || 3)));
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 const money = v => '$' + Math.round(v || 0).toLocaleString('en-US');
-const moneyShort = v => {
-  const n = Math.round(v || 0);
-  if (Math.abs(n) >= 1e6) return '$' + (n / 1e6).toFixed(n >= 1e7 ? 1 : 2).replace(/\.?0+$/, '') + 'M';
-  if (Math.abs(n) >= 1e4) return '$' + Math.round(n / 1e3).toLocaleString('en-US') + 'K';
-  return '$' + n.toLocaleString('en-US');
-};
+const moneyShort = v => { const n = Math.round(v || 0); if (Math.abs(n) >= 1e6) return '$' + (n / 1e6).toFixed(2).replace(/\.?0+$/, '') + 'M'; if (Math.abs(n) >= 1e4) return '$' + Math.round(n / 1e3).toLocaleString('en-US') + 'K'; return '$' + n.toLocaleString('en-US'); };
 const num = v => (v || 0).toLocaleString('en-US');
+const contactMonth = eff => ((eff - lead - 1 + 120) % 12) + 1;
+const next3 = new Set(SLOTS.slice(0, 3).map(s => s.m));
 
-// Same formula as the dashboard's Opportunity LTV, so the numbers match when you drill in.
-function oppLTV(p, savPct, discount) {
-  const rr = p._renRates || [];
-  let v = 0;
-  for (let i = 0; i < rr.length; i++) v += (rr[i] * (p.curr_prem || 0) * (1 - savPct / 100) * 12) / Math.pow(1 + discount, i + 1);
-  return v;
+function setLead(v) {
+  lead = Math.max(1, Math.min(6, +v || 3));
+  document.getElementById('lead').value = lead;
+  localStorage.setItem('bvp_lead_months', lead);
+  render();
 }
-
-function renewalMonths() {
-  const m = new Date().getMonth() + 1;
-  return [m, (m % 12) + 1, ((m + 1) % 12) + 1];
+function setAgentView(v) {
+  agentView = v;
+  document.getElementById('tg-book').classList.toggle('on', v === 'book');
+  document.getElementById('tg-months').classList.toggle('on', v === 'months');
+  renderAgents();
 }
+function outreachLink(agentId) {
+  return 'bookvaluepro-outreach.html?view=agency' + (agentId ? '&agent=' + encodeURIComponent(agentId) : '');
+}
+function blank() { return { n: 0, c1: 0, c2: 0, c3: 0, prem: 0, curr: 0, lift: 0, due: 0 }; }
+function selectedAgent() { return document.getElementById('f-agent').value; }
 
-async function loadAgentBook(member) {
-  const row = { ...member, policies: 0, premium: 0, curr: 0, opp: 0, renewals: 0, emails: 0, touches: 0, openLeads: 0, won: 0, hasBook: false };
-  const book = await bvpGetActiveBook(member.user_id);
-  if (!book) return row;
-  const policies = await bvpGetPolicies(book.id);
-  if (!policies.length) return row;
-  const discountPct = book.discount_rate || 10;
-  const savingsPct = book.savings_pct || 10;
-  const enriched = await bvpEnrichPolicies(member.user_id, policies, discountPct, savingsPct);
-  const months = renewalMonths();
-  row.hasBook = true;
-  row.policies = enriched.length;
-  enriched.forEach(p => {
-    row.premium += p._annualCurrPrem || 0;
-    row.curr += p.curr_npv || 0;
-    row.opp += oppLTV(p, savingsPct, discountPct / 100);
-    if (p.eff_month && months.includes(Number(p.eff_month))) row.renewals += 1;
+function render() {
+  const agent = selectedAgent();
+  const vis = rows.filter(r => !agent || r.agentId === agent);
+  document.getElementById('lnk-clients').href = 'bookvaluepro-agency-clients.html' + (agent ? '?agent=' + encodeURIComponent(agent) : '');
+  document.getElementById('lnk-outreach').href = outreachLink(agent);
+
+  const by = {}; SLOTS.forEach(s => by[s.m] = blank());
+  vis.forEach(r => {
+    if (!r.month) return;
+    const b = by[r.month];
+    b.n++; b['c' + ([1, 2, 3].includes(r.priority) ? r.priority : 3)]++;
+    b.prem += r.annualPrem; b.curr += r.curr;
+    if (r.priority === 1) b.lift += Math.max(0, r.opp - r.curr);
+    by[contactMonth(r.month)].due++;
   });
-  return row;
+
+  // Tiles
+  const curr = vis.reduce((s, r) => s + r.curr, 0), prem = vis.reduce((s, r) => s + r.annualPrem, 0);
+  const n3 = SLOTS.slice(0, 3).map(s => by[s.m]);
+  const ren3 = n3.reduce((s, b) => s + b.n, 0), ss3 = n3.reduce((s, b) => s + b.c1, 0), prem3 = n3.reduce((s, b) => s + b.prem, 0);
+  const lift = SLOTS.reduce((s, x) => s + by[x.m].lift, 0), ss12 = SLOTS.reduce((s, x) => s + by[x.m].c1, 0);
+  document.getElementById('t-curr').textContent = moneyShort(curr);
+  document.getElementById('t-curr-sub').textContent = `${num(vis.length)} policies · ${moneyShort(prem)} annual premium`;
+  document.getElementById('t-lift').textContent = moneyShort(lift);
+  document.getElementById('t-lift-sub').textContent = `${num(ss12)} Save & Switch client${ss12 === 1 ? '' : 's'}`;
+  document.getElementById('t-ren3').textContent = num(ren3);
+  document.getElementById('t-ren3-sub').textContent = `${num(ss3)} Save & Switch · ${moneyShort(prem3)} premium`;
+  document.getElementById('t-due').textContent = num(by[CUR].due);
+  document.getElementById('t-due-sub').textContent = `${MONTHS[CUR - 1]} · ${lead} mo. ahead of anniversary`;
+  const people = agent ? roster.filter(m => m.user_id === agent) : roster;
+  document.getElementById('t-agents').textContent = num(people.length);
+  document.getElementById('t-agents-sub').textContent = `${people.filter(m => (agentStats[m.user_id] || {}).hasBook).length} with a book uploaded`;
+
+  // Chart: stacked bars, 2px gaps, rounded top, count on top
+  const max = Math.max(1, ...SLOTS.map(s => by[s.m].n));
+  const step = max <= 5 ? 1 : max <= 12 ? 2 : max <= 30 ? 5 : max <= 60 ? 10 : Math.ceil(max / 5 / 10) * 10;
+  const top = Math.ceil(max / step) * step;
+  const chart = document.getElementById('chart');
+  let grid = '';
+  for (let v = step; v <= top; v += step) grid += `<div class="gridline" style="bottom:${v / top * 100}%"><span>${v}</span></div>`;
+  chart.innerHTML = grid + SLOTS.map(s => {
+    const b = by[s.m];
+    const segs = [['c1', b.c1], ['c2', b.c2], ['c3', b.c3]].filter(x => x[1] > 0);
+    return `<div class="col" data-m="${s.m}">${segs.map(([k, v], i) => `<div class="seg${i === segs.length - 1 ? ' last' : ''}" style="height:calc(${v / top * 100}% - 2px);background:var(--${k})"></div>`).join('')}
+      <div class="top" style="bottom:calc(${b.n / top * 100}% + 2px)">${b.n || ''}</div></div>`;
+  }).join('');
+  document.getElementById('xlabels').innerHTML = SLOTS.map((s, i) => `<div class="${i === 0 ? 'now' : ''}">${MONTHS[s.m - 1]}${s.m === 1 || i === 0 ? ` '${String(s.year).slice(2)}` : ''}</div>`).join('');
+  chart._by = by;
+
+  // By-month table
+  const tot = SLOTS.reduce((t, s) => { const b = by[s.m]; Object.keys(t).forEach(k => t[k] += b[k]); return t; }, blank());
+  const z = v => v ? num(v) : '<span class="zero">0</span>';
+  document.getElementById('months').innerHTML = SLOTS.map((s, i) => { const b = by[s.m]; return `<tr class="link">
+    <td class="mo ${i === 0 ? 'now' : ''}">${MONTHS[s.m - 1]} ${s.year}${i === 0 ? ' · this month' : ''}</td>
+    <td>${z(b.n)}</td><td>${z(b.c1)}</td><td>${z(b.c2)}</td><td>${z(b.c3)}</td>
+    <td>${money(b.prem)}</td><td>${money(b.curr)}</td><td>${b.lift ? '+' + money(b.lift) : '<span class="zero">—</span>'}</td><td>${z(b.due)}</td></tr>`; }).join('');
+  document.getElementById('months-foot').innerHTML = `<tr><td>Next 12 months</td><td>${num(tot.n)}</td><td>${num(tot.c1)}</td><td>${num(tot.c2)}</td><td>${num(tot.c3)}</td><td>${money(tot.prem)}</td><td>${money(tot.curr)}</td><td>+${money(tot.lift)}</td><td>${num(tot.due)}</td></tr>`;
+
+  renderAgents();
 }
 
-async function loadLeadStats(ids) {
-  const cutoff = new Date(Date.now() - 30 * 864e5).toISOString();
-  const { data: leads, error } = await bvp.from('leads').select('id, agent_id, stage, converted_at').in('agent_id', ids);
-  if (error) { console.error('leads:', error); return {}; }
-  const byAgent = {};
-  const leadOwner = {};
-  (leads || []).forEach(l => {
-    leadOwner[l.id] = l.agent_id;
-    const s = byAgent[l.agent_id] ||= { touches: 0, openLeads: 0, won: 0 };
-    if (!['won', 'lost'].includes(l.stage)) s.openLeads += 1;
-    if (l.stage === 'won' && l.converted_at && l.converted_at >= cutoff) s.won += 1;
+// ── BY-AGENT TABLE (two views) ──
+function agentRows() {
+  const agent = selectedAgent();
+  const people = agent ? roster.filter(m => m.user_id === agent) : roster;
+  return people.map(m => {
+    const mine = rows.filter(r => r.agentId === m.user_id);
+    const s = agentStats[m.user_id] || {};
+    return {
+      m, label: bvpMemberLabel(m), hasBook: !!s.hasBook,
+      policies: mine.length,
+      premium: mine.reduce((t, r) => t + r.annualPrem, 0),
+      curr: mine.reduce((t, r) => t + r.curr, 0),
+      lift: mine.reduce((t, r) => t + (r.priority === 1 ? Math.max(0, r.opp - r.curr) : 0), 0),
+      renewals: mine.filter(r => next3.has(r.month)).length,
+      emails: s.emails || 0, touches: s.touches || 0, openLeads: s.openLeads || 0, won: s.won || 0,
+      byMonth: mine,
+    };
   });
-  // Outreach emails that have actually gone out in the last 30 days.
-  const { data: sentEmails, error: e3 } = await bvp.from('outreach_emails').select('agent_id')
-    .in('agent_id', ids).in('status', ['sent', 'scheduled']).gte('sent_at', cutoff).lte('sent_at', new Date().toISOString());
-  if (e3) console.warn('outreach_emails:', e3.message);
-  (sentEmails || []).forEach(e => { (byAgent[e.agent_id] ||= { touches: 0, openLeads: 0, won: 0, emails: 0 }).emails = ((byAgent[e.agent_id].emails) || 0) + 1; });
+}
 
-  const leadIds = Object.keys(leadOwner);
-  if (leadIds.length) {
-    const { data: acts, error: e2 } = await bvp.from('lead_activity').select('lead_id').gte('created_at', cutoff);
-    if (e2) console.error('lead_activity:', e2);
-    (acts || []).forEach(a => {
-      const agent = leadOwner[a.lead_id];
-      if (agent) (byAgent[agent] ||= { touches: 0, openLeads: 0, won: 0 }).touches += 1;
-    });
+const BOOK_COLS = [
+  ['label', 'Agent'], ['policies', 'Policies'], ['premium', 'Annual<br>premium'], ['curr', 'Current<br>LTV'],
+  ['lift', 'Save &amp; Switch<br>lift'], ['renewals', 'Renewals<br>next 3 mo.'], ['emails', 'Emails sent<br>last 30 days'],
+  ['touches', 'Lead touches<br>last 30 days'], ['openLeads', 'Open<br>leads'], ['won', 'Leads won<br>last 30 days'],
+];
+
+function renderAgents() {
+  const table = document.getElementById('agents');
+  const list = agentRows();
+  const note = document.getElementById('agents-note');
+  const roleTag = m => (m.role === 'owner' ? '<span class="role">Owner</span>' : m.role === 'admin' ? '<span class="role">Admin</span>' : '') + (m.user_id === meId ? '<span class="role">(you)</span>' : '');
+  if (!list.length) { table.innerHTML = '<tbody><tr><td class="loading">No agents yet.</td></tr></tbody>'; return; }
+
+  if (agentView === 'months') {
+    note.innerHTML = 'Renewals per anniversary month. The <span style="color:var(--forest)">small green number</span> is Save &amp; Switch. Click a cell to open that agent\'s outreach list.';
+    table.innerHTML = `<thead><tr><th>Agent</th>${SLOTS.map(s => `<th>${MONTHS[s.m - 1]}</th>`).join('')}<th>12 mo.</th></tr></thead><tbody>${
+      list.map(a => {
+        let t = 0, tss = 0;
+        const tds = SLOTS.map(s => {
+          const here = a.byMonth.filter(r => r.month === s.m), ss = here.filter(r => r.priority === 1).length;
+          t += here.length; tss += ss;
+          return `<td class="cell" data-agent="${esc(a.m.user_id)}">${here.length ? here.length + (ss ? `<span class="ss-n">${ss}</span>` : '') : '<span class="zero">·</span>'}</td>`;
+        }).join('');
+        return `<tr><td class="agent">${esc(a.label)}${roleTag(a.m)}</td>${tds}<td><strong>${t}</strong>${tss ? `<span class="ss-n">${tss}</span>` : ''}</td></tr>`;
+      }).join('')}</tbody>`;
+    return;
   }
-  return byAgent;
-}
 
-function renderTotals() {
-  const t = rows.reduce((s, r) => {
-    ['policies', 'premium', 'curr', 'opp', 'renewals', 'emails', 'touches', 'openLeads', 'won'].forEach(k => s[k] += r[k] || 0);
-    return s;
-  }, { policies: 0, premium: 0, curr: 0, opp: 0, renewals: 0, emails: 0, touches: 0, openLeads: 0, won: 0 });
-
-  document.getElementById('t-curr').textContent = moneyShort(t.curr);
-  document.getElementById('t-opp').textContent = moneyShort(t.opp);
-  document.getElementById('t-pol').textContent = num(t.policies);
-  document.getElementById('t-prem').textContent = money(t.premium) + ' annual premium';
-  document.getElementById('t-ren').textContent = num(t.renewals);
-  const withBooks = rows.filter(r => r.hasBook).length;
-  document.getElementById('t-agents').textContent = rows.length;
-  document.getElementById('t-agents-sub').textContent = `${withBooks} with a book uploaded`;
-
-  document.getElementById('totals').innerHTML = rows.length > 1 ? `<tr>
-    <td>Agency total</td><td>${num(t.policies)}</td><td>${money(t.premium)}</td><td>${money(t.curr)}</td><td>${money(t.opp)}</td>
-    <td>${num(t.renewals)}</td><td>${num(t.emails)}</td><td>${num(t.touches)}</td><td>${num(t.openLeads)}</td><td>${num(t.won)}</td><td></td></tr>` : '';
-}
-
-function renderRows() {
-  const sorted = [...rows].sort((a, b) => {
+  note.textContent = '"Emails sent" counts outreach emails sent from Renewal Outreach. "Lead touches" counts logged calls, emails, notes and stage changes on leads. Click a column to sort.';
+  list.sort((a, b) => {
     const av = a[sortKey], bv = b[sortKey];
-    if (typeof av === 'string') return av.localeCompare(bv) * sortDir;
-    return ((av || 0) - (bv || 0)) * sortDir;
+    return (typeof av === 'string' ? av.localeCompare(bv) : (av || 0) - (bv || 0)) * sortDir;
   });
-  document.querySelectorAll('#sort-row th[data-key]').forEach(th => {
-    const on = th.dataset.key === sortKey;
-    th.classList.toggle('sorted', on);
-    if (!th.dataset.label) th.dataset.label = th.innerHTML;
-    th.innerHTML = th.dataset.label + (on ? `<span class="arrow">${sortDir > 0 ? '▲' : '▼'}</span>` : '');
-  });
-  document.getElementById('rows').innerHTML = sorted.map(r => {
-    const link = r.isMe ? 'bookvaluepro-dashboard.html' : `bookvaluepro-dashboard.html?agent=${encodeURIComponent(r.user_id)}`;
-    const book = r.hasBook
-      ? `<td>${num(r.policies)}</td><td>${money(r.premium)}</td><td>${money(r.curr)}</td><td>${money(r.opp)}</td><td>${num(r.renewals)}</td>`
-      : `<td colspan="5" class="nobook" style="text-align:center;">No book uploaded yet</td>`;
-    return `<tr>
-      <td class="agent">${esc(bvpMemberLabel(r))}${r.display_name ? `<span class="role">${esc(r.email)}</span>` : ''}${r.role === 'owner' ? '<span class="role">Owner</span>' : r.role === 'admin' ? '<span class="role">Admin</span>' : ''}${r.isMe ? '<span class="role">(you)</span>' : ''}</td>
-      ${book}
-      <td>${num(r.emails)}</td><td>${num(r.touches)}</td><td>${num(r.openLeads)}</td><td>${num(r.won)}</td>
-      <td><a class="view" href="${link}">${r.isMe ? 'Open' : 'View'}</a></td></tr>`;
-  }).join('') || '<tr><td colspan="11" class="loading">No agents yet.</td></tr>';
+  const t = list.reduce((s, a) => { BOOK_COLS.slice(1).forEach(([k]) => s[k] = (s[k] || 0) + a[k]); return s; }, {});
+  table.innerHTML = `<thead><tr id="sort-row">${BOOK_COLS.map(([k, l]) => `<th class="sortable${k === sortKey ? ' sorted' : ''}" data-key="${k}">${l}${k === sortKey ? (sortDir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}<th></th></tr></thead>
+    <tbody>${list.map(a => {
+      const link = a.m.user_id === meId ? 'bookvaluepro-dashboard.html' : `bookvaluepro-dashboard.html?agent=${encodeURIComponent(a.m.user_id)}`;
+      const book = a.hasBook
+        ? `<td>${num(a.policies)}</td><td>${money(a.premium)}</td><td>${money(a.curr)}</td><td>${a.lift ? '+' + money(a.lift) : '<span class="zero">—</span>'}</td><td>${num(a.renewals)}</td>`
+        : `<td colspan="5" class="nobook">No book uploaded yet</td>`;
+      return `<tr><td class="agent">${esc(a.label)}${roleTag(a.m)}</td>${book}
+        <td>${num(a.emails)}</td><td>${num(a.touches)}</td><td>${num(a.openLeads)}</td><td>${num(a.won)}</td>
+        <td><a class="view" href="${link}">${a.m.user_id === meId ? 'Open' : 'View'}</a></td></tr>`;
+    }).join('')}</tbody>
+    ${list.length > 1 ? `<tfoot><tr><td>Agency total</td><td>${num(t.policies)}</td><td>${money(t.premium)}</td><td>${money(t.curr)}</td><td>+${money(t.lift)}</td><td>${num(t.renewals)}</td><td>${num(t.emails)}</td><td>${num(t.touches)}</td><td>${num(t.openLeads)}</td><td>${num(t.won)}</td><td></td></tr></tfoot>` : ''}`;
 }
 
-document.getElementById('sort-row').addEventListener('click', e => {
+document.getElementById('agents').addEventListener('click', e => {
   const th = e.target.closest('th[data-key]');
-  if (!th) return;
-  const key = th.dataset.key;
-  sortDir = key === sortKey ? -sortDir : (key === 'email' ? 1 : -1);
-  sortKey = key;
-  renderRows();
+  if (th) {
+    const key = th.dataset.key;
+    sortDir = key === sortKey ? -sortDir : (key === 'label' ? 1 : -1);
+    sortKey = key;
+    return renderAgents();
+  }
+  const td = e.target.closest('td.cell');
+  if (td) location.href = outreachLink(td.dataset.agent);
 });
+
+// Hover tooltip on bars
+const tip = document.getElementById('tip');
+document.getElementById('chart').addEventListener('mousemove', e => {
+  const col = e.target.closest('.col');
+  if (!col) { tip.style.display = 'none'; return; }
+  const m = +col.dataset.m, b = document.getElementById('chart')._by[m];
+  tip.innerHTML = `<b>${MONTHS[m - 1]} anniversaries · ${b.n}</b>
+    <div class="row"><span><i style="background:var(--c1)"></i>Save &amp; Switch</span><span>${b.c1}</span></div>
+    <div class="row"><span><i style="background:var(--c2)"></i>Steady Book</span><span>${b.c2}</span></div>
+    <div class="row"><span><i style="background:var(--c3)"></i>Loyalty Watch</span><span>${b.c3}</span></div>
+    <div class="row" style="margin-top:4px"><span>Premium</span><span>${moneyShort(b.prem)}</span></div>
+    ${b.lift ? `<div class="row"><span>S&amp;S lift</span><span>+${moneyShort(b.lift)}</span></div>` : ''}`;
+  tip.style.display = 'block';
+  const x = Math.min(e.clientX + 14, window.innerWidth - tip.offsetWidth - 10);
+  tip.style.left = x + 'px'; tip.style.top = (e.clientY - tip.offsetHeight - 12) + 'px';
+});
+document.getElementById('chart').addEventListener('mouseleave', () => tip.style.display = 'none');
+document.getElementById('chart').addEventListener('click', e => { if (e.target.closest('.col')) location.href = outreachLink(selectedAgent()); });
+document.getElementById('months').addEventListener('click', e => { if (e.target.closest('tr.link')) location.href = outreachLink(selectedAgent()); });
+
+// Emails sent, lead touches, open leads and leads won (last 30 days), per agent.
+async function loadActivity(ids) {
+  const cutoff = new Date(Date.now() - 30 * 864e5).toISOString();
+  const add = (id, k, n = 1) => { const s = agentStats[id] ||= {}; s[k] = (s[k] || 0) + n; };
+  const [leadsRes, emailsRes] = await Promise.all([
+    bvp.from('leads').select('id, agent_id, stage, converted_at').in('agent_id', ids),
+    bvp.from('outreach_emails').select('agent_id').in('agent_id', ids).in('status', ['sent', 'scheduled'])
+      .gte('sent_at', cutoff).lte('sent_at', new Date().toISOString()).limit(20000),
+  ]);
+  if (leadsRes.error) console.error('leads:', leadsRes.error);
+  if (emailsRes.error) console.warn('outreach_emails:', emailsRes.error.message);
+  const owner = {};
+  (leadsRes.data || []).forEach(l => {
+    owner[l.id] = l.agent_id;
+    if (!['won', 'lost'].includes(l.stage)) add(l.agent_id, 'openLeads');
+    if (l.stage === 'won' && l.converted_at && l.converted_at >= cutoff) add(l.agent_id, 'won');
+  });
+  (emailsRes.data || []).forEach(e => add(e.agent_id, 'emails'));
+  if (Object.keys(owner).length) {
+    const { data: acts, error } = await bvp.from('lead_activity').select('lead_id').gte('created_at', cutoff);
+    if (error) console.error('lead_activity:', error);
+    (acts || []).forEach(a => { if (owner[a.lead_id]) add(owner[a.lead_id], 'touches'); });
+  }
+}
 
 (async () => {
   const session = await bvpRequireAuth();
   if (!session) return;
+  meId = session.user.id;
   document.getElementById('agent-email').textContent = session.user.email;
   bvpSetAdminNavVisible(session.user.email);
-
   const access = await bvpRequireAgencyManager();
   if (!access) return;
   if (bvpIsAgencyOwner(access)) document.getElementById('manage-team').classList.remove('hidden');
+  document.getElementById('lead').value = lead;
   const agency = await bvpGetAgency(access.agency_id);
   if (agency) document.getElementById('agency-name').textContent = agency.name;
 
-  const roster = await bvpGetAgencyRoster();
-  const progress = document.getElementById('progress');
-  const leadStats = await loadLeadStats(roster.map(m => m.user_id));
+  roster = await bvpGetAgencyRoster();
+  const sel = document.getElementById('f-agent');
+  roster.forEach(m => { const o = document.createElement('option'); o.value = m.user_id; o.textContent = bvpMemberLabel(m) + (m.user_id === meId ? ' (you)' : ''); sel.appendChild(o); });
+  const params = new URLSearchParams(location.search);
+  const preset = params.get('agent');
+  if (preset && roster.some(m => m.user_id === preset)) sel.value = preset;
+  if (params.get('view') === 'months') setAgentView('months'); // old Pipeline links land here
 
-  // Load books a few at a time so a large team doesn't overload the browser.
-  let done = 0;
-  const queue = [...roster];
-  const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
-    while (queue.length) {
-      const m = queue.shift();
-      let row;
-      try { row = await loadAgentBook(m); }
-      catch (err) { console.error('loadAgentBook', m.email, err); row = { ...m, hasBook: false }; }
-      Object.assign(row, leadStats[m.user_id] || {}, { isMe: m.user_id === session.user.id });
-      rows.push(row);
-      done += 1;
-      progress.textContent = done < roster.length ? `Loading ${done} of ${roster.length} agents…` : `Updated ${new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
-      renderRows(); renderTotals();
-    }
+  loadActivity(roster.map(m => m.user_id)).then(render).catch(e => console.warn('activity:', e));
+
+  const progress = document.getElementById('progress');
+  await bvpLoadTeamBooks(roster, (r, done, total) => {
+    (agentStats[r.member.user_id] ||= {}).hasBook = !!r.policies.length;
+    r.policies.forEach(p => rows.push({
+      agentId: r.member.user_id, priority: p.priority, month: p.eff_month ? Number(p.eff_month) : null,
+      annualPrem: p._annualCurrPrem || 0, curr: p.curr_npv || 0,
+      opp: p.ren_npv || 0, // same Opportunity LTV as Renewal Outreach
+    }));
+    progress.textContent = done < total ? `Loading ${done} of ${total} agents…` : `Updated ${new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+    render();
   });
-  await Promise.all(workers);
-  if (!roster.length) { renderRows(); renderTotals(); progress.textContent = ''; }
+  if (!roster.length) progress.textContent = '';
+  render();
 })();
 
 (function () {
@@ -381,6 +522,7 @@ document.getElementById('sort-row').addEventListener('click', e => {
     });
   }
 })();
+
 </script>
 </body>
 </html>
