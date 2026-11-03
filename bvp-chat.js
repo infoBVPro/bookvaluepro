@@ -7,15 +7,21 @@
 
   // 'uw' on the Underwriting Assistant page: the bar becomes the UW Assistant and
   // answers only from the underwriting data loaded in BookValuePro.
-  // A page can force a mode with window.BVP_CHAT_MODE = 'uw' | 'book'.
-  const CHAT_MODE = window.BVP_CHAT_MODE || (/uw-assistant/i.test(location.pathname) ? 'uw' : 'book');
+  // 'hhd' on the Household Discount Assistant page: the bar becomes the HHD Assistant and
+  // answers only from the household discount rules loaded in BookValuePro.
+  // A page can force a mode with window.BVP_CHAT_MODE = 'uw' | 'hhd' | 'book'.
+  const CHAT_MODE = window.BVP_CHAT_MODE || (/uw-assistant/i.test(location.pathname) ? 'uw'
+    : /household-discount/i.test(location.pathname) ? 'hhd' : 'book');
   const IS_UW = CHAT_MODE === 'uw';
-  const CHAT_NAME = IS_UW ? 'UW Assistant' : 'BVP Assistant';
+  const IS_HHD = CHAT_MODE === 'hhd';
+  const CHAT_NAME = IS_UW ? 'UW Assistant' : IS_HHD ? 'HHD Assistant' : 'BVP Assistant';
   const CHAT_PLACEHOLDER = IS_UW
     ? 'Ask an underwriting question — e.g. "Does Aetna decline COPD in Texas?"'
+    : IS_HHD ? 'Ask a household discount question — e.g. "Does Humana give a discount for a roommate in Ohio?"'
     : 'Ask about your book, rate increases, regulations…';
   const CHAT_GREETING = IS_UW
     ? "Hi! I'm the UW Assistant. Ask me about a carrier's underwriting rules — conditions, medications, height/weight, lookback periods, where a carrier is offered, or state guaranteed-issue rights. I answer only from the applications and underwriting guides loaded into BookValuePro."
+    : IS_HHD ? "Hi! I'm the HHD Assistant. Ask me about a carrier's household discount — the %, who in the home qualifies (spouse, partner, relatives or roommates), age and 12-month rules, and whether the other person needs a policy too. I answer only from the applications, Outlines of Coverage and underwriting guides loaded into BookValuePro."
     : "Hi! I'm your BVP Assistant. Ask me anything about your Medicare Supplement book of business, carrier rate changes, or state regulations.";
 
   const style = document.createElement('style');
@@ -158,7 +164,13 @@
   let isOpen = false, isLoading = false;
   const history = [];
 
-  const SUGGESTIONS = IS_UW ? [
+  const SUGGESTIONS = IS_HHD ? [
+    'Which carrier has the biggest household discount in Texas?',
+    'Does Humana give a discount for a roommate in Maryland?',
+    'My client lives with her sister, age 62 — who gives a discount in Ohio?',
+    'Does the spouse need a policy with the same company?',
+    'What is Mutual of Omaha\'s household discount in Kansas?',
+  ] : IS_UW ? [
     'Which carriers accept atrial fibrillation?',
     'Does Mutual of Omaha decline COPD in Texas?',
     'What is the cancer lookback for each carrier?',
@@ -248,8 +260,8 @@
     try {
       const { data: { session } } = await bvp.auth.getSession();
       if (!session) throw new Error('Not authenticated');
-      if (IS_UW) {
-        const uwPrompt = await buildUWPrompt(text);
+      if (IS_UW || IS_HHD) {
+        const uwPrompt = IS_HHD ? await buildHHDPrompt(text) : await buildUWPrompt(text);
         const r = await fetch(BVP_CHAT_PROXY, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
@@ -407,10 +419,10 @@ Response guidelines:
   // win over shorter ones inside them ("heart failure" over "heart").
   function uwFindTerms(text, entries) {
     const hits = [];
-    entries.forEach(({ term, key }) => {
+    entries.forEach(({ term, key, anyCase }) => {
       const t = String(term || '').trim();
       if (t.length < 2) return;
-      const short = t.replace(/[^A-Za-z0-9]/g, '').length <= 4;
+      const short = !anyCase && t.replace(/[^A-Za-z0-9]/g, '').length <= 4;
       const re = new RegExp('(^|[^A-Za-z0-9])(' + _uwEsc(t) + ')(?=$|[^A-Za-z0-9])', short ? 'g' : 'gi');
       let m;
       while ((m = re.exec(text))) {
@@ -472,7 +484,7 @@ Response guidelines:
     (data.drugList || []).forEach(d => [d.name, d.generic_name, ..._uwList(d.aliases)]
       .filter(t => t && String(t).replace(/[^A-Za-z]/g, '').length >= 4).forEach(t => drugEntries.push({ term: t, key: d.name })));
     const stateEntries = [];
-    Object.entries(UW_CHAT_STATES).forEach(([code, nm]) => { stateEntries.push({ term: nm, key: code }); stateEntries.push({ term: code, key: code }); });
+    Object.entries(UW_CHAT_STATES).forEach(([code, nm]) => { stateEntries.push({ term: nm, key: code, anyCase: true }); stateEntries.push({ term: code, key: code }); });
     const carrierEntries = uwCarrierTerms(allCarriers);
 
     const find = (t) => ({
@@ -680,6 +692,180 @@ How to answer:
 TODAY'S DATE: ${new Date().toDateString()}
 
 --- UNDERWRITING DATA ---
+${ctx}`;
+  }
+
+
+  // ── HHD ASSISTANT (Household Discount Assistant page) ──────────────────────
+  // Builds the system prompt from the household discount rules loaded in BookValuePro
+  // (uw_household_discounts: from carriers' applications, Outlines of Coverage and
+  // underwriting guides). Finds the carriers, state and household in the question
+  // (falling back to the previous question and the page's form), runs the page's own
+  // check (evaluateCarrier) on the household, and adds the matching rows. The
+  // assistant is told to answer only from this data.
+  let _hhdChatRules = null;
+  async function hhdChatGetRules() {
+    if (typeof loadHHRules === 'function') { try { return await loadHHRules(); } catch (e) { /* fall through */ } }
+    if (!_hhdChatRules) {
+      try { const { data } = await bvp.from('uw_household_discounts').select('*'); _hhdChatRules = data || []; }
+      catch (e) { _hhdChatRules = []; }
+    }
+    return _hhdChatRules;
+  }
+  const _hhdNum = { one: 1, two: 2, three: 3, four: 4, five: 5, a: 1, an: 1 };
+  const _hhdRel = 'sister|brother|son|daughter|friend|roommate|room-mate|housemate|mother|father|mom|dad|parent|aunt|uncle|cousin|niece|nephew|grandchild|granddaughter|grandson|relative|in-law|sibling|adult|boyfriend|girlfriend|companion|partner';
+  // Household details in the question → the page's household fields ({} when none given).
+  function hhdParseHousehold(text) {
+    const h = {};
+    const t = ' ' + text.toLowerCase().replace(/[’']/g, "'") + ' ';
+    if (/domestic partner/.test(t)) h.partner = 'domestic_partner';
+    else if (/civil union/.test(t)) h.partner = 'civil_union';
+    else if (/\b(spouse|spouses|wife|husband|married|couple)\b/.test(t)) h.partner = 'spouse';
+    else if (/\b(single|lives alone|living alone|widow|widowed|widower|divorced|no spouse)\b/.test(t)) h.partner = 'none';
+    const cnt = t.match(new RegExp("\\b(\\d|one|two|three|four|five|a|an)\\s+(?:other\\s+|adult\\s+)?(?:" + _hhdRel + ")s?\\b"));
+    const rel = t.match(new RegExp("\\b(?:her|his|their|a|an|the|with)\\s+(?:adult\\s+)?(" + _hhdRel.replace('|partner', '') + ")s?\\b"));
+    if (cnt && !/^(partner|boyfriend|girlfriend|companion)/.test(cnt[0].split(/\s+/).pop())) h.adults = Math.min(4, isNaN(+cnt[1]) ? (_hhdNum[cnt[1]] || 1) : +cnt[1]);
+    else if (rel) h.adults = 1;
+    if (/\b(boyfriend|girlfriend|companion|partner)\b/.test(t) && !h.partner) { h.adults = (h.adults || 0) + (h.adults ? 0 : 1); h.unmarried = true; }
+    const age = t.match(new RegExp("\\b(?:" + _hhdRel + ")s?[^.?!]{0,25}?\\b(?:age[d]?\\s*|is\\s+|who's\\s+|,\\s*)(\\d{2})\\b"))
+      || t.match(new RegExp("\\b(\\d{2})[- ]?(?:year[- ]old|yr[- ]old|yo)\\s+(?:" + _hhdRel + ")"));
+    if (age) h.adultAge = +age[1];
+    if (/\b(just|recently)\s+moved in\b|\bless than (?:a year|12 months)\b|\b(?:[1-9]|1[01])\s+months?\b/.test(t)) h.together12 = false;
+    else if (/\b(\d+|many|several|a few)\s+years\b|\bover a year\b|\bmore than (?:a year|12 months)\b|\b12\+? months\b/.test(t)) h.together12 = true;
+    if (/\baffiliate/.test(t)) h.policy = 'affiliate';
+    else if (/\b(no policy|doesn't have|does not have|isn't applying|not applying|without a policy|no med supp|other carrier|another carrier|different carrier)\b/.test(t)) h.policy = 'none';
+    else if (/\b(also has|both have|already has|applying together|both apply|both applying|same company|same carrier|is applying|also applying)\b/.test(t)) h.policy = 'same';
+    return h;
+  }
+
+  async function buildHHDPrompt(question) {
+    const rules = await hhdChatGetRules();
+    if (typeof bvpLoadCarriers === 'function') await bvpLoadCarriers();
+    const listed = typeof bvpCarrierList === 'function' ? bvpCarrierList({ includeGeneric: false, uwOnly: true }).map(c => c.name) : [];
+    const allCarriers = [...new Set([...listed, ...rules.map(r => r.carrier)])].filter(Boolean);
+    const disp = c => (typeof bvpCarrierDisplay === 'function' ? bvpCarrierDisplay(c) : c);
+    const prevQ = [...history].reverse().filter(m => m.role === 'user').map(m => m.content)[1] || '';
+    const stateEntries = [];
+    Object.entries(UW_CHAT_STATES).forEach(([code, nm]) => { stateEntries.push({ term: nm, key: code, anyCase: true }); stateEntries.push({ term: code, key: code }); });
+    const carrierEntries = uwCarrierTerms(allCarriers);
+    const find = (t) => ({ carriers: uwFindTerms(t, carrierEntries), states: uwFindTerms(t, stateEntries), hh: hhdParseHousehold(t) });
+    const now = find(question), prev = prevQ ? find(prevQ) : null;
+    const pageCarriers = (typeof selectedCarriers !== 'undefined') ? [...selectedCarriers] : [];
+    const pageState = (document.getElementById('uw-state') || {}).value || '';
+    const refersToForm = /\b(this|the|my)\s+(client|household|case|applicant|form)\b|\bthese\b|\babove\b/i.test(question);
+    const followUp = !!prev && /^\s*(?:(?:what|how)\s+about|and|also|same|ok(?:ay)?,?\s+(?:what|how)\s+about)\b|\b(?:it|that|those|them|this one)\b/i.test(question);
+    let carriers = now.carriers.length ? now.carriers : (followUp ? prev.carriers : []);
+    let carrierBasis = carriers.length ? (now.carriers.length ? 'named in the question' : 'from the previous question') : '';
+    if (!carriers.length && pageCarriers.length && refersToForm) { carriers = pageCarriers; carrierBasis = 'selected on the page'; }
+    if (!carriers.length) { carriers = allCarriers; carrierBasis = 'all carriers (none named)'; }
+    const state = now.states[0] || (followUp ? prev.states[0] : null) || pageState || null;
+    const stName = state ? (UW_CHAT_STATES[state] || state) : null;
+
+    // Household: this question, else the previous one (follow-ups), else the page's form when the question points at it.
+    let hh = Object.keys(now.hh).length ? now.hh : (followUp && prev && Object.keys(prev.hh).length ? prev.hh : {});
+    let hhBasis = Object.keys(now.hh).length ? 'from the question' : (Object.keys(hh).length ? 'from the previous question' : '');
+    const g = id => (document.getElementById(id) || {}).value;
+    if (!Object.keys(hh).length && refersToForm && g('hh-partner') != null) {
+      hh = { partner: g('hh-partner'), adults: +g('hh-adults') || 0, adultAge: +g('hh-adult-age') || 0,
+             together12: typeof together12 !== 'undefined' ? together12 : true, policy: g('hh-policy') };
+      hhBasis = 'from the household entered on the page';
+    }
+
+    const out = [];
+    out.push(`QUESTION SCOPE
+- Carriers: ${carriers.map(disp).join(', ')} (${carrierBasis})
+- State: ${stName ? `${stName} (${state})` : 'none named — rules by state are summarized'}
+- Household: ${Object.keys(hh).length ? JSON.stringify(hh) + ` (${hhBasis})` : 'not described'}`);
+
+    const fmtRow = r => {
+      const rule = typeof hhTierRule === 'function' ? hhTierRule(r) : '';
+      const src = r.source === 'guide' ? 'underwriting guide' : r.source === 'outline' ? 'Outline of Coverage' : 'application';
+      return `- ${disp(r.carrier)} | ${r.state || 'national'}${r.product ? ` | ${r.product}` : ''} | ${r.tier === 'none' || r.offered === false ? 'NO household discount'
+        : `${r.tier} ${r.discount_pct != null ? r.discount_pct + '%' : '% not stated'}`}${rule ? ` | rule: ${rule}` : ''}`
+        + `${r.notes ? ` | notes: ${_uwStrip(r.notes).slice(0, 400)}` : ''}${r.question_text ? ` | ${src} wording: "${_uwStrip(r.question_text).slice(0, 400)}"` : ''}`
+        + ` | source: ${src}${r.form_number ? ` form ${r.form_number}` : ''}${r.underwriter ? `, ${r.underwriter}` : ''}`;
+    };
+
+    if (state) {
+      // Full rules for each carrier in the state (state rows replace the carrier's national rows).
+      const lines = [];
+      carriers.forEach(c => {
+        if (typeof uwNotOffered === 'function' && uwNotOffered(c, state)) { lines.push(`- ${disp(c)} | ${state} | NOT OFFERED in ${stName}`); return; }
+        const all = rules.filter(r => r.carrier === c);
+        const st = all.filter(r => r.state === state);
+        const use = st.length ? st : all.filter(r => !r.state);
+        if (!use.length) { lines.push(`- ${disp(c)} | ${state} | household discount rules NOT LOADED`); return; }
+        use.forEach(r => lines.push(fmtRow(r) + (st.length ? '' : ` (national rule — no ${stName} rule loaded)`)));
+      });
+      out.push(`HOUSEHOLD DISCOUNT RULES — ${stName.toUpperCase()}\n` + lines.join('\n'));
+
+      // The page's own check on the household described.
+      if (Object.keys(hh).length && typeof evaluateCarrier === 'function') {
+        const base = { partner: 'none', adults: 0, adultAge: 0, together12: true, policy: 'none', ...hh };
+        if (base.adults && !base.adultAge) base.adultAge = 0;
+        const scen = hh.policy ? [base] : [{ ...base, policy: 'none' }, { ...base, policy: 'same' }];
+        const res = [];
+        scen.forEach(h => {
+          const label = hh.policy ? '' : (h.policy === 'none' ? ' — if the household member has NO policy with the carrier' : ' — if the household member ALSO has (or applies for) a policy with the same carrier');
+          const lines2 = carriers.map(c => {
+            const e = evaluateCarrier(c, state, h);
+            const one = x => x.status === 'qualifies' ? `qualifies for ${x.best.r.discount_pct}% (${x.best.r.tier})`
+              : x.status === 'noQualify' ? 'does NOT qualify' : x.status === 'none' ? 'no household discount' : x.status === 'notOffered' ? 'not offered in this state' : 'rules not loaded';
+            if (e.products) return `- ${disp(c)}: ${e.products.map(p => `${p.product}: ${one(p)}`).join('; ')}`;
+            return `- ${disp(c)}: ${one(e)}`;
+          });
+          res.push(`HOUSEHOLD CHECK RESULTS${label}\n` + lines2.join('\n'));
+        });
+        out.push(res.join('\n\n') + `\nAssumptions used where the question didn't say: ${[
+          hh.partner == null && 'no spouse or partner', hh.adults == null && 'no other adults', hh.adults && !hh.adultAge && 'other adult\'s age unknown (age rules count as not met)',
+          hh.together12 == null && 'lived together 12+ months', hh.unmarried && 'an unmarried partner/companion counted as a household adult'].filter(Boolean).join('; ') || 'none'}.`);
+      }
+    } else {
+      // No state: each carrier's rules grouped by discount, with the states for each.
+      carriers.forEach(c => {
+        const all = rules.filter(r => r.carrier === c);
+        if (!all.length) { out.push(`${disp(c).toUpperCase()}: household discount rules NOT LOADED`); return; }
+        const nat = all.filter(r => !r.state);
+        const groups = {};
+        all.filter(r => r.state).forEach(r => {
+          const rule = typeof hhTierRule === 'function' ? hhTierRule(r) : '';
+          const k = `${r.product ? r.product + ' | ' : ''}${r.tier === 'none' || r.offered === false ? 'NO household discount' : `${r.tier} ${r.discount_pct != null ? r.discount_pct + '%' : '% not stated'}`}${rule ? ` | ${rule}` : ''}`;
+          (groups[k] = groups[k] || []).push(r.state);
+        });
+        const gl = Object.entries(groups).sort((a, b) => b[1].length - a[1].length).map(([k, sts]) => `- ${k} | states: ${[...new Set(sts)].sort().join(', ')}`);
+        out.push(`${disp(c).toUpperCase()} — HOUSEHOLD DISCOUNT BY STATE`
+          + (gl.length ? '\n' + gl.join('\n') : '')
+          + (nat.length ? '\nNational rule (states without their own rule):\n' + nat.map(fmtRow).join('\n') : ''));
+      });
+      out.push('NOTE: No state was named. Household discounts vary by state — if the answer depends on the state, give the rule per state above or ask which state.');
+    }
+
+    let ctx = out.join('\n\n');
+    if (ctx.length > 90000) ctx = ctx.slice(0, 90000) + '\n…(trimmed)';
+
+    return `You are HHD Assistant, the household discount helper inside BookValuePro's Household Discount Assistant page, used by Medicare Supplement agents.
+
+ANSWER ONLY FROM THE HOUSEHOLD DISCOUNT DATA BELOW. It comes from the carriers' applications, Outlines of Coverage and underwriting guides loaded into BookValuePro. Do not use outside knowledge about any carrier's discounts, and never guess a percentage or rule. If the data doesn't answer the question, say it isn't loaded in BookValuePro yet (and which carrier/state is missing) and suggest checking with the carrier.
+
+Scope: Medicare Supplement household discounts only — the %, who in the home qualifies (spouse, civil union or domestic partner, relatives or roommates), age and 12-month living-together rules, whether the other person must also have or apply for a policy (same company or an affiliate), and when the discount ends. If asked about underwriting, the agent's book of business, rate increases or anything else, say that this assistant answers household discount questions and the UW Assistant or BVP Assistant on the other pages can help with that.
+
+How to read the data:
+- Each rule line: carrier | state (or national) | product (when a carrier has more than one product in the state, e.g. Humana Traditional and Achieve) | tier and % | rule | notes | source.
+- "NO household discount" = the carrier has none in that state. NOT OFFERED = the carrier doesn't sell Medicare Supplement there. NOT LOADED = no rules in BookValuePro yet — never present that as "no discount".
+- A state's own rule replaces the carrier's national rule.
+- "HOUSEHOLD CHECK RESULTS" is the same check the page runs for the household described; trust it over your own reading of the rules. When two scenarios are given (with and without the household member's policy), give both.
+- Discounts don't stack: a multi-policy % is the total.
+
+How to answer:
+- Short and direct; lead with the answer per carrier (and per product when there are two). Name the state.
+- Briefly cite where it comes from when useful (e.g. "Humana's Maryland Outline of Coverage…", "Mutual of Omaha's Texas application…").
+- Mention any assumption you relied on (e.g. lived together 12+ months).
+- Plain text only — no markdown symbols like ** or #. Use short lines starting with "- " for lists.
+- If the question is unclear (no state when the answer depends on it), ask one short clarifying question.
+
+TODAY'S DATE: ${new Date().toDateString()}
+
+--- HOUSEHOLD DISCOUNT DATA ---
 ${ctx}`;
   }
 
