@@ -324,6 +324,12 @@ body { padding-left: 64px; }
 .hh-tier b { font-weight: 600; }
 .hh-tier .ri-notes { display: block; color: var(--text-muted); font-size: 11.5px; margin-top: 2px; }
 .hh-pct { font-family: var(--serif); font-size: 26px; color: var(--accept); line-height: 1; }
+.result-products-intro { font-size: 13px; color: var(--text-muted); margin-bottom: 10px; }
+.result-product { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
+.result-product:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+.result-product-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.result-product-name { font-size: 14px; font-weight: 600; color: var(--deep); }
+.result-product-head .result-badge { font-size: 12px; }
 .hh-q { font-size: 11.5px; color: var(--text-muted); margin-top: 10px; line-height: 1.5; }
 .uw-field select.uw-select:disabled { opacity: .5; }
 </style>
@@ -636,8 +642,23 @@ function evaluateCarrier(carrier, state, h) {
   const all = (hhRules || []).filter(r => r.carrier === carrier);
   const stateRows = all.filter(r => r.state === state);
   const rows = stateRows.length ? stateRows : all.filter(r => !r.state);
+  // A carrier with more than one product in this state (e.g. Humana Traditional and Achieve), each with its own
+  // household rules: evaluate each product separately. Rows with no product apply to every product.
+  const PRODUCT_ORDER = ['Traditional', 'Achieve'];
+  const products = [...new Set(rows.map(r => r.product).filter(Boolean))]
+    .sort((x, y) => ((PRODUCT_ORDER.indexOf(x) + 1) || 99) - ((PRODUCT_ORDER.indexOf(y) + 1) || 99) || x.localeCompare(y));
+  if (products.length > 1) {
+    const rank = { qualifies: 0, noQualify: 1, none: 2 };
+    const per = products.map(p => Object.assign({ product: p },
+      evaluateRows(carrier, rows.filter(r => !r.product || r.product === p), stateRows.length ? state : null, h)));
+    const best = per.slice().sort((a, b) => rank[a.status] - rank[b.status] || ((b.best && b.best.r.discount_pct) || 0) - ((a.best && a.best.r.discount_pct) || 0))[0];
+    return Object.assign({}, best, { products: per });
+  }
+  return evaluateRows(carrier, rows, stateRows.length ? state : null, h);
+}
+function evaluateRows(carrier, rows, ruleState, h) {
   if (!rows.length) return { carrier, status: 'noData' };
-  if (rows.every(r => r.tier === 'none' || r.offered === false)) return { carrier, status: 'none', rows };
+  if (rows.every(r => r.tier === 'none' || r.offered === false)) return { carrier, status: 'none', rows, ruleState };
   const tiers = rows.filter(r => r.tier !== 'none').map(r => {
     const household = rows.find(x => x.tier === 'household');
     const member = r.tier === 'multi_policy' && r.requires_household_tier && household ? hhMemberOK(household, h) : hhMemberOK(r, h);
@@ -645,7 +666,7 @@ function evaluateCarrier(carrier, state, h) {
     return { r, ok: member && policy, member, policy };
   }).sort((a, b) => (a.r.discount_pct || 0) - (b.r.discount_pct || 0));
   const best = tiers.filter(t => t.ok).sort((a, b) => (b.r.discount_pct || 0) - (a.r.discount_pct || 0))[0] || null;
-  return { carrier, status: best ? 'qualifies' : 'noQualify', best, tiers, rows, ruleState: stateRows.length ? state : null };
+  return { carrier, status: best ? 'qualifies' : 'noQualify', best, tiers, rows, ruleState };
 }
 
 async function runHHCheck() {
@@ -681,25 +702,39 @@ function renderHH(results, state, h) {
       </div>`;
     if (res.status === 'notOffered') return card('none', `— Not Offered${uwTip('notOffered')}`, `<div class="result-clean">${_hhEsc(name)} does not currently offer Medicare Supplement in ${stName}.</div>`);
     if (res.status === 'noData') return card('none', `— Not loaded${uwTip('noData')}`, `<div class="result-clean">Household discount rules for ${_hhEsc(name)} aren't loaded yet.</div>`);
-    const r0 = res.rows[0];
-    const fromGuide = r0.source === 'guide';
-    const fromOutline = r0.source === 'outline';
-    const src = res.ruleState && !fromGuide
-      ? `Based on ${_hhEsc(name)}'s ${stName} ${fromOutline ? 'Outline of Coverage' : 'application'}${r0.form_number || r0.underwriter ? ` (${[r0.form_number && 'form ' + _hhEsc(r0.form_number), r0.underwriter && 'issued by ' + _hhEsc(r0.underwriter)].filter(Boolean).join(', ')})` : ''}.`
-      : `Based on ${_hhEsc(name)}'s underwriting guide${res.ruleState ? ` (${stName} rules)` : ''}.`;
-    const q = r0.question_text ? `<div class="hh-q">${res.ruleState && !fromGuide ? (fromOutline ? 'Outline of Coverage says' : 'Application asks') : 'Guide says'}: “${_hhEsc(r0.question_text)}”</div>` : '';
-    if (res.status === 'none') return card('none', `— No household discount${uwTip('noDiscount')}`, `<div class="result-clean">${_hhEsc(name)} has no household discount in ${stName}.</div><div class="result-source">${src}</div>`);
-    const lines = res.tiers.map(t => {
-      const why = !t.member ? 'The household doesn\'t meet this requirement.' : (!t.policy && h.policy === 'affiliate' && t.r.other_policy_scope === 'same_company' ? 'The other policy must be with the same company — an affiliate doesn\'t count here.' : '');
-      return `<div class="hh-tier ${t.ok ? 'yes' : 'no'}"><span class="ri-icon">${t.ok ? '✓' : '–'}</span><span><b>${hhTierLabel(t.r)} — ${t.r.discount_pct != null ? t.r.discount_pct + '%' : '% not stated'}</b><span class="ri-notes">${_hhEsc(hhTierRule(t.r))}${!t.ok && why ? ' ' + why : ''}${t.r.notes && !(t.r.tier === 'multi_policy' && t.r.requires_household_tier) ? '<br>' + _hhEsc(t.r.notes) : ''}</span></span></div>`;
-    }).join('');
-    // Upsell hint: qualifies for a lower tier but a higher one is one step away (household member's policy).
-    const higher = res.tiers.filter(t => !t.ok && t.member && !t.policy && (t.r.discount_pct || 0) > ((res.best && res.best.r.discount_pct) || 0)).pop();
-    const hint = higher && h.policy === 'none' ? `<div class="hh-tier hint"><span class="ri-icon">!</span><span>Up to <b>${higher.r.discount_pct}%</b> if the household member also has, or applies for, a ${_hhEsc(name)} Medicare Supplement.</span></div>` : '';
-    const badge = res.status === 'qualifies' ? `✓ ${res.best.r.discount_pct}% discount${uwTip('qualifies')}` : `– No discount${uwTip('noQualify')}`;
-    return card(res.status === 'qualifies' ? 'accept' : 'none', badge,
-      `<div class="result-list">${lines}${hint}</div>${q}<div class="result-source">${src}</div>`);
+    if (res.products) {
+      const secs = res.products.map(p => {
+        const s = hhBody(p, name, stName, h);
+        return `<div class="result-product"><div class="result-product-head"><span class="result-product-name">${_hhEsc(name)} ${_hhEsc(p.product)}</span><span class="result-badge ${s.cls}">${s.badge}</span></div>${s.body}</div>`;
+      }).join('');
+      const top = hhBody(res, name, stName, h);
+      const intro = `<div class="result-products-intro">${_hhEsc(name)} sells ${res.products.length} Medicare Supplement products in ${stName}, each with its own household discount — results for each:</div>`;
+      return card(top.cls, res.status === 'qualifies' ? `✓ Best: ${res.best.r.discount_pct}% (${_hhEsc(res.product)})${uwTip('qualifies')}` : top.badge, intro + secs);
+    }
+    const s = hhBody(res, name, stName, h);
+    return card(s.cls, s.badge, s.body);
   }).join('');
+}
+
+function hhBody(res, name, stName, h) {
+  const r0 = res.rows[0];
+  const prod = res.product || r0.product || '';
+  const fromGuide = r0.source === 'guide';
+  const fromOutline = r0.source === 'outline';
+  const src = res.ruleState && !fromGuide
+    ? `Based on ${_hhEsc(name)}'s ${stName}${prod ? ' ' + _hhEsc(prod) : ''} ${fromOutline ? 'Outline of Coverage' : 'application'}${r0.form_number || r0.underwriter ? ` (${[r0.form_number && 'form ' + _hhEsc(r0.form_number), r0.underwriter && 'issued by ' + _hhEsc(r0.underwriter)].filter(Boolean).join(', ')})` : ''}.`
+    : `Based on ${_hhEsc(name)}'s underwriting guide${res.ruleState ? ` (${stName} rules)` : ''}.`;
+  const q = r0.question_text ? `<div class="hh-q">${res.ruleState && !fromGuide ? (fromOutline ? 'Outline of Coverage says' : 'Application asks') : 'Guide says'}: “${_hhEsc(r0.question_text)}”</div>` : '';
+  if (res.status === 'none') return { cls: 'none', badge: `— No household discount${uwTip('noDiscount')}`, body: `<div class="result-clean">${_hhEsc(name)}${prod ? ' ' + _hhEsc(prod) : ''} has no household discount in ${stName}.</div><div class="result-source">${src}</div>` };
+  const lines = res.tiers.map(t => {
+    const why = !t.member ? 'The household doesn\'t meet this requirement.' : (!t.policy && h.policy === 'affiliate' && t.r.other_policy_scope === 'same_company' ? 'The other policy must be with the same company — an affiliate doesn\'t count here.' : '');
+    return `<div class="hh-tier ${t.ok ? 'yes' : 'no'}"><span class="ri-icon">${t.ok ? '✓' : '–'}</span><span><b>${hhTierLabel(t.r)} — ${t.r.discount_pct != null ? t.r.discount_pct + '%' : '% not stated'}</b><span class="ri-notes">${_hhEsc(hhTierRule(t.r))}${!t.ok && why ? ' ' + why : ''}${t.r.notes && !(t.r.tier === 'multi_policy' && t.r.requires_household_tier) ? '<br>' + _hhEsc(t.r.notes) : ''}</span></span></div>`;
+  }).join('');
+  // Upsell hint: qualifies for a lower tier but a higher one is one step away (household member's policy).
+  const higher = res.tiers.filter(t => !t.ok && t.member && !t.policy && (t.r.discount_pct || 0) > ((res.best && res.best.r.discount_pct) || 0)).pop();
+  const hint = higher && h.policy === 'none' ? `<div class="hh-tier hint"><span class="ri-icon">!</span><span>Up to <b>${higher.r.discount_pct}%</b> if the household member also has, or applies for, a ${_hhEsc(name)} Medicare Supplement.</span></div>` : '';
+  const badge = res.status === 'qualifies' ? `✓ ${res.best.r.discount_pct}% discount${uwTip('qualifies')}` : `– No discount${uwTip('noQualify')}`;
+  return { cls: res.status === 'qualifies' ? 'accept' : 'none', badge, body: `<div class="result-list">${lines}${hint}</div>${q}<div class="result-source">${src}</div>` };
 }
 
 // ── TOOLTIPS ──────────────────────────────────────────────────────────
