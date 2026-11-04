@@ -786,7 +786,7 @@ function renderCalendar(){
           </div>
         </div>
         <div class="month-header-right">
-          ${ssLift>0?`<span class="month-opp">+${fmtK(ssLift)} LTV opp.</span>`:''}
+          ${ssLift>0?`<span class="month-opp bvp-money">+${fmtK(ssLift)} LTV opp.</span>`:''}
           <span class="chevron">▾</span>
         </div>
       </div>
@@ -807,9 +807,9 @@ function buildTable(m){
     <th>Client</th>${AGENCY_MODE?'<th>Agent</th>':''}<th>Carrier</th><th>State</th>
     <th title="State guaranteed-issue right">State GI Right</th>
     <th class="num">Age</th>
-    <th class="num">Current premium</th><th class="num">Current LTV</th>
+    <th class="num">Current premium</th><th class="num bvp-money">Current LTV</th>
     <th class="num">Duration</th><th class="num">Est. mo. savings</th>
-    <th class="num">Opportunity LTV</th>
+    <th class="num bvp-money">Opportunity LTV</th>
     <th>GI Window</th><th title="Last day to submit an underwritten app — 30 days before the GI window opens">Underwrite By</th>
     <th>Contact</th><th>Actions</th>
   </tr></thead>`;
@@ -826,10 +826,10 @@ function buildTable(m){
       <td>${giRightCell(p.gi)}</td>
       <td class="num"><span class="dur-badge">${p.age ?? '—'}</span></td>
       <td class="num">${fmt$(p.currPrem)}/mo</td>
-      <td class="num">${fmt$(p.currNPV)}</td>
+      <td class="num bvp-money">${fmt$(p.currNPV)}</td>
       <td class="num"><span class="dur-badge">Yr ${p.duration}</span></td>
       <td class="num"><span class="sav-val">${fmt$(liveMonSav(p))}/mo</span></td>
-      <td class="num"><span class="opp-val">${fmt$(p.renNPV)}</span>${p.gi&&p.gi.hasRight&&p.giRenNPV!=null?`<span class="gi-only" title="Same switch written under the state GI right">GI only: ${fmt$(p.giRenNPV)}</span>`:''}</td>
+      <td class="num bvp-money"><span class="opp-val">${fmt$(p.renNPV)}</span>${p.gi&&p.gi.hasRight&&p.giRenNPV!=null?`<span class="gi-only" title="Same switch written under the state GI right">GI only: ${fmt$(p.giRenNPV)}</span>`:''}</td>
       <td>${giWindowCell(p.gi)}</td>
       <td>${giUnderwriteCell(p.gi)}</td>
       <td>${p.phone?`<a class="contact-link" href="tel:${p.phone}">${p.phone}</a>`:''}${p.phone&&p.email?' · ':''}${p.email?`<a class="contact-link" href="mailto:${p.email}">${p.email}</a>`:''} ${!p.phone&&!p.email?'<span class="no-contact">—</span>':''}</td>
@@ -926,8 +926,8 @@ Cohort: ${cohort}
 Current monthly premium: $${p.currPrem?.toFixed(2) || 'N/A'}
 Estimated monthly savings if they switch: $${moSav}
 Estimated annual savings: $${annSav}
-Opportunity LTV: $${Math.round(p.renNPV || 0).toLocaleString()}
-Policy duration: Year ${p.duration || 'N/A'}${p.gi && p.gi.hasRight ? `
+${window.BVP_LOA ? '' : `Opportunity LTV: $${Math.round(p.renNPV || 0).toLocaleString()}
+`}Policy duration: Year ${p.duration || 'N/A'}${p.gi && p.gi.hasRight ? `
 State GI right: ${p.gi.ruleName} — ${bvpGIStatusText(p.gi)}. (Agent note: aim to complete an underwritten application before the GI window opens; do not mention commissions to the client.)` : ''}`;
 }
 

@@ -182,6 +182,7 @@ body { padding-left: 64px; }
 
   <section class="card hidden" id="sender-profile">
     <div class="card-label">Email sender profile</div>
+    <p style="font-size:13px;color:var(--text-muted);margin:-6px 0 12px;">Your NPN, license states and renewal dates are on <a href="bookvaluepro-profile-setup.html?next=bookvaluepro-account.html" style="color:var(--forest);font-weight:600;">Licensing details</a>.</p>
     <p class="plan-sub" style="margin-bottom:1rem;">Used on outreach emails you send to clients. Clients see your name as the sender, and their replies go to your reply-to email. Federal anti-spam law (CAN-SPAM) requires a mailing address on every marketing email.</p>
     <div class="sp-grid">
       <div class="sp-field"><label for="sp-name">Your name, as clients see it</label><input id="sp-name" maxlength="80" placeholder="Sarah Miller"/></div>
@@ -338,8 +339,8 @@ async function upgradeToAgency() {
     const { data: { session } } = await bvp.auth.getSession();
     _bvpAccessCache = null;
     await render(session);
-    showBanner('info', `You're now on the Agency plan. <a href="${BVP_TEAM_PAGE}" style="color:inherit;font-weight:600;">Invite your team →</a>`);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Next: tell us about the agency and how the team works.
+    location.href = BVP_AGENCY_SETUP_PAGE;
   } catch (e) {
     err.textContent = e.message; err.classList.add('show');
     btn.disabled = false; btn.textContent = 'Upgrade';
@@ -475,6 +476,8 @@ async function saveSenderProfile() {
       }
     }
     if (done(access)) {
+      // New agency: go straight to agency setup.
+      if (access.reason === 'agency_owner') { location.href = BVP_AGENCY_SETUP_PAGE; return; }
       showBanner('info', `You're all set. Your ${BVP_TRIAL_MONTHS}-month free trial has started. <a href="bookvaluepro-upload.html" style="color:inherit;font-weight:600;">Upload your book →</a>`);
     } else {
       showBanner('warn', 'Your payment details were received, but your plan is still being set up. Please refresh this page in a minute.');

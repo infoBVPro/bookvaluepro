@@ -869,7 +869,7 @@ body { padding-left: 64px; }
                 <rect x="4" y="1" width="2" height="6" rx="1" fill="currentColor"/>
               </svg>
             </span></span></th>
-          <th onclick="sortBy('comm_prem')" id="th-comm_prem"><span class="th-inner">Comm. Premium<span class="sort-icon">
+          <th onclick="sortBy('comm_prem')" id="th-comm_prem" class="bvp-money"><span class="th-inner">Comm. Premium<span class="sort-icon">
               <svg class="icon-bars" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <rect x="0" y="0"  width="10" height="2.2" rx="1" fill="currentColor" opacity="0.9"/>
                 <rect x="0" y="3.6" width="7.5" height="2.2" rx="1" fill="currentColor" opacity="0.7"/>
@@ -885,7 +885,7 @@ body { padding-left: 64px; }
                 <rect x="4" y="1" width="2" height="6" rx="1" fill="currentColor"/>
               </svg>
             </span></span></th>
-          <th onclick="sortBy('curr_npv')" id="th-curr_npv"><span class="th-inner">LTV<span class="sort-icon">
+          <th onclick="sortBy('curr_npv')" id="th-curr_npv" class="bvp-money"><span class="th-inner">LTV<span class="sort-icon">
               <svg class="icon-bars" width="10" height="13" viewBox="0 0 10 13" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <rect x="0" y="0"  width="10" height="2.2" rx="1" fill="currentColor" opacity="0.9"/>
                 <rect x="0" y="3.6" width="7.5" height="2.2" rx="1" fill="currentColor" opacity="0.7"/>
@@ -1144,8 +1144,8 @@ function renderTable() {
       <td>${c.eff_month ? monthName(c.eff_month) : '—'}</td>
       <td>Yr ${c.duration_yr || '—'}</td>
       <td class="premium-val">${c.curr_prem ? '$' + c.curr_prem.toFixed(2) : '—'}</td>
-      <td class="premium-val">${c.comm_prem ? '$' + c.comm_prem.toFixed(2) : '—'}</td>
-      <td class="npv-val">${c.curr_npv != null ? '$' + Math.round(c.curr_npv).toLocaleString() : '—'}</td>
+      <td class="premium-val bvp-money">${c.comm_prem ? '$' + c.comm_prem.toFixed(2) : '—'}</td>
+      <td class="npv-val bvp-money">${c.curr_npv != null ? '$' + Math.round(c.curr_npv).toLocaleString() : '—'}</td>
       <td class="contact-cell">${contactCell(c)}</td>
     </tr>
   `).join('');
@@ -1229,8 +1229,8 @@ function giPanelSection(c) {
       <div class="field-group"><div class="field-label">Rule</div><div class="field-value">${gi.state} — ${gi.ruleName}</div></div>
       <div class="field-group"><div class="field-label">GI Window</div><div class="field-value mono">${bvpGIWindowLabel(gi)}</div></div>
       ${dated ? `<div class="field-group"><div class="field-label">Underwrite By</div><div class="field-value mono">${bvpGIFmtDate(gi.underwriteBy)}</div></div>` : ''}
-      <div class="field-group"><div class="field-label">Renewal LTV if written as GI</div><div class="field-value mono">${fmtNPV(c.gi_ren_npv)}</div></div>
-      <div class="field-group"><div class="field-label">Commission at stake</div><div class="field-value mono">${gi.sameCommission ? 'None (same commission)' : fmtNPV(gi.commissionAtStake)}</div></div>
+      <div class="field-group bvp-money"><div class="field-label">Renewal LTV if written as GI</div><div class="field-value mono">${fmtNPV(c.gi_ren_npv)}</div></div>
+      <div class="field-group bvp-money"><div class="field-label">Commission at stake</div><div class="field-value mono">${gi.sameCommission ? 'None (same commission)' : fmtNPV(gi.commissionAtStake)}</div></div>
       <div class="field-group"><div class="field-label">Plans</div><div class="field-value">${gi.planNote}</div></div>
       <div class="field-group"><div class="field-label">Carriers</div><div class="field-value">${gi.scopeNote}</div></div>
     </div>
@@ -1381,7 +1381,7 @@ function renderPanel() {
           <div class="field-label">Current Premium</div>
           <div class="field-value mono">${fmt$(c.curr_prem)}</div>
         </div>
-        <div class="field-group">
+        <div class="field-group bvp-money">
           <div class="field-label">Comm. Premium</div>
           <div class="field-value mono">${fmt$(c.comm_prem)}</div>
         </div>
@@ -1393,11 +1393,11 @@ function renderPanel() {
     <div class="panel-section">
       <div class="panel-section-title">Financial</div>
       <div class="field-grid">
-        <div class="field-group">
+        <div class="field-group bvp-money">
           <div class="field-label">Current LTV</div>
           <div class="field-value mono highlight">${fmtNPV(c.curr_npv)}</div>
         </div>
-        <div class="field-group">
+        <div class="field-group bvp-money">
           <div class="field-label">Renewal LTV</div>
           <div class="field-value mono highlight">${fmtNPV(c.ren_npv)}
             ${c.ren_carrier ? `<span class="ren-npv-agent">Agent</span>` : ''}
@@ -1649,6 +1649,10 @@ function runExport() {
       '', '',
     ]);
 
+    // LOA agents: no commission-based columns (Comm. Premium, LTVs).
+    var MONEY_COLS = [13, 14, 15, 19];
+    if (window.BVP_LOA) ws_data.forEach(function (row) { MONEY_COLS.forEach(function (i) { if (i < row.length) row[i] = ''; }); });
+
     var ws = XLSX.utils.aoa_to_sheet(ws_data);
 
     ws['!cols'] = [
@@ -1659,6 +1663,8 @@ function runExport() {
       {wch:14},{wch:14},
       {wch:26},{wch:16}
     ];
+
+    if (window.BVP_LOA) MONEY_COLS.forEach(function (i) { ws['!cols'][i] = Object.assign({}, ws['!cols'][i] || {}, { hidden: true }); });
 
     ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft' };
 

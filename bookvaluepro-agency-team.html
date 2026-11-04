@@ -184,7 +184,7 @@ body { padding-left: 64px; }
 <main class="page">
   <div class="eyebrow">Agency</div>
   <h1 id="agency-name">Team</h1>
-  <p class="sub">Invite agents and office staff to your agency. Each person gets their own login, and their license is covered by your plan. After someone joins, you can make them an Admin.</p>
+  <p class="sub">Invite agents and office staff to your agency. Each person gets their own login, and their license is covered by your plan. After someone joins, you can make them an Admin. <a href="bookvaluepro-agency-setup.html" style="color:var(--forest);font-weight:600;">Agency details &amp; defaults</a></p>
 
   <div id="loading" class="loading">Loading your team…</div>
 
@@ -205,6 +205,7 @@ body { padding-left: 64px; }
         <input id="invite-email" type="email" placeholder="agent@example.com" autocomplete="off"/>
         <button class="btn btn-primary" id="invite-btn" onclick="sendInvite()">Send invite</button>
       </div>
+      <div id="invite-terms" style="margin-top:14px;"></div>
       <div class="msg" id="invite-msg"></div>
       <div class="linkbox" id="linkbox">
         <p id="linkbox-text"></p>
@@ -224,7 +225,8 @@ body { padding-left: 64px; }
       <div class="card-label">Team members</div>
       <div id="members"></div>
       <p class="meter-note"><strong>Admins</strong> (for example an office administrator) see every agent's clients and the Agency Overview, and can send renewal emails for any client. Each email goes out under that client's own agent. Only you can invite or remove people, change roles, or manage billing. An admin uses a license like any other member.</p>
-      <p class="meter-note">When you remove someone, you choose whether their clients move to another team member or stay with them. Nothing is deleted either way.</p>
+      <p class="meter-note"><strong>LOA</strong> agents see their clients, schedule and outreach, but not book value or commissions. <strong>Contracted</strong> agents see everything, including their share after the agency's.</p>
+      <p class="meter-note">When you remove a Contracted agent, you choose whether their clients move to another team member or stay with them. An LOA agent's clients always move to someone on your team. Nothing is deleted either way.</p>
     </section>
   </div>
 </main>
@@ -237,7 +239,7 @@ body { padding-left: 64px; }
       <span>Move their clients to
         <select id="rm-to" onclick="document.querySelector('input[name=rm-dest][value=move]').checked=true;rmChanged()"></select>
         <small>Their clients, older book versions, leads and do-not-email list move to this person. Any emails still scheduled under the removed person's name are cancelled.</small></span></label>
-    <label class="opt"><input type="radio" name="rm-dest" value="keep" onchange="rmChanged()">
+    <label class="opt" id="rm-keep"><input type="radio" name="rm-dest" value="keep" onchange="rmChanged()">
       <span>Let them keep their clients
         <small>Their book stays in their own account. Your agency no longer sees it.</small></span></label>
     <div class="msg error" id="rm-err"></div>
@@ -248,8 +250,24 @@ body { padding-left: 64px; }
   </div>
 </div>
 
+<div class="overlay" id="terms-overlay">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="tm-title" style="max-width:600px;max-height:92vh;overflow:auto;">
+    <h2 id="tm-title">Setup</h2>
+    <p id="tm-text"></p>
+    <div id="tm-form"></div>
+    <div class="msg error" id="tm-err"></div>
+    <div class="dialog-actions">
+      <button class="btn btn-ghost" onclick="closeTerms()">Cancel</button>
+      <button class="btn btn-primary" id="tm-go" onclick="saveTerms()">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 let me = null;
+let memberTerms = {};   // user_id → terms row
+let pendingTerms = {};  // email → pending terms row
+let settings = null;
 let agency = null;
 let roster = [];
 let invites = [];
@@ -269,7 +287,7 @@ function showLink(result) {
   document.getElementById('linkbox-url').value = result.link;
   document.getElementById('linkbox-text').textContent = result.emailed
     ? `Invite emailed to ${result.email}. You can also copy the link below and send it yourself.`
-    : `Email isn't set up yet, so copy this link and send it to ${result.email} yourself. It works once and expires in 7 days.`;
+    : `Email isn't set up yet, so copy this link and send it to ${result.email} yourself. It works once and expires in ${settings ? settings.invite_expiry_days : '—'} days.`;
   box.classList.add('show');
 }
 
@@ -289,19 +307,20 @@ function renderLicenses() {
   fill.style.width = Math.min(100, used / p.includedLicenses * 100) + '%';
   fill.classList.toggle('over', extra > 0);
   document.getElementById('lic-note').textContent = extra > 0
-    ? `You're using ${extra} license${extra === 1 ? '' : 's'} beyond the 10 included, at ${fmtMoney(p.extraLicense)}/month each.`
-    : `You can add ${p.includedLicenses - used} more agent${p.includedLicenses - used === 1 ? '' : 's'} at no extra cost. Each agent beyond 10 adds ${fmtMoney(p.extraLicense)}/month.`;
+    ? `You're using ${extra} license${extra === 1 ? '' : 's'} beyond the ${p.includedLicenses} included, at ${fmtMoney(p.extraLicense)}/month each.`
+    : `You can add ${p.includedLicenses - used} more agent${p.includedLicenses - used === 1 ? '' : 's'} at no extra cost. Each agent beyond ${p.includedLicenses} adds ${fmtMoney(p.extraLicense)}/month.`;
 }
 
 function renderInvites() {
   const el = document.getElementById('invites');
   if (!invites.length) { el.innerHTML = '<div class="empty">No pending invites.</div>'; return; }
   const now = new Date();
-  el.innerHTML = `<table><thead><tr><th>Email</th><th>Sent</th><th>Status</th><th></th></tr></thead><tbody>${
+  el.innerHTML = `<table><thead><tr><th>Email</th><th>Setup</th><th>Sent</th><th>Status</th><th></th></tr></thead><tbody>${
     invites.map(i => {
       const expired = new Date(i.expires_at) < now;
       return `<tr>
         <td class="email">${esc(i.email)}</td>
+        <td style="font-size:12.5px;color:var(--text-muted);">${esc(pendingTerms[i.email] ? bvpTermsSummary(pendingTerms[i.email]) : 'Agency default')}</td>
         <td>${fmtDate(i.created_at)}</td>
         <td>${expired ? '<span class="chip amber">Expired</span>' : `<span class="chip grey">Expires ${fmtDate(i.expires_at)}</span>`}</td>
         <td class="actions">
@@ -313,7 +332,7 @@ function renderInvites() {
 
 function renderMembers() {
   const el = document.getElementById('members');
-  el.innerHTML = `<table><thead><tr><th>Member</th><th>Role</th><th>Joined</th><th></th></tr></thead><tbody>${
+  el.innerHTML = `<table><thead><tr><th>Member</th><th>Role</th><th>Setup</th><th>Joined</th><th></th></tr></thead><tbody>${
     roster.map(m => {
       const isOwner = m.role === 'owner';
       const id = esc(m.user_id);
@@ -323,6 +342,7 @@ function renderMembers() {
           : `<select class="role-sel" data-id="${id}" onchange="changeRole(this)" aria-label="Role for ${esc(m.email)}">
                <option value="agent" ${m.role === 'agent' ? 'selected' : ''}>Agent</option>
                <option value="admin" ${m.role === 'admin' ? 'selected' : ''}>Admin</option></select>`}</td>
+        <td style="font-size:12.5px;color:var(--text-muted);">${isOwner ? 'Owner' : `${esc(bvpTermsSummary(memberTerms[m.user_id]))}<br><button class="btn-sm" style="margin-top:4px;" data-id="${id}" onclick="openTerms(this.dataset.id)">Edit</button>`}</td>
         <td>${fmtDate(m.joined_at)}</td>
         <td class="actions">
           ${isOwner ? '' : `<a class="btn-sm" href="bookvaluepro-dashboard.html?agent=${encodeURIComponent(m.user_id)}">View book</a>
@@ -331,8 +351,24 @@ function renderMembers() {
     }).join('')}</tbody></table>`;
 }
 
+async function loadTerms() {
+  const [{ data: mt, error: e1 }, { data: pt, error: e2 }] = await Promise.all([
+    bvp.from('agency_member_terms').select('*').eq('agency_id', agency.id).is('carrier', null),
+    bvp.from('agency_pending_terms').select('*').eq('agency_id', agency.id),
+  ]);
+  if (e1 || e2) console.warn('terms:', (e1 || e2).message);
+  memberTerms = Object.fromEntries((mt || []).map(t => [t.user_id, t]));
+  pendingTerms = Object.fromEntries((pt || []).map(t => [t.email, t]));
+}
+
+function renderInviteTerms() {
+  const values = bvpAgencyDefaultTerms(agency);
+  document.getElementById('invite-terms').innerHTML = bvpTermsFormHTML('it', { values, modelQuestion: 'How is this person set up?' });
+  bvpTermsFormInit('it', values);
+}
+
 async function reload() {
-  [roster, invites] = await Promise.all([bvpGetAgencyRoster(), bvpGetAgencyInvites(agency.id)]);
+  [roster, invites] = await Promise.all([bvpGetAgencyRoster(), bvpGetAgencyInvites(agency.id), loadTerms()]);
   renderLicenses(); renderInvites(); renderMembers();
 }
 
@@ -341,14 +377,18 @@ async function sendInvite() {
   const email = input.value.trim().toLowerCase();
   document.getElementById('linkbox').classList.remove('show');
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setMsg('Please enter a valid email address.', 'error'); return; }
+  const tr = bvpTermsFormRead('it');
+  if (!tr.ok) { setMsg(tr.error, 'error'); return; }
   if (roster.length >= BVP_PRICING.agency.includedLicenses && !invites.some(i => i.email === email)) {
     setMsg(`Heads up: once this agent joins, your plan goes to ${fmtMoney(bvpAgencyMonthly(roster.length + 1))}/month.`, 'ok');
   } else setMsg('', '');
   const btn = document.getElementById('invite-btn');
   btn.disabled = true; btn.textContent = 'Sending…';
   try {
+    await bvpSavePendingTerms(agency.id, email, tr.terms, me.id);
     const result = await bvpAgencyAction('invite', { email });
     input.value = '';
+    renderInviteTerms();
     showLink(result);
     await reload();
   } catch (e) { setMsg(e.message, 'error'); }
@@ -387,6 +427,9 @@ function openRemove(id) {
   const others = roster.filter(m => m.user_id !== id);
   document.getElementById('rm-to').innerHTML = others.map(m => `<option value="${esc(m.user_id)}">${esc(bvpMemberLabel(m))}${m.user_id === me.id ? ' (you)' : ''}</option>`).join('');
   document.querySelector('input[name=rm-dest][value=move]').checked = true;
+  const isLoa = (memberTerms[id] || {}).model === 'loa';
+  document.getElementById('rm-keep').classList.toggle('hidden', isLoa);
+  if (isLoa) document.getElementById('rm-text').textContent += ' They\'re an LOA agent, so their clients stay with your agency.';
   document.getElementById('rm-err').classList.remove('show');
   rmChanged();
   document.getElementById('remove-overlay').classList.add('show');
@@ -399,7 +442,9 @@ function rmChanged() {
 function closeRemove() { document.getElementById('remove-overlay').classList.remove('show'); removing = null; }
 async function confirmRemove() {
   if (!removing) return;
-  const move = document.querySelector('input[name=rm-dest]:checked').value === 'move';
+  const isLoa = (memberTerms[removing.user_id] || {}).model === 'loa';
+  const move = isLoa || document.querySelector('input[name=rm-dest]:checked').value === 'move';
+  if (move && !document.getElementById('rm-to').value) { const err0 = document.getElementById('rm-err'); err0.textContent = 'Choose who receives their clients.'; err0.classList.add('show'); return; }
   const transferTo = move ? document.getElementById('rm-to').value : 'keep';
   const btn = document.getElementById('rm-go'), err = document.getElementById('rm-err');
   btn.disabled = true; btn.textContent = move ? 'Moving clients…' : 'Removing…';
@@ -418,6 +463,43 @@ async function confirmRemove() {
   } catch (e) { err.textContent = e.message; err.classList.add('show'); }
   btn.disabled = false; rmChanged();
 }
+let editing = null;
+function openTerms(id) {
+  editing = roster.find(m => m.user_id === id);
+  if (!editing) return;
+  const t = memberTerms[id] || {};
+  document.getElementById('tm-title').textContent = 'Setup for ' + bvpMemberLabel(editing);
+  document.getElementById('tm-text').textContent = 'Changes apply right away to what they see and to the commission numbers on your Agency pages.';
+  document.getElementById('tm-form').innerHTML = bvpTermsFormHTML('tm', { values: t, modelQuestion: 'How is this person set up?' });
+  bvpTermsFormInit('tm', t);
+  document.getElementById('tm-err').classList.remove('show');
+  document.getElementById('terms-overlay').classList.add('show');
+}
+function closeTerms() { document.getElementById('terms-overlay').classList.remove('show'); editing = null; }
+async function saveTerms() {
+  if (!editing) return;
+  const err = document.getElementById('tm-err');
+  const r = bvpTermsFormRead('tm');
+  if (!r.ok) { err.textContent = r.error; err.classList.add('show'); return; }
+  const t = r.terms;
+  const row = { agency_id: agency.id, user_id: editing.user_id, model: t.model, pay_method: t.model === 'loa' ? null : t.pay_method,
+    agent_first_year_pct: t.agent_first_year_pct, agent_renewal_pct: t.agent_renewal_pct,
+    agency_first_year_pct: t.agency_first_year_pct, agency_renewal_pct: t.agency_renewal_pct,
+    updated_by: me.id, effective_from: new Date().toISOString().slice(0, 10) };
+  const btn = document.getElementById('tm-go'); btn.disabled = true;
+  const existing = memberTerms[editing.user_id];
+  const { error } = existing
+    ? await bvp.from('agency_member_terms').update(row).eq('id', existing.id)
+    : await bvp.from('agency_member_terms').insert(row);
+  btn.disabled = false;
+  if (error) { err.textContent = 'Could not save: ' + error.message; err.classList.add('show'); return; }
+  const who = bvpMemberLabel(editing);
+  closeTerms();
+  setMsg(`${who} is now set up as: ${bvpTermsSummary(row)}.`, 'ok');
+  await reload();
+}
+document.getElementById('terms-overlay').addEventListener('click', e => { if (e.target.id === 'terms-overlay') closeTerms(); });
+
 document.getElementById('remove-overlay').addEventListener('click', e => { if (e.target.id === 'remove-overlay') closeRemove(); });
 
 document.getElementById('invite-email').addEventListener('keydown', e => { if (e.key === 'Enter') sendInvite(); });
@@ -433,6 +515,9 @@ document.getElementById('invite-email').addEventListener('keydown', e => { if (e
   if (!bvpIsAgencyOwner(access)) { window.location.replace(bvpIsAgencyManager(access) ? BVP_AGENCY_PAGE : BVP_ACCOUNT_PAGE); return; }
   agency = await bvpGetAgency(access.agency_id);
   document.getElementById('agency-name').textContent = (agency && agency.name ? agency.name + ' — ' : '') + 'Team';
+  try { settings = await bvpGetSettings(); } catch (e) { console.warn(e.message); }
+  bvpTermsFormStyles();
+  renderInviteTerms();
 
   await reload();
   document.getElementById('loading').classList.add('hidden');

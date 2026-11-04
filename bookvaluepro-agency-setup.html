@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BookValuePro — Set up your agency</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="bvp-supabase.js"></script>
+<style>
+:root{--forest:#1a5c3a;--emerald:#3da272;--deep:#0d2e1e;--slate:#5a6472;--mist:#e6f5ee;--light-bg:#f7faf8;--border:#dde8e2;--text:#1a1a1a;--text-muted:#556b5e;--danger:#c0392b;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;color:var(--text);background:var(--light-bg);min-height:100vh;}
+.top{background:var(--deep);height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 2rem;}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
+.mark{width:34px;height:34px;border-radius:50%;background:var(--forest);border:1.5px solid var(--emerald);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:white;}
+.word{font-family:'DM Serif Display',serif;font-size:17px;color:white;}
+.word em{color:var(--emerald);font-style:normal;}
+.signout{font-size:12px;color:#7abf9a;background:transparent;border:1px solid rgba(122,191,154,0.3);padding:6px 14px;border-radius:6px;cursor:pointer;font-family:inherit;}
+.page{max-width:720px;margin:0 auto;padding:36px 24px 80px;}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--emerald);text-transform:uppercase;margin-bottom:0.5rem;}
+h1{font-family:'DM Serif Display',serif;font-size:32px;color:var(--deep);font-weight:400;margin-bottom:0.4rem;}
+.sub{font-size:14px;color:var(--text-muted);margin-bottom:1.5rem;line-height:1.6;}
+.steps{display:flex;gap:6px;margin-bottom:22px;}
+.steps div{flex:1;height:6px;border-radius:4px;background:#e3ece7;}
+.steps div.on{background:var(--emerald);}
+.steps-label{font-size:12px;color:var(--text-muted);margin:-14px 0 18px;}
+.card{background:white;border:1px solid var(--border);border-radius:16px;padding:1.5rem 1.75rem;margin-bottom:16px;}
+.card h2{font-family:'DM Serif Display',serif;font-weight:400;font-size:23px;color:var(--deep);margin-bottom:6px;}
+.card .hint{font-size:13.5px;color:var(--text-muted);line-height:1.55;margin-bottom:16px;}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.field{display:flex;flex-direction:column;gap:6px;}
+.field.full{grid-column:1/-1;}
+.field label{font-size:12.5px;font-weight:600;color:var(--slate);}
+.field label .req{color:var(--danger);}
+.field label .opt-tag{font-weight:400;color:var(--text-muted);}
+.field input,.field select,.field textarea{padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;font-size:14px;background:white;color:var(--text);}
+.field textarea{min-height:64px;resize:vertical;}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--emerald);box-shadow:0 0 0 3px rgba(61,162,114,0.12);}
+.field small{font-size:12px;color:var(--text-muted);}
+.choice-row{display:flex;gap:8px;flex-wrap:wrap;}
+.choice-row label{border:1.5px solid var(--border);border-radius:10px;padding:9px 14px;font-size:14px;cursor:pointer;display:flex;gap:8px;align-items:center;background:white;}
+.choice-row label:has(input:checked){border-color:var(--emerald);background:#f4fbf7;}
+.actions{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:18px;flex-wrap:wrap;}
+.btn{border:none;padding:11px 22px;border-radius:10px;font-size:14px;font-family:inherit;font-weight:600;cursor:pointer;}
+.btn-primary{background:var(--forest);color:white;}
+.btn-primary:hover:not(:disabled){background:var(--emerald);}
+.btn-ghost{background:white;border:1px solid var(--border);color:var(--slate);}
+.btn:disabled{opacity:.6;cursor:wait;}
+.link-btn{background:none;border:none;color:var(--forest);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;padding:0;}
+.msg{font-size:13px;margin-top:12px;line-height:1.55;display:none;}
+.msg.show{display:block;}
+.msg.error{color:var(--danger);}
+.msg.ok{color:var(--forest);}
+.note{background:var(--mist);border:1px solid #b8dfc8;border-radius:10px;padding:11px 14px;font-size:13px;color:var(--forest);line-height:1.55;margin-top:14px;}
+.inv{border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px;}
+.inv-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.inv-top input{flex:1;min-width:200px;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;font-size:14px;}
+.inv-sum{font-size:12.5px;color:var(--text-muted);margin-top:8px;}
+.inv-body{margin-top:12px;display:none;}
+.inv.open .inv-body{display:block;}
+.inv-res{font-size:12.5px;margin-top:8px;line-height:1.5;word-break:break-all;}
+.inv-res.ok{color:var(--forest);}
+.inv-res.error{color:var(--danger);}
+.hidden{display:none !important;}
+@media (max-width:640px){.grid{grid-template-columns:1fr;}.top{padding:0 1rem;}}
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="logo" href="bookvaluepro-dashboard.html"><div class="mark">BV</div><span class="word">Book<em>Value</em>Pro</span></a>
+  <button class="signout" onclick="bvpSignOut()">Sign out</button>
+</header>
+
+<main class="page">
+  <div class="eyebrow">Agency setup</div>
+  <h1 id="title">Set up your agency</h1>
+  <p class="sub">A few questions about your agency and how your team works. It takes about three minutes, and you can change any of it later.</p>
+  <div class="steps" id="steps"><div></div><div></div><div></div><div></div></div>
+  <div class="steps-label" id="steps-label"></div>
+  <div id="loading" class="sub">Loading…</div>
+
+  <!-- STEP 1: BUSINESS -->
+  <section class="card hidden" data-step="1">
+    <h2>Your business</h2>
+    <p class="hint">How your agency is registered. Only the starred items are needed now.</p>
+    <div class="grid">
+      <div class="field full"><label for="a-name">Agency name, as shown in BookValuePro</label><input id="a-name" maxlength="100"/></div>
+      <div class="field full"><label for="a-legal">Legal business name <span class="req">*</span></label><input id="a-legal" maxlength="150" autocomplete="organization"/></div>
+      <div class="field"><label for="a-dba">DBA <span class="opt-tag">(if different)</span></label><input id="a-dba" maxlength="150"/></div>
+      <div class="field"><label for="a-state">Resident state <span class="req">*</span></label><select id="a-state"></select></div>
+      <div class="field"><label for="a-npn">Agency NPN <span class="opt-tag">(if the agency is licensed)</span></label><input id="a-npn" inputmode="numeric" maxlength="10"/></div>
+      <div class="field"><label for="a-phone">Main phone</label><input id="a-phone" maxlength="40" autocomplete="tel"/></div>
+      <div class="field full"><label for="a-address">Business address</label><textarea id="a-address" maxlength="300"></textarea></div>
+      <div class="field"><label for="a-web">Website</label><input id="a-web" maxlength="200" placeholder="www.youragency.com"/></div>
+      <div class="field"><label for="a-tz">Time zone</label><select id="a-tz"></select></div>
+    </div>
+    <div class="msg error" id="msg-1"></div>
+    <div class="actions"><span></span><button class="btn btn-primary" onclick="saveStep(1)">Continue →</button></div>
+  </section>
+
+  <!-- STEP 2: HOW YOU SELL -->
+  <section class="card hidden" data-step="2">
+    <h2>How you sell</h2>
+    <p class="hint">This helps us show the right things first. All optional.</p>
+    <div class="field full" style="margin-bottom:14px;"><label>What does your agency sell?</label>
+      <div class="choice-row">
+        <label><input type="radio" name="mix" value="both">Medicare Advantage and Med Supp</label>
+        <label><input type="radio" name="mix" value="ma">Medicare Advantage only</label>
+        <label><input type="radio" name="mix" value="supp">Med Supp only</label>
+      </div></div>
+    <div class="field full" style="margin-bottom:14px;"><label>How do your agents mostly sell?</label>
+      <div class="choice-row">
+        <label><input type="radio" name="channel" value="field">In person</label>
+        <label><input type="radio" name="channel" value="phone">By phone</label>
+        <label><input type="radio" name="channel" value="hybrid">Both</label>
+      </div></div>
+    <div class="grid">
+      <div class="field"><label for="a-upline">Upline (FMO / IMO / NMO)</label><input id="a-upline" maxlength="150" placeholder="e.g. the marketing organization you contract through"/></div>
+      <div class="field"><label for="a-principal">Principal licensed producer</label><select id="a-principal"></select><small>The person responsible for compliance.</small></div>
+    </div>
+    <div class="msg error" id="msg-2"></div>
+    <div class="actions"><button class="btn btn-ghost" onclick="go(1)">← Back</button><button class="btn btn-primary" onclick="saveStep(2)">Continue →</button></div>
+  </section>
+
+  <!-- STEP 3: HOW YOUR TEAM WORKS -->
+  <section class="card hidden" data-step="3">
+    <h2>How your team works</h2>
+    <p class="hint">This sets what your agents see and what happens to their clients if they leave. It becomes the starting choice on every invite, and you can change it for any one person.</p>
+    <div id="defaults-form"></div>
+    <div class="note" id="model-note"></div>
+    <div class="msg error" id="msg-3"></div>
+    <div class="actions"><button class="btn btn-ghost" onclick="go(2)">← Back</button><button class="btn btn-primary" onclick="saveStep(3)">Save and continue →</button></div>
+  </section>
+
+  <!-- STEP 4: INVITE -->
+  <section class="card hidden" data-step="4">
+    <h2>Invite your team</h2>
+    <p class="hint">Each person gets an email with a link to join. You can also do this later from the Team page.</p>
+    <div id="invites"></div>
+    <button class="link-btn" onclick="addInvite()">+ Add another person</button>
+    <div class="msg" id="msg-4"></div>
+    <div class="actions"><button class="btn btn-ghost" onclick="go(3)">← Back</button>
+      <span><button class="btn btn-ghost" id="btn-skip" onclick="finish()">Skip for now</button>
+      <button class="btn btn-primary" id="btn-send" onclick="sendInvites()">Send invites and finish</button></span></div>
+  </section>
+</main>
+
+<script>
+let me = null, agency = null, roster = [], step = 1, inviteSeq = 0;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const STEP_NAMES = ['Your business', 'How you sell', 'How your team works', 'Invite your team'];
+const TIME_ZONES = [
+  ['America/New_York', 'Eastern'], ['America/Chicago', 'Central'], ['America/Denver', 'Mountain'],
+  ['America/Phoenix', 'Arizona'], ['America/Los_Angeles', 'Pacific'], ['America/Anchorage', 'Alaska'],
+  ['Pacific/Honolulu', 'Hawaii'], ['America/Puerto_Rico', 'Atlantic (Puerto Rico)'],
+];
+
+function showMsg(n, text, kind = 'error') { const m = $('msg-' + n); m.textContent = text || ''; m.className = 'msg' + (text ? ' show ' + kind : ''); }
+
+function go(n) {
+  step = n;
+  document.querySelectorAll('[data-step]').forEach(s => s.classList.toggle('hidden', +s.dataset.step !== n));
+  document.querySelectorAll('#steps div').forEach((d, i) => d.classList.toggle('on', i < n));
+  $('steps-label').textContent = `Step ${n} of ${STEP_NAMES.length} · ${STEP_NAMES[n - 1]}`;
+  if (n === 4 && !$('invites').children.length) addInvite();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function radioVal(name) { return (document.querySelector(`input[name="${name}"]:checked`) || {}).value || null; }
+function setRadio(name, v) { const el = document.querySelector(`input[name="${name}"][value="${v}"]`); if (el) el.checked = true; }
+const blankToNull = s => { s = (s || '').trim(); return s === '' ? null : s; };
+
+function fill() {
+  $('a-state').innerHTML = '<option value="">Choose…</option>' + BVP_ALL_STATES.slice().sort().map(s => `<option>${s}</option>`).join('');
+  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  $('a-tz').innerHTML = TIME_ZONES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+  $('a-name').value = agency.name || '';
+  $('a-legal').value = agency.legal_name || '';
+  $('a-dba').value = agency.dba || '';
+  $('a-state').value = agency.resident_state || '';
+  $('a-npn').value = agency.agency_npn || '';
+  $('a-phone').value = agency.phone || '';
+  $('a-address').value = agency.address || '';
+  $('a-web').value = agency.website || '';
+  $('a-tz').value = agency.time_zone || (TIME_ZONES.some(t => t[0] === browserTz) ? browserTz : TIME_ZONES[0][0]);
+  if (agency.business_mix) setRadio('mix', agency.business_mix);
+  if (agency.sales_channel) setRadio('channel', agency.sales_channel);
+  $('a-upline').value = agency.upline_name || '';
+  $('a-principal').innerHTML = roster.map(m => `<option value="${esc(m.user_id)}">${esc(bvpMemberLabel(m))}${m.user_id === me.id ? ' (you)' : ''}</option>`).join('');
+  $('a-principal').value = agency.principal_producer_id || me.id;
+
+  bvpTermsFormStyles();
+  const defaults = { ...bvpAgencyDefaultTerms(agency), model: agency.default_model || null };
+  $('defaults-form').innerHTML = bvpTermsFormHTML('def', {
+    allowMixed: true, values: defaults,
+    modelQuestion: 'Does your agency use the LOA model?',
+    payQuestion: 'For Contracted agents, how does the agency usually get paid on their business?',
+  }).replace('>LOA<', '>Yes — LOA<').replace('>Contracted<', '>No — agents are Contracted<');
+  bvpTermsFormInit('def', defaults);
+  const note = () => {
+    const m = radioVal('def-model');
+    $('model-note').innerHTML = m === 'loa'
+      ? '<strong>LOA:</strong> agents see their clients, renewal schedule, client categories, State GI dates and outreach, but not book value or commissions. If an LOA agent leaves, their clients move to someone on your team.'
+      : m === 'contracted'
+      ? '<strong>Contracted:</strong> agents see everything, including their own expected commission after the agency\'s share. If a Contracted agent leaves, they keep their book unless you choose to move it.'
+      : m === 'mixed'
+      ? '<strong>Some of each:</strong> you\'ll pick LOA or Contracted for each person when you invite them. The percentages here are pre-filled on each invite, and you can change them there.'
+      : 'Choose one to continue.';
+  };
+  $('defaults-form').addEventListener('change', note); note();
+}
+
+async function updateAgency(fields) {
+  const { error } = await bvp.from('agencies').update(fields).eq('id', agency.id);
+  if (error) throw new Error(error.message.includes('check constraint') ? 'One of the entries isn\'t in the right format.' : error.message);
+  Object.assign(agency, fields);
+}
+
+async function saveStep(n) {
+  showMsg(n, '');
+  const btn = document.querySelector(`[data-step="${n}"] .btn-primary`);
+  try {
+    if (n === 1) {
+      const legal = blankToNull($('a-legal').value), state = $('a-state').value || null;
+      const npn = blankToNull($('a-npn').value);
+      if (!legal) return showMsg(1, 'Please enter your legal business name.');
+      if (!state) return showMsg(1, 'Please choose your resident state.');
+      if (npn && !/^[0-9]{1,10}$/.test(npn)) return showMsg(1, 'An NPN is numbers only (up to 10 digits).');
+      btn.disabled = true;
+      await updateAgency({
+        name: blankToNull($('a-name').value) || legal, legal_name: legal, dba: blankToNull($('a-dba').value),
+        resident_state: state, agency_npn: npn, phone: blankToNull($('a-phone').value),
+        address: blankToNull($('a-address').value), website: blankToNull($('a-web').value), time_zone: $('a-tz').value,
+      });
+      go(2);
+    } else if (n === 2) {
+      btn.disabled = true;
+      await updateAgency({ business_mix: radioVal('mix'), sales_channel: radioVal('channel'),
+        upline_name: blankToNull($('a-upline').value), principal_producer_id: $('a-principal').value || null });
+      go(3);
+    } else if (n === 3) {
+      const r = bvpTermsFormRead('def', { payOptional: true });
+      if (!r.ok) return showMsg(3, r.error);
+      const t = r.terms, contracted = t.model !== 'loa', loa = t.model !== 'contracted';
+      btn.disabled = true;
+      await updateAgency({
+        default_model: t.model,
+        default_pay_method: contracted ? t.pay_method : null,
+        default_agent_first_year_pct: contracted && t.pay_method === 'split' ? t.agent_first_year_pct : null,
+        default_agent_renewal_pct:    contracted && t.pay_method === 'split' ? t.agent_renewal_pct : null,
+        default_agency_first_year_pct: contracted && t.pay_method === 'override' ? t.agency_first_year_pct : null,
+        default_agency_renewal_pct:    contracted && t.pay_method === 'override' ? t.agency_renewal_pct : null,
+        default_loa_agency_first_year_pct: loa ? t.loa_agency_first_year_pct : null,
+        default_loa_agency_renewal_pct:    loa ? t.loa_agency_renewal_pct : null,
+        setup_completed_at: agency.setup_completed_at || new Date().toISOString(),
+      });
+      go(4);
+    }
+  } catch (e) { showMsg(n, 'Could not save: ' + e.message); }
+  if (btn) btn.disabled = false;
+}
+
+// ── STEP 4: invites ──
+function addInvite() {
+  const i = ++inviteSeq, prefix = 'inv' + i;
+  const values = bvpAgencyDefaultTerms(agency);
+  // Open the payment details when the owner has to choose (no full default).
+  const needsChoice = !values.model || (values.model === 'contracted' && !values.pay_method);
+  const div = document.createElement('div');
+  div.className = 'inv' + (needsChoice ? ' open' : '');
+  div.id = prefix;
+  div.innerHTML = `<div class="inv-top">
+      <input type="email" id="${prefix}-email" placeholder="agent@example.com" autocomplete="off"/>
+      <button class="link-btn" onclick="document.getElementById('${prefix}').classList.toggle('open')">Change setup</button>
+      ${i > 1 ? `<button class="link-btn" style="color:var(--slate)" onclick="document.getElementById('${prefix}').remove()">Remove</button>` : ''}
+    </div>
+    <div class="inv-sum" id="${prefix}-sum"></div>
+    <div class="inv-body">${bvpTermsFormHTML(prefix, { values, modelQuestion: 'How is this person set up?' })}</div>
+    <div class="inv-res" id="${prefix}-res"></div>`;
+  $('invites').appendChild(div);
+  bvpTermsFormInit(prefix, values);
+  const sum = () => { const r = bvpTermsFormRead(prefix); $(prefix + '-sum').textContent = r.ok ? bvpTermsSummary(r.terms) : 'Setup: choose below'; };
+  div.addEventListener('input', sum); div.addEventListener('change', sum); sum();
+}
+
+async function sendInvites() {
+  showMsg(4, '');
+  const rows = [...document.querySelectorAll('#invites .inv')];
+  const todo = [];
+  for (const row of rows) {
+    const p = row.id, email = $(p + '-email').value.trim().toLowerCase();
+    $(p + '-res').textContent = ''; $(p + '-res').className = 'inv-res';
+    if (!email) continue;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { row.classList.add('open'); return showMsg(4, `"${email}" isn't a valid email address.`); }
+    const r = bvpTermsFormRead(p);
+    if (!r.ok) { row.classList.add('open'); return showMsg(4, `${email}: ${r.error}`); }
+    todo.push({ p, email, terms: r.terms });
+  }
+  if (!todo.length) return showMsg(4, 'Enter at least one email, or choose Skip for now.');
+  $('btn-send').disabled = true; $('btn-skip').disabled = true; $('btn-send').textContent = 'Sending…';
+  let failed = 0;
+  for (const t of todo) {
+    const res = $(t.p + '-res');
+    try {
+      await bvpSavePendingTerms(agency.id, t.email, t.terms, me.id);
+      const r = await bvpAgencyAction('invite', { email: t.email });
+      res.className = 'inv-res ok';
+      res.textContent = r.emailed ? `Invite emailed to ${t.email}.` : `Email isn't set up yet. Send ${t.email} this link yourself: ${r.link}`;
+    } catch (e) { failed++; res.className = 'inv-res error'; res.textContent = e.message; }
+  }
+  $('btn-send').disabled = false; $('btn-skip').disabled = false; $('btn-send').textContent = 'Send invites and finish';
+  if (failed) return showMsg(4, `${failed} invite${failed === 1 ? '' : 's'} didn't go out. Fix and try again, or choose Skip for now.`);
+  showMsg(4, 'Invites sent. Finishing up…', 'ok');
+  setTimeout(finish, 2500);
+}
+
+async function finish() {
+  const setup = await bvpGetSetup(true);
+  const next = bvpSetupNext();
+  if (setup.profile_needed) { location.href = BVP_PROFILE_SETUP_PAGE + (next ? '?next=' + encodeURIComponent(next) : ''); return; }
+  if (next) location.href = next; else await bvpSmartRedirect(me.id);
+}
+
+(async () => {
+  const session = await bvpRequireLogin();
+  if (!session) return;
+  me = session.user;
+  const access = await bvpGetAccess();
+  if (!bvpIsAgencyOwner(access)) { location.replace(BVP_ACCOUNT_PAGE); return; }
+  [agency, roster] = await Promise.all([bvpGetAgency(access.agency_id), bvpGetAgencyRoster()]);
+  if (!agency) { $('loading').textContent = 'Your agency could not be loaded. Please refresh the page.'; return; }
+  if (agency.setup_completed_at) { $('title').textContent = 'Agency setup'; }
+  fill();
+  $('loading').classList.add('hidden');
+  go(1);
+})();
+</script>
+</body>
+</html>

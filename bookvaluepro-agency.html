@@ -244,7 +244,7 @@ body { padding-left: 64px; }
       </table>
     </div>
   </section>
-  <p class="note">Book values use each agent's own commission rates and assumptions, the same numbers they see on their dashboard and on Renewal Outreach. "Save &amp; Switch lift" is Opportunity LTV minus Current LTV for Save &amp; Switch clients. "Renewals" are policies whose anniversary falls in that month. "Reach out in this month" follows the lead time set above, which is the same setting Renewal Outreach uses.</p>
+  <p class="note">Book values are the full commission on each agent's book, using that agent's own commission rates and assumptions. <span id="share-note" class="hidden">"Agency share" applies each person's setup from the Team page: Split → the agency's %, Override → the override %, Not paid → $0, LOA → the agency share you entered (all of it if none was entered). Your own book counts in full. Contracted agents on a Split see their own share on their dashboard.</span> "Save &amp; Switch lift" is Opportunity LTV minus Current LTV for Save &amp; Switch clients. "Renewals" are policies whose anniversary falls in that month. "Reach out in this month" follows the lead time set above, which is the same setting Renewal Outreach uses.</p>
 </main>
 <div class="tip" id="tip"></div>
 
@@ -255,6 +255,7 @@ const CUR = NOW.getMonth() + 1;
 // The next 12 anniversary months, starting with this one.
 const SLOTS = Array.from({ length: 12 }, (_, i) => { const m = ((CUR - 1 + i) % 12) + 1; return { m, year: NOW.getFullYear() + (CUR - 1 + i >= 12 ? 1 : 0) }; });
 let rows = [], roster = [], meId = null;
+let isOwner = false, memberTerms = {};   // owner only: { user_id: payment terms }
 let agentStats = {};          // agent id -> { hasBook, emails, touches, openLeads, won }
 let agentView = 'book', sortKey = 'curr', sortDir = -1;
 let lead = Math.max(1, Math.min(6, +(localStorage.getItem('bvp_lead_months') || 3)));
@@ -306,7 +307,10 @@ function render() {
   const ren3 = n3.reduce((s, b) => s + b.n, 0), ss3 = n3.reduce((s, b) => s + b.c1, 0), prem3 = n3.reduce((s, b) => s + b.prem, 0);
   const lift = SLOTS.reduce((s, x) => s + by[x.m].lift, 0), ss12 = SLOTS.reduce((s, x) => s + by[x.m].c1, 0);
   document.getElementById('t-curr').textContent = moneyShort(curr);
-  document.getElementById('t-curr-sub').textContent = `${num(vis.length)} policies · ${moneyShort(prem)} annual premium`;
+  const agencyCurr = vis.reduce((s, r) => s + (r.agencyCurr || 0), 0);
+  const shareKnown = isOwner && vis.every(r => r.agencyCurr != null);
+  document.getElementById('t-curr-sub').textContent = `${num(vis.length)} policies · ${moneyShort(prem)} annual premium`
+    + (shareKnown ? ` · agency share ${moneyShort(agencyCurr)}` : '');
   document.getElementById('t-lift').textContent = moneyShort(lift);
   document.getElementById('t-lift-sub').textContent = `${num(ss12)} Save & Switch client${ss12 === 1 ? '' : 's'}`;
   document.getElementById('t-ren3').textContent = num(ren3);
@@ -357,6 +361,8 @@ function agentRows() {
       policies: mine.length,
       premium: mine.reduce((t, r) => t + r.annualPrem, 0),
       curr: mine.reduce((t, r) => t + r.curr, 0),
+      agency: mine.some(r => r.agencyCurr == null) ? null : mine.reduce((t, r) => t + r.agencyCurr, 0),
+      setup: m.role === 'owner' ? 'Owner' : bvpTermsSummary(memberTerms[m.user_id]),
       lift: mine.reduce((t, r) => t + (r.priority === 1 ? Math.max(0, r.opp - r.curr) : 0), 0),
       renewals: mine.filter(r => next3.has(r.month)).length,
       emails: s.emails || 0, touches: s.touches || 0, openLeads: s.openLeads || 0, won: s.won || 0,
@@ -365,11 +371,15 @@ function agentRows() {
   });
 }
 
-const BOOK_COLS = [
+const BOOK_COLS_ALL = [
   ['label', 'Agent'], ['policies', 'Policies'], ['premium', 'Annual<br>premium'], ['curr', 'Current<br>LTV'],
+  ['agency', 'Agency share<br>of LTV'],
   ['lift', 'Save &amp; Switch<br>lift'], ['renewals', 'Renewals<br>next 3 mo.'], ['emails', 'Emails sent<br>last 30 days'],
   ['touches', 'Lead touches<br>last 30 days'], ['openLeads', 'Open<br>leads'], ['won', 'Leads won<br>last 30 days'],
 ];
+
+// The agency-share column is for the owner only (pay terms aren't shown to admins).
+let BOOK_COLS = BOOK_COLS_ALL.filter(([k]) => k !== 'agency');
 
 function renderAgents() {
   const table = document.getElementById('agents');
@@ -398,18 +408,19 @@ function renderAgents() {
     const av = a[sortKey], bv = b[sortKey];
     return (typeof av === 'string' ? av.localeCompare(bv) : (av || 0) - (bv || 0)) * sortDir;
   });
-  const t = list.reduce((s, a) => { BOOK_COLS.slice(1).forEach(([k]) => s[k] = (s[k] || 0) + a[k]); return s; }, {});
+  const t = list.reduce((s, a) => { BOOK_COLS.slice(1).forEach(([k]) => s[k] = (s[k] || 0) + (a[k] || 0)); return s; }, {});
   table.innerHTML = `<thead><tr id="sort-row">${BOOK_COLS.map(([k, l]) => `<th class="sortable${k === sortKey ? ' sorted' : ''}" data-key="${k}">${l}${k === sortKey ? (sortDir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}<th></th></tr></thead>
     <tbody>${list.map(a => {
       const link = a.m.user_id === meId ? 'bookvaluepro-dashboard.html' : `bookvaluepro-dashboard.html?agent=${encodeURIComponent(a.m.user_id)}`;
+      const shareTd = isOwner ? `<td title="${esc(a.setup)}">${a.agency == null ? '<span class="zero">—</span>' : money(a.agency)}</td>` : '';
       const book = a.hasBook
-        ? `<td>${num(a.policies)}</td><td>${money(a.premium)}</td><td>${money(a.curr)}</td><td>${a.lift ? '+' + money(a.lift) : '<span class="zero">—</span>'}</td><td>${num(a.renewals)}</td>`
-        : `<td colspan="5" class="nobook">No book uploaded yet</td>`;
+        ? `<td>${num(a.policies)}</td><td>${money(a.premium)}</td><td>${money(a.curr)}</td>${shareTd}<td>${a.lift ? '+' + money(a.lift) : '<span class="zero">—</span>'}</td><td>${num(a.renewals)}</td>`
+        : `<td colspan="${isOwner ? 6 : 5}" class="nobook">No book uploaded yet</td>`;
       return `<tr><td class="agent">${esc(a.label)}${roleTag(a.m)}</td>${book}
         <td>${num(a.emails)}</td><td>${num(a.touches)}</td><td>${num(a.openLeads)}</td><td>${num(a.won)}</td>
         <td><a class="view" href="${link}">${a.m.user_id === meId ? 'Open' : 'View'}</a></td></tr>`;
     }).join('')}</tbody>
-    ${list.length > 1 ? `<tfoot><tr><td>Agency total</td><td>${num(t.policies)}</td><td>${money(t.premium)}</td><td>${money(t.curr)}</td><td>+${money(t.lift)}</td><td>${num(t.renewals)}</td><td>${num(t.emails)}</td><td>${num(t.touches)}</td><td>${num(t.openLeads)}</td><td>${num(t.won)}</td><td></td></tr></tfoot>` : ''}`;
+    ${list.length > 1 ? `<tfoot><tr><td>Agency total</td><td>${num(t.policies)}</td><td>${money(t.premium)}</td><td>${money(t.curr)}</td>${isOwner ? `<td>${list.every(a => !a.hasBook || a.agency != null) ? money(t.agency) : '—'}</td>` : ''}<td>+${money(t.lift)}</td><td>${num(t.renewals)}</td><td>${num(t.emails)}</td><td>${num(t.touches)}</td><td>${num(t.openLeads)}</td><td>${num(t.won)}</td><td></td></tr></tfoot>` : ''}`;
 }
 
 document.getElementById('agents').addEventListener('click', e => {
@@ -478,6 +489,8 @@ async function loadActivity(ids) {
   const access = await bvpRequireAgencyManager();
   if (!access) return;
   if (bvpIsAgencyOwner(access)) document.getElementById('manage-team').classList.remove('hidden');
+  isOwner = bvpIsAgencyOwner(access);
+  if (isOwner) { memberTerms = await bvpGetAgencyTerms(access.agency_id); BOOK_COLS = BOOK_COLS_ALL; document.getElementById('share-note').classList.remove('hidden'); }
   document.getElementById('lead').value = lead;
   const agency = await bvpGetAgency(access.agency_id);
   if (agency) document.getElementById('agency-name').textContent = agency.name;
@@ -495,9 +508,11 @@ async function loadActivity(ids) {
   const progress = document.getElementById('progress');
   await bvpLoadTeamBooks(roster, (r, done, total) => {
     (agentStats[r.member.user_id] ||= {}).hasBook = !!r.policies.length;
+    const agencyShare = isOwner ? bvpAgencyShareFor(memberTerms[r.member.user_id], r.member.role) : null;
     r.policies.forEach(p => rows.push({
       agentId: r.member.user_id, priority: p.priority, month: p.eff_month ? Number(p.eff_month) : null,
       annualPrem: p._annualCurrPrem || 0, curr: p.curr_npv || 0,
+      agencyCurr: agencyShare && p._parts ? bvpSplitValue(p._parts.curr, agencyShare) : null,
       opp: p.ren_npv || 0, // same Opportunity LTV as Renewal Outreach
     }));
     progress.textContent = done < total ? `Loading ${done} of ${total} agents…` : `Updated ${new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;

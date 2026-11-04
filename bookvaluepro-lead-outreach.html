@@ -837,8 +837,8 @@ Cohort: ${cohort}
 Current monthly premium: $${p.currPrem?.toFixed(2) || 'N/A'}
 Estimated monthly savings if they switch: $${moSav}
 Estimated annual savings: $${annSav}
-Opportunity LTV: $${Math.round(p.renNPV || 0).toLocaleString()}
-Policy duration: Year ${p.duration || 'N/A'}`;
+${window.BVP_LOA ? '' : `Opportunity LTV: $${Math.round(p.renNPV || 0).toLocaleString()}
+`}Policy duration: Year ${p.duration || 'N/A'}`;
 }
 
 async function callClaude(systemPrompt, userPrompt) {

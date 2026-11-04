@@ -7,6 +7,16 @@ const BVP_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 
 const bvp = window.supabase.createClient(BVP_URL, BVP_ANON);
 
+// LOA agents don't see commission-based figures. Pages mark those elements
+// .bvp-money; .bvp-loa-only elements show only to LOA agents.
+(function () {
+  const st = document.createElement('style');
+  st.textContent = 'html.bvp-loa .bvp-money{display:none !important}.bvp-loa-only{display:none !important}html.bvp-loa .bvp-loa-only{display:revert !important}';
+  document.head.appendChild(st);
+})();
+// True for an LOA agent (set by bvpRequireAuth before the page renders).
+window.BVP_LOA = false;
+
 // ── CONSTANTS ─────────────────────────────────────────────────
 const BVP_ENROLLMENT_TYPES = [
   'OpenEnrollment', 'Underwritten',
@@ -205,6 +215,8 @@ async function bvpRequireAuth() {
   if (!session) return null;
   const access = await bvpGetAccess();
   if (!access.has_access) { window.location.href = BVP_PLANS_PAGE; return null; }
+  // Unfinished setup → the setup pages first (agency setup, then your profile).
+  if (await bvpEnforceSetup(access)) return null;
   bvpAddAccountNav(access);
   return session;
 }
@@ -401,6 +413,236 @@ async function bvpGetAgencyInvites(agencyId) {
     .order('created_at', { ascending: false });
   if (error) { console.error('bvpGetAgencyInvites:', error); return []; }
   return data || [];
+}
+
+// ── ACCOUNT SETUP (migration 6) ──────────────────────────────
+const BVP_AGENCY_SETUP_PAGE  = 'bookvaluepro-agency-setup.html';
+const BVP_PROFILE_SETUP_PAGE = 'bookvaluepro-profile-setup.html';
+// Pages that never redirect to setup (setup itself, billing, joining).
+const BVP_SETUP_EXEMPT_PAGES = [BVP_AGENCY_SETUP_PAGE, BVP_PROFILE_SETUP_PAGE, 'bookvaluepro-account.html',
+  'bookvaluepro-plans.html', 'bookvaluepro-join.html', 'bookvaluepro-unsubscribe.html', 'index.html', ''];
+
+let _bvpSetupCache = null;
+// { agency_id, role, model, pay_method, is_loa, agency_setup_needed, profile_needed }
+// If the setup check can't run (e.g. migration 6 not run yet), nothing is required.
+async function bvpGetSetup(force = false) {
+  if (_bvpSetupCache && !force) return _bvpSetupCache;
+  const { data, error } = await bvp.rpc('bvp_my_setup');
+  if (error) {
+    console.warn('bvpGetSetup:', error.message);
+    return { is_loa: false, agency_setup_needed: false, profile_needed: false, error: error.message };
+  }
+  _bvpSetupCache = data || {};
+  return _bvpSetupCache;
+}
+
+function bvpIsLOA(setup) { return !!(setup && setup.is_loa); }
+
+// Where to come back to after setup.
+function bvpSetupNext() {
+  const next = new URLSearchParams(location.search).get('next');
+  // Only same-site page names, never a full address.
+  return next && /^bookvaluepro-[a-z0-9-]+\.html(\?[^#]*)?$/i.test(next) ? next : null;
+}
+
+// Sends the person to whichever setup page they still need. Returns true if redirecting.
+async function bvpEnforceSetup(access) {
+  if (access && access.reason === 'admin') return false;  // site admins aren't agents
+  const page = location.pathname.split('/').pop();
+  const setup = await bvpGetSetup();
+  if (bvpIsLOA(setup)) {
+    // Hides every element marked .bvp-money (see the style rule at the top of this file).
+    window.BVP_LOA = true;
+    document.documentElement.classList.add('bvp-loa');
+    document.querySelectorAll('#step-commissions, .bvp-sidenav-item[href="bookvaluepro-commissions.html"]')
+      .forEach(el => { el.style.display = 'none'; });
+  }
+  if (BVP_SETUP_EXEMPT_PAGES.includes(page)) return false;
+  const next = encodeURIComponent(page + location.search);
+  if (setup.agency_setup_needed) { window.location.replace(BVP_AGENCY_SETUP_PAGE + '?next=' + next); return true; }
+  if (setup.profile_needed)      { window.location.replace(BVP_PROFILE_SETUP_PAGE + '?next=' + next); return true; }
+  return false;
+}
+
+// Settings: every number calculations and limits use. Most specific wins:
+// your own → your agency's → the site's. Nothing has a fallback in code; if the
+// settings can't be loaded, this throws so the page can say so.
+let _bvpSettingsCache = null;
+async function bvpGetSettings(force = false) {
+  if (_bvpSettingsCache && !force) return _bvpSettingsCache;
+  const { data, error } = await bvp.rpc('bvp_my_settings');
+  if (error || !data || !Object.keys(data).length) throw new Error('Settings could not be loaded' + (error ? ': ' + error.message : '.'));
+  _bvpSettingsCache = data;
+  return data;
+}
+
+// Settings for a team member (owner/admin viewing their book).
+async function bvpGetSettingsFor(userId) {
+  const { data, error } = await bvp.rpc('bvp_settings_for', { p_user: userId });
+  if (error || !data || !Object.keys(data).length) throw new Error('Settings could not be loaded' + (error ? ': ' + error.message : '.'));
+  return data;
+}
+
+// Labels, units and ranges for the settings screens.
+async function bvpGetSettingDefinitions() {
+  const { data, error } = await bvp.from('site_settings').select('*').order('sort_order');
+  if (error) throw new Error('Settings could not be loaded: ' + error.message);
+  return data || [];
+}
+
+// ── PAYMENT TERMS (LOA / Contracted) ─────────────────────────
+const BVP_PAY_METHODS = {
+  split:    { label: 'Split',    help: 'The agent pays the agency a share of their commission.' },
+  override: { label: 'Override', help: 'The carrier or upline pays the agency separately. The agent keeps all of their commission.' },
+  none:     { label: 'Not paid', help: "The agency isn't paid on this agent's business." },
+};
+
+const _bvpPct = v => (v === null || v === undefined || v === '') ? '' : String(Number(v));
+
+// Short text, e.g. "LOA", "Contracted · Split 70% / 60%".
+function bvpTermsSummary(t) {
+  if (!t || !t.model) return 'Not set';
+  if (t.model === 'loa') {
+    return t.agency_first_year_pct != null ? `LOA · agency keeps ${_bvpPct(t.agency_first_year_pct)}% / ${_bvpPct(t.agency_renewal_pct)}%` : 'LOA';
+  }
+  if (t.pay_method === 'split')    return `Contracted · agent ${_bvpPct(t.agent_first_year_pct)}% / ${_bvpPct(t.agent_renewal_pct)}% (first year / renewal)`;
+  if (t.pay_method === 'override') return `Contracted · agency override ${_bvpPct(t.agency_first_year_pct)}% / ${_bvpPct(t.agency_renewal_pct)}%`;
+  if (t.pay_method === 'none')     return 'Contracted · agency not paid';
+  return 'Contracted';
+}
+
+// The model + payment form, used by the setup wizard and the Team page.
+// opts: { allowMixed: bool (agency default only), values: {model, pay_method, ...pcts} }
+function bvpTermsFormHTML(prefix, opts = {}) {
+  const v = opts.values || {};
+  const e = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const radio = (name, val, label, help, checked) =>
+    `<label class="opt"><input type="radio" name="${prefix}-${name}" value="${val}" ${checked ? 'checked' : ''}>
+       <span><strong>${e(label)}</strong><small>${e(help)}</small></span></label>`;
+  const pct = (field, label) =>
+    `<label class="pct-field"><span>${e(label)}</span><span class="pct-wrap"><input type="number" inputmode="decimal" min="0" max="100" step="0.01"
+       id="${prefix}-${field}" value="${e(_bvpPct(v[field]))}"/><em>%</em></span></label>`;
+  const models = [
+    ['loa', 'LOA', 'The agency holds the carrier contracts and owns the book. The agent doesn\'t see book value or commissions.'],
+    ['contracted', 'Contracted', 'The agent holds their own contracts and owns their book, and sees everything.'],
+  ];
+  if (opts.allowMixed) models.push(['mixed', 'Some of each', 'You\'ll choose LOA or Contracted for each person when you invite them.']);
+  return `<div class="terms-form" id="${prefix}-form">
+    <div class="terms-q">${e(opts.modelQuestion || 'How is this agent set up?')}</div>
+    ${models.map(([val, label, help]) => radio('model', val, label, help, v.model === val)).join('')}
+    <div class="terms-block" id="${prefix}-contracted">
+      <div class="terms-q">${e(opts.payQuestion || 'How does the agency get paid on this agent\'s business?')}</div>
+      ${Object.entries(BVP_PAY_METHODS).map(([val, m]) => radio('pay', val, m.label, m.help, v.pay_method === val)).join('')}
+      <div class="pct-row" id="${prefix}-split">${pct('agent_first_year_pct', "Agent's share, first year")}${pct('agent_renewal_pct', "Agent's share, renewals")}
+        <div class="pct-note" id="${prefix}-split-note"></div></div>
+      <div class="pct-row" id="${prefix}-override">${pct('ovr_first_year_pct', 'Agency override, first year')}${pct('ovr_renewal_pct', 'Agency override, renewals')}</div>
+    </div>
+    <div class="terms-block" id="${prefix}-loa">
+      <div class="terms-q">Agency's share for LOA agents <span class="optional">optional · only you see this</span></div>
+      <div class="pct-row">${pct('loa_first_year_pct', 'Agency keeps, first year')}${pct('loa_renewal_pct', 'Agency keeps, renewals')}</div>
+    </div>
+  </div>`;
+}
+
+// Wires show/hide after the HTML is inserted. Override %s are stored as agency %.
+function bvpTermsFormInit(prefix, values = {}) {
+  const $ = id => document.getElementById(prefix + '-' + id);
+  if (values.pay_method !== 'split' || values.model === 'loa') { $('agent_first_year_pct').value = ''; $('agent_renewal_pct').value = ''; }
+  if (values.pay_method === 'override') { $('ovr_first_year_pct').value = _bvpPct(values.agency_first_year_pct); $('ovr_renewal_pct').value = _bvpPct(values.agency_renewal_pct); }
+  const loaFy = values.loa_agency_first_year_pct !== undefined ? values.loa_agency_first_year_pct : (values.model === 'loa' ? values.agency_first_year_pct : null);
+  const loaRn = values.loa_agency_renewal_pct    !== undefined ? values.loa_agency_renewal_pct    : (values.model === 'loa' ? values.agency_renewal_pct    : null);
+  $('loa_first_year_pct').value = _bvpPct(loaFy); $('loa_renewal_pct').value = _bvpPct(loaRn);
+  const sync = () => {
+    const model = (document.querySelector(`input[name="${prefix}-model"]:checked`) || {}).value;
+    const pay = (document.querySelector(`input[name="${prefix}-pay"]:checked`) || {}).value;
+    $('contracted').style.display = (model === 'contracted' || model === 'mixed') ? '' : 'none';
+    $('loa').style.display = (model === 'loa' || model === 'mixed') ? '' : 'none';
+    $('split').style.display = pay === 'split' ? '' : 'none';
+    $('override').style.display = pay === 'override' ? '' : 'none';
+    const fy = parseFloat($('agent_first_year_pct').value), rn = parseFloat($('agent_renewal_pct').value);
+    $('split-note').textContent = (!isNaN(fy) || !isNaN(rn))
+      ? `Agency gets ${isNaN(fy) ? '—' : +(100 - fy).toFixed(3) + '%'} first year and ${isNaN(rn) ? '—' : +(100 - rn).toFixed(3) + '%'} on renewals.` : '';
+  };
+  document.getElementById(prefix + '-form').addEventListener('input', sync);
+  document.getElementById(prefix + '-form').addEventListener('change', sync);
+  sync();
+}
+
+// Reads and checks the form. Returns { ok, error, terms } where terms matches
+// agency_member_terms columns. For 'mixed' (agency default), returns both parts.
+function bvpTermsFormRead(prefix, opts = {}) {
+  const $ = id => document.getElementById(prefix + '-' + id);
+  const model = (document.querySelector(`input[name="${prefix}-model"]:checked`) || {}).value;
+  const pay = (document.querySelector(`input[name="${prefix}-pay"]:checked`) || {}).value || null;
+  const num = id => { const s = $(id).value.trim(); return s === '' ? null : Number(s); };
+  const bad = n => n === null || isNaN(n) || n < 0 || n > 100;
+  if (!model) return { ok: false, error: 'Choose LOA or Contracted.' };
+  const terms = { model, pay_method: null, agent_first_year_pct: null, agent_renewal_pct: null, agency_first_year_pct: null, agency_renewal_pct: null };
+  if (model === 'contracted' || model === 'mixed') {
+    if (!pay && !opts.payOptional) return { ok: false, error: 'Choose how the agency gets paid on Contracted agents\' business.' };
+    terms.pay_method = pay;
+    if (pay === 'split') {
+      terms.agent_first_year_pct = num('agent_first_year_pct'); terms.agent_renewal_pct = num('agent_renewal_pct');
+      if (bad(terms.agent_first_year_pct) || bad(terms.agent_renewal_pct)) return { ok: false, error: "Enter the agent's share (0–100%) for first year and renewals." };
+    } else if (pay === 'override') {
+      terms.agency_first_year_pct = num('ovr_first_year_pct'); terms.agency_renewal_pct = num('ovr_renewal_pct');
+      if (bad(terms.agency_first_year_pct) || bad(terms.agency_renewal_pct)) return { ok: false, error: "Enter the agency's override (0–100%) for first year and renewals." };
+    }
+  }
+  if (model === 'loa' || model === 'mixed') {
+    const fy = num('loa_first_year_pct'), rn = num('loa_renewal_pct');
+    if ((fy === null) !== (rn === null)) return { ok: false, error: "Enter both the first-year and renewal share for LOA agents, or leave both blank." };
+    if (fy !== null && (bad(fy) || bad(rn))) return { ok: false, error: "The LOA agency share must be between 0 and 100%." };
+    terms.loa_agency_first_year_pct = fy; terms.loa_agency_renewal_pct = rn;
+    if (model === 'loa') { terms.agency_first_year_pct = fy; terms.agency_renewal_pct = rn; }
+  }
+  return { ok: true, terms };
+}
+
+// Saves the terms an invitee will get when they join (applied by the database).
+async function bvpSavePendingTerms(agencyId, email, terms, userId) {
+  const row = {
+    agency_id: agencyId, email: email.toLowerCase(), model: terms.model, pay_method: terms.model === 'loa' ? null : terms.pay_method,
+    agent_first_year_pct: terms.agent_first_year_pct, agent_renewal_pct: terms.agent_renewal_pct,
+    agency_first_year_pct: terms.agency_first_year_pct, agency_renewal_pct: terms.agency_renewal_pct, created_by: userId,
+  };
+  const { error } = await bvp.from('agency_pending_terms').upsert(row, { onConflict: 'agency_id,email' });
+  if (error) throw new Error('Could not save the payment terms: ' + error.message);
+}
+
+// The agency's default terms, as the form expects them (for one invite).
+// For a "Some of each" agency the model is left for the owner to choose.
+function bvpAgencyDefaultTerms(agency) {
+  if (!agency || !agency.default_model) return {};
+  const m = agency.default_model;
+  const t = { model: m === 'mixed' ? null : m, pay_method: agency.default_pay_method,
+    agent_first_year_pct: agency.default_agent_first_year_pct, agent_renewal_pct: agency.default_agent_renewal_pct,
+    agency_first_year_pct: agency.default_agency_first_year_pct, agency_renewal_pct: agency.default_agency_renewal_pct,
+    loa_agency_first_year_pct: agency.default_loa_agency_first_year_pct, loa_agency_renewal_pct: agency.default_loa_agency_renewal_pct };
+  return t;
+}
+
+// Shared styles for the terms form (injected once).
+function bvpTermsFormStyles() {
+  if (document.getElementById('bvp-terms-css')) return;
+  const s = document.createElement('style');
+  s.id = 'bvp-terms-css';
+  s.textContent = `
+  .terms-q{font-size:13px;font-weight:600;color:var(--deep,#0d2e1e);margin:14px 0 8px;}
+  .terms-q:first-child{margin-top:0;}
+  .terms-q .optional{font-weight:400;color:var(--text-muted,#556b5e);font-size:12px;margin-left:6px;}
+  .terms-form .opt{display:flex;gap:10px;align-items:flex-start;border:1.5px solid var(--border,#dde8e2);border-radius:11px;padding:10px 13px;margin-bottom:8px;cursor:pointer;font-size:14px;line-height:1.45;background:white;}
+  .terms-form .opt:has(input:checked){border-color:var(--emerald,#3da272);background:#f4fbf7;}
+  .terms-form .opt input{margin-top:3px;}
+  .terms-form .opt small{display:block;color:var(--text-muted,#556b5e);font-size:12.5px;font-weight:400;}
+  .pct-row{display:flex;gap:12px;flex-wrap:wrap;margin:4px 0 6px 2px;align-items:flex-end;}
+  .pct-field{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--slate,#5a6472);font-weight:600;}
+  .pct-wrap{display:flex;align-items:center;gap:6px;}
+  .pct-wrap input{width:110px;padding:9px 11px;border:1.5px solid var(--border,#dde8e2);border-radius:9px;font-family:inherit;font-size:14px;}
+  .pct-wrap input:focus{outline:none;border-color:var(--emerald,#3da272);}
+  .pct-wrap em{font-style:normal;color:var(--text-muted,#556b5e);}
+  .pct-note{font-size:12.5px;color:var(--forest,#1a5c3a);flex-basis:100%;}`;
+  document.head.appendChild(s);
 }
 
 // ── VIEW-ONLY MODE (agency owner looking at an agent's book) ──
@@ -762,18 +1004,31 @@ function bvpCalcRenewalNPV(currPrem, savingsPct, effMonth, commRates, discountPc
 // discountPct: discount rate % (default 10)
 // savingsPct:  avg policyholder savings on switch % (default 10)
 
-async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct = 10) {
+async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct = 10, opts = {}) {
   // Collect unique states + carriers from the book for a scoped fetch
   const states   = [...new Set(policies.map(p => p.issued_state).filter(Boolean))];
   const carriers = [...new Set(policies.map(p => p.company).filter(Boolean))];
 
-  const comms = await bvpGetCommissionRates(agentId, states, carriers);
+  // Whose share of the commission the main figures show (see bvpViewerShare).
+  const share = opts.share || await bvpViewerShare(agentId);
+  // LOA agents can't read commission rates (database rule) and see no $ figures.
+  const loaSelf = share.loa === true;
+
+  const comms = loaSelf ? [] : await bvpGetCommissionRates(agentId, states, carriers);
   const generic = bvpGenericCarrier(); // carriers table is loaded by bvpGetCommissionRates
+  const _rateMemo = new Map();
 
   // Rate lookup: carrier + state + plan + enrollment_type → 11-element rate array
   // Fallback chain: exact carrier+state → carrier+any state → Generic+state → Generic+any
   // NPV calculations use only years 1-11 (indices 0-10); data goes to 20 but we cap at 11.
   function getRates(carrier, state, plan, enrollmentType) {
+    const memoKey = ['R', carrier, state, plan, enrollmentType].join('|');
+    if (_rateMemo.has(memoKey)) return _rateMemo.get(memoKey);
+    const found = _getRates(carrier, state, plan, enrollmentType);
+    _rateMemo.set(memoKey, found);
+    return found;
+  }
+  function _getRates(carrier, state, plan, enrollmentType) {
     const attempts = [
       r => r.carrier === carrier  && r.issued_state === state && r.plan === plan && r.enrollment_type === enrollmentType,
       r => r.carrier === carrier  && r.issued_state === state && r.plan === plan,
@@ -795,7 +1050,7 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
         if (rates.some(r => r > 0)) return rates;
       }
     }
-    console.warn('bvpEnrichPolicies: no rates found for', carrier, state, plan, enrollmentType);
+    if (!loaSelf) console.warn('bvpEnrichPolicies: no rates found for', carrier, state, plan, enrollmentType);
     return Array(11).fill(0);
   }
 
@@ -825,6 +1080,11 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
     return Array(11).fill(0);
   }
 
+  // Scales a rate schedule by a share: index 0 (policy year 1) gets the
+  // first-year share, later years the renewal share. Gross = { fy: 1, rn: 1 }.
+  const scaleRates = (rates, sh) => (sh.fy === 1 && sh.rn === 1) ? rates : rates.map((r, i) => r * (i === 0 ? sh.fy : sh.rn));
+  const FY_ONLY = { fy: 1, rn: 0 }, RN_ONLY = { fy: 0, rn: 1 };
+
   const enriched = policies.map(p => {
     const carrier      = p.company      || generic;
     const state        = p.issued_state || null;
@@ -842,64 +1102,67 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
     const annualCurrPrem = currPrem * premMulti;
     const annualCommPrem = commPrem * premMulti;
 
-    const currRates = getRates(carrier, state, plan, enrollType);
+    // State GI rights (evaluated once; the values below are per share).
+    const gi = giRules ? bvpEvaluateGI(p, giRules) : undefined;
 
-    const curr_npv = bvpCalcCurrentNPV(annualCommPrem, durYr, effMonth, currRates, discountPct);
+    // All commission math for one share of the commission.
+    function run(sh) {
+      const R = (c, st, pl, et) => scaleRates(getRates(c, st, pl, et), sh);
+      const G = (c, st, pl) => scaleRates(getGIRates(c, st, pl), sh);
 
-    // Renewal NPV: agent-entered renewal carrier/prem takes priority over savings % estimate.
-    // Renewal restarts at duration 1 rates, same plan and enrollment type.
-    let ren_npv;
-    if (p.ren_carrier && p.ren_prem != null) {
-      const renRates      = getRates(p.ren_carrier, state, plan, renEnrollType);
+      const currRates = R(carrier, state, plan, enrollType);
+      const curr_npv = bvpCalcCurrentNPV(annualCommPrem, durYr, effMonth, currRates, discountPct);
+
+      // Renewal NPV: agent-entered renewal carrier/prem takes priority over savings % estimate.
+      // Renewal restarts at duration 1 rates, same plan and enrollment type.
+      let ren_npv;
+      if (p.ren_carrier && p.ren_prem != null) {
+        const renRates      = R(p.ren_carrier, state, plan, renEnrollType);
+        const alreadyRenewed = effMonth !== null && effMonth <= VALUATION_MONTH;
+        const r = discountPct / 100;
+        let npv = 0;
+        for (let i = 0; i < 11; i++) {
+          const rate = alreadyRenewed
+            ? (i === 0 ? 0 : (renRates[Math.min(i - 1, 10)] || 0))
+            : (renRates[Math.min(i, 10)] || 0);
+          npv += (p.ren_prem * rate) / Math.pow(1 + r, i + 1);
+        }
+        ren_npv = npv * 12;
+      } else {
+        const renRates = R(carrier, state, plan, renEnrollType);
+        ren_npv = bvpCalcRenewalNPV(annualCurrPrem, savingsPct, effMonth, renRates, discountPct);
+      }
+
+      // Build offset arrays for dashboard engine
       const alreadyRenewed = effMonth !== null && effMonth <= VALUATION_MONTH;
-      const r = discountPct / 100;
-      let npv = 0;
-      for (let i = 0; i < 11; i++) {
-        const rate = alreadyRenewed
-          ? (i === 0 ? 0 : (renRates[Math.min(i - 1, 10)] || 0))
-          : (renRates[Math.min(i, 10)] || 0);
-        npv += (p.ren_prem * rate) / Math.pow(1 + r, i + 1);
-      }
-      ren_npv = npv * 12;
-    } else {
-      const renRates = getRates(carrier, state, plan, renEnrollType);
-      ren_npv = bvpCalcRenewalNPV(annualCurrPrem, savingsPct, effMonth, renRates, discountPct);
-    }
+      const nextDur        = durYr + 1;
 
-    // Build offset arrays for dashboard engine
-    const alreadyRenewed = effMonth !== null && effMonth <= VALUATION_MONTH;
-    const nextDur        = durYr + 1;
+      // renRatesForOffset: use agent-set renewal carrier if available, else current carrier
+      const renRatesForOffset = (p.ren_carrier && p.ren_prem != null)
+        ? R(p.ren_carrier, state, plan, renEnrollType)
+        : R(carrier, state, plan, renEnrollType);
 
-    // renRatesForOffset: use agent-set renewal carrier if available, else current carrier
-    const renRatesForOffset = (p.ren_carrier && p.ren_prem != null)
-      ? getRates(p.ren_carrier, state, plan, renEnrollType)
-      : getRates(carrier, state, plan, renEnrollType);
+      const offsetCurrRates = Array(11).fill(0).map((_, i) => {
+        if (alreadyRenewed) {
+          if (i === 0) return 0;
+          return currRates[Math.min(nextDur - 1 + (i - 1), 10)] || 0;
+        }
+        return currRates[Math.min(nextDur - 1 + i, 10)] || 0;
+      });
 
-    const offsetCurrRates = Array(11).fill(0).map((_, i) => {
-      if (alreadyRenewed) {
-        if (i === 0) return 0;
-        return currRates[Math.min(nextDur - 1 + (i - 1), 10)] || 0;
-      }
-      return currRates[Math.min(nextDur - 1 + i, 10)] || 0;
-    });
+      const offsetRenRates = Array(11).fill(0).map((_, i) => {
+        if (alreadyRenewed) {
+          return i === 0 ? 0 : (renRatesForOffset[Math.min(i - 1, 10)] || 0);
+        }
+        return renRatesForOffset[Math.min(i, 10)] || 0;
+      });
 
-    const offsetRenRates = Array(11).fill(0).map((_, i) => {
-      if (alreadyRenewed) {
-        return i === 0 ? 0 : (renRatesForOffset[Math.min(i - 1, 10)] || 0);
-      }
-      return renRatesForOffset[Math.min(i, 10)] || 0;
-    });
-
-    // Expose annualized prems for dashboard/outreach calcs
-    // State GI rights + what the same switch would be worth if written as GI.
-    let gi, gi_ren_npv = null;
-    if (giRules) {
-      gi = bvpEvaluateGI(p, giRules);
-      if (gi.hasRight) {
+      // What the same switch would be worth if written as GI.
+      let gi_ren_npv = null;
+      if (gi && gi.hasRight) {
         if (p.ren_carrier && p.ren_prem != null) {
           // Same math as ren_npv's agent-entered branch, on the GI schedule.
-          const giRates = getGIRates(p.ren_carrier, state, plan);
-          const alreadyRenewed = effMonth !== null && effMonth <= VALUATION_MONTH;
+          const giRates = G(p.ren_carrier, state, plan);
           const r = discountPct / 100;
           let npv = 0;
           for (let i = 0; i < 11; i++) {
@@ -908,22 +1171,109 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
           }
           gi_ren_npv = npv * 12;
         } else {
-          gi_ren_npv = bvpCalcRenewalNPV(annualCurrPrem, savingsPct, effMonth, getGIRates(carrier, state, plan), discountPct);
+          gi_ren_npv = bvpCalcRenewalNPV(annualCurrPrem, savingsPct, effMonth, G(carrier, state, plan), discountPct);
         }
-        // What's lost if the switch is written as GI instead of underwritten. Zero where the
-        // carrier's GI schedule matches its underwritten one (e.g. CA and NV in the base table).
-        gi.commissionAtStake = Math.max(0, (ren_npv || 0) - (gi_ren_npv || 0));
-        gi.sameCommission = gi.commissionAtStake < 1;
       }
+      return { curr_npv, ren_npv, gi_ren_npv, offsetCurrRates, offsetRenRates };
     }
 
-    return { ...p, curr_npv, ren_npv, gi, gi_ren_npv,
+    const v = run(share);                          // what this viewer sees
+    const f = run(FY_ONLY), n = run(RN_ONLY);      // full commission, split into first-year / renewal parts
+    const part = k => ({ fy: f[k] || 0, rn: n[k] || 0 });
+
+    if (gi && gi.hasRight) {
+      // What's lost if the switch is written as GI instead of underwritten. Zero where the
+      // carrier's GI schedule matches its underwritten one (e.g. CA and NV in the base table).
+      gi.commissionAtStake = Math.max(0, (v.ren_npv || 0) - (v.gi_ren_npv || 0));
+      gi.sameCommission = bvpSplitValue(part('ren_npv'), { fy: 1, rn: 1 }) - bvpSplitValue(part('gi_ren_npv'), { fy: 1, rn: 1 }) < 1;
+    }
+
+    return { ...p, curr_npv: v.curr_npv, ren_npv: v.ren_npv, gi, gi_ren_npv: v.gi_ren_npv,
+      // Full (100%) commission split into first-year and renewal parts, so any
+      // share can be worked out with bvpSplitValue (e.g. the agency's share).
+      _parts: { curr: part('curr_npv'), ren: part('ren_npv'), gi: part('gi_ren_npv') },
+      _share: share,
       _annualCurrPrem: annualCurrPrem,
       _annualCommPrem: annualCommPrem,
-      _currRates: offsetCurrRates,
-      _renRates: offsetRenRates };
+      _currRates: v.offsetCurrRates,
+      _renRates: v.offsetRenRates };
   });
+  if (share.applied) bvpShowShareNote(share);
   return enriched;
+}
+
+// ── SHARES OF THE COMMISSION ─────────────────────────────────
+// A value split into first-year and renewal parts, times a share { fy, rn } (fractions).
+function bvpSplitValue(parts, sh) {
+  if (!parts || !sh) return 0;
+  return (parts.fy || 0) * sh.fy + (parts.rn || 0) * sh.rn;
+}
+
+let _bvpMyTermsCache;
+async function bvpGetMyTerms() {
+  if (_bvpMyTermsCache !== undefined) return _bvpMyTermsCache;
+  const setup = await bvpGetSetup();
+  _bvpMyTermsCache = null;
+  if (!setup.agency_id || setup.model !== 'contracted') return null;
+  const { data: { session } } = await bvp.auth.getSession();
+  const { data, error } = await bvp.from('agency_member_terms').select('*')
+    .eq('agency_id', setup.agency_id).eq('user_id', session.user.id).is('carrier', null).maybeSingle();
+  if (error) console.warn('bvpGetMyTerms:', error.message);
+  _bvpMyTermsCache = data || null;
+  return _bvpMyTermsCache;
+}
+
+// The share the main figures show for agentId's book, from the viewer's side:
+//   • your own book as a Contracted agent on a Split → your share (agent %)
+//   • your own book as an LOA agent → no $ figures at all ({ loa: true })
+//   • anything else (no agency, Override, Not paid, owner/admin viewing someone) → full commission
+async function bvpViewerShare(agentId) {
+  const full = { fy: 1, rn: 1, applied: false };
+  const { data: { session } } = await bvp.auth.getSession();
+  const me = session && session.user && session.user.id;
+  if (!me || agentId !== me) return full;
+  const setup = await bvpGetSetup();
+  if (bvpIsLOA(setup)) return { ...full, loa: true };
+  if (setup.model !== 'contracted' || setup.pay_method !== 'split') return full;
+  const t = await bvpGetMyTerms();
+  if (!t || t.agent_first_year_pct == null || t.agent_renewal_pct == null) return full;
+  return { fy: t.agent_first_year_pct / 100, rn: t.agent_renewal_pct / 100, applied: true,
+           fyPct: Number(t.agent_first_year_pct), rnPct: Number(t.agent_renewal_pct) };
+}
+
+// The agency's share of one member's business, from their terms. null = unknown.
+//   Split → agency %; Override → override %; Not paid → 0;
+//   LOA → the agency share if entered, else 100% (the agency holds the contracts);
+//   the owner's own book → 100%.
+function bvpAgencyShareFor(terms, role) {
+  if (role === 'owner') return { fy: 1, rn: 1 };
+  if (!terms || !terms.model) return null;
+  const f = v => Number(v) / 100;
+  if (terms.model === 'loa') {
+    return terms.agency_first_year_pct == null ? { fy: 1, rn: 1 } : { fy: f(terms.agency_first_year_pct), rn: f(terms.agency_renewal_pct) };
+  }
+  if (terms.pay_method === 'none') return { fy: 0, rn: 0 };
+  if (terms.agency_first_year_pct == null || terms.agency_renewal_pct == null) return null;
+  return { fy: f(terms.agency_first_year_pct), rn: f(terms.agency_renewal_pct) };
+}
+
+// Owner only: every member's terms for the agency ({ user_id: terms }).
+async function bvpGetAgencyTerms(agencyId) {
+  const { data, error } = await bvp.from('agency_member_terms').select('*').eq('agency_id', agencyId).is('carrier', null);
+  if (error) { console.warn('bvpGetAgencyTerms:', error.message); return {}; }
+  return Object.fromEntries((data || []).map(t => [t.user_id, t]));
+}
+
+// One line under the page header telling a Contracted agent the figures are their share.
+function bvpShowShareNote(share) {
+  if (document.getElementById('bvp-share-note')) return;
+  const host = document.querySelector('.page, main, .main, .content');
+  if (!host) return;
+  const n = document.createElement('div');
+  n.id = 'bvp-share-note';
+  n.style.cssText = 'background:#e6f5ee;border:1px solid #b8dfc8;color:#1a5c3a;border-radius:10px;padding:9px 14px;font-size:13px;margin:0 0 16px;line-height:1.5;';
+  n.textContent = `Dollar figures show your share of the commission: ${share.fyPct}% first year and ${share.rnPct}% on renewals, after your agency's split.`;
+  host.insertBefore(n, host.firstChild);
 }
 
 // ── STATE GI RIGHTS ENGINE ─────────────────────────────────────

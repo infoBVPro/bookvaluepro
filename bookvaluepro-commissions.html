@@ -489,6 +489,8 @@ let editingCell   = null;
 (async () => {
   bvpSession = await bvpRequireAuth();
   if (!bvpSession) return;
+  // LOA agents don't see commissions (the database blocks the rates too).
+  if (bvpIsLOA(await bvpGetSetup())) { location.replace('bookvaluepro-dashboard.html'); return; }
   bvpSetAdminNavVisible(bvpSession.user.email);
   document.getElementById('agent-name').textContent = bvpSession.user.email;
 

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BookValuePro — Your licensing details</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="bvp-supabase.js"></script>
+<style>
+:root{--forest:#1a5c3a;--emerald:#3da272;--deep:#0d2e1e;--slate:#5a6472;--mist:#e6f5ee;--light-bg:#f7faf8;--border:#dde8e2;--text:#1a1a1a;--text-muted:#556b5e;--danger:#c0392b;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;color:var(--text);background:var(--light-bg);min-height:100vh;}
+.top{background:var(--deep);height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 2rem;}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
+.mark{width:34px;height:34px;border-radius:50%;background:var(--forest);border:1.5px solid var(--emerald);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:white;}
+.word{font-family:'DM Serif Display',serif;font-size:17px;color:white;}
+.word em{color:var(--emerald);font-style:normal;}
+.signout{font-size:12px;color:#7abf9a;background:transparent;border:1px solid rgba(122,191,154,0.3);padding:6px 14px;border-radius:6px;cursor:pointer;font-family:inherit;}
+.page{max-width:680px;margin:0 auto;padding:36px 24px 80px;}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:0.12em;color:var(--emerald);text-transform:uppercase;margin-bottom:0.5rem;}
+h1{font-family:'DM Serif Display',serif;font-size:32px;color:var(--deep);font-weight:400;margin-bottom:0.4rem;}
+.sub{font-size:14px;color:var(--text-muted);margin-bottom:1.5rem;line-height:1.6;}
+.card{background:white;border:1px solid var(--border);border-radius:16px;padding:1.5rem 1.75rem;margin-bottom:16px;}
+.card h2{font-family:'DM Serif Display',serif;font-weight:400;font-size:22px;color:var(--deep);margin-bottom:6px;}
+.card .hint{font-size:13.5px;color:var(--text-muted);line-height:1.55;margin-bottom:16px;}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.field{display:flex;flex-direction:column;gap:6px;}
+.field.full{grid-column:1/-1;}
+.field label,.field .lbl{font-size:12.5px;font-weight:600;color:var(--slate);}
+.req{color:var(--danger);}
+.opt-tag{font-weight:400;color:var(--text-muted);}
+.field input,.field select,.field textarea{padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;font-size:14px;background:white;color:var(--text);}
+.field textarea{min-height:64px;resize:vertical;}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--emerald);box-shadow:0 0 0 3px rgba(61,162,114,0.12);}
+.field small{font-size:12px;color:var(--text-muted);}
+.field small a{color:var(--forest);}
+.states{display:flex;flex-wrap:wrap;gap:6px;}
+.states label{font-size:12px;font-weight:600;border:1.5px solid var(--border);border-radius:8px;padding:5px 0;width:44px;text-align:center;cursor:pointer;color:var(--slate);user-select:none;}
+.states label:has(input:checked){background:var(--forest);border-color:var(--forest);color:white;}
+.states label.resident{opacity:.4;cursor:not-allowed;}
+.states input{display:none;}
+.toggle{font-size:13px;color:var(--forest);font-weight:600;background:none;border:none;cursor:pointer;font-family:inherit;padding:0;}
+.actions{display:flex;justify-content:flex-end;gap:10px;margin-top:6px;flex-wrap:wrap;}
+.btn{border:none;padding:11px 22px;border-radius:10px;font-size:14px;font-family:inherit;font-weight:600;cursor:pointer;}
+.btn-primary{background:var(--forest);color:white;}
+.btn-primary:hover:not(:disabled){background:var(--emerald);}
+.btn:disabled{opacity:.6;cursor:wait;}
+.msg{font-size:13px;margin:10px 0;line-height:1.55;display:none;}
+.msg.show{display:block;}
+.msg.error{color:var(--danger);}
+.msg.ok{color:var(--forest);}
+.hidden{display:none !important;}
+@media (max-width:640px){.grid{grid-template-columns:1fr;}.top{padding:0 1rem;}}
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="logo" href="bookvaluepro-dashboard.html"><div class="mark">BV</div><span class="word">Book<em>Value</em>Pro</span></a>
+  <button class="signout" onclick="bvpSignOut()">Sign out</button>
+</header>
+
+<main class="page">
+  <div class="eyebrow" id="eyebrow">Almost done</div>
+  <h1>Your licensing details</h1>
+  <p class="sub" id="intro">Three quick things we need before you start. Everything else is optional and can be added any time from your Account page.</p>
+  <div id="loading" class="sub">Loading…</div>
+
+  <div id="content" class="hidden">
+    <section class="card">
+      <h2>About you</h2>
+      <div class="grid">
+        <div class="field full"><label for="p-name">Full legal name <span class="req">*</span></label><input id="p-name" maxlength="120" autocomplete="name"/></div>
+        <div class="field"><label for="p-npn">NPN <span class="req">*</span></label><input id="p-npn" inputmode="numeric" maxlength="10" autocomplete="off"/>
+          <small>Your National Producer Number. Don't know it? <a href="https://nipr.com" target="_blank" rel="noopener">Look it up free on NIPR</a>.</small></div>
+        <div class="field"><label for="p-state">Resident state <span class="req">*</span></label><select id="p-state"></select></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Other states you're licensed in <span class="opt-tag" style="font-family:'DM Sans';font-size:13px;">optional</span></h2>
+      <p class="hint">We'll flag outreach to clients living in a state you're not licensed in. Nothing is blocked.</p>
+      <div class="states" id="p-states"></div>
+    </section>
+
+    <section class="card">
+      <h2>Renewal reminders <span class="opt-tag" style="font-family:'DM Sans';font-size:13px;">optional</span></h2>
+      <p class="hint">Add these if you know them and we'll remind you before they lapse.</p>
+      <div class="grid">
+        <div class="field"><label for="p-ahip">AHIP certification expires</label><input id="p-ahip" type="date"/></div>
+        <div class="field"><label for="p-eo">E&amp;O insurance expires</label><input id="p-eo" type="date"/></div>
+      </div>
+    </section>
+
+    <section class="card" id="sender-card">
+      <h2>Email sender details <span class="opt-tag" style="font-family:'DM Sans';font-size:13px;">optional now · needed to send outreach</span></h2>
+      <p class="hint" id="sender-hint">What clients see on emails you send from BookValuePro. The law requires a mailing address on marketing emails.</p>
+      <button class="toggle" id="sender-toggle" onclick="toggleSender()">Fill these in now</button>
+      <div class="grid hidden" id="sender-fields" style="margin-top:14px;">
+        <div class="field full"><label for="s-name">Your name, as clients see it</label><input id="s-name" maxlength="80"/></div>
+        <div class="field"><label for="s-phone">Phone</label><input id="s-phone" maxlength="40" autocomplete="tel"/></div>
+        <div class="field"><label for="s-reply">Reply-to email</label><input id="s-reply" type="email"/></div>
+        <div class="field full"><label for="s-address">Business mailing address</label><textarea id="s-address" maxlength="300"></textarea></div>
+      </div>
+    </section>
+
+    <div class="msg" id="msg"></div>
+    <div class="actions"><button class="btn btn-primary" id="btn-save" onclick="save()">Save and continue →</button></div>
+  </div>
+</main>
+
+<script>
+let me = null, lic = null, sender = null, senderOpen = false;
+const $ = id => document.getElementById(id);
+const blankToNull = s => { s = (s || '').trim(); return s === '' ? null : s; };
+function showMsg(text, kind = 'error') { $('msg').textContent = text || ''; $('msg').className = 'msg' + (text ? ' show ' + kind : ''); }
+
+function toggleSender(force) {
+  senderOpen = force !== undefined ? force : !senderOpen;
+  showMsg('');
+  $('sender-fields').classList.toggle('hidden', !senderOpen);
+  $('sender-toggle').textContent = senderOpen ? 'Do this later' : 'Fill these in now';
+}
+
+function renderStates() {
+  const resident = $('p-state').value;
+  const chosen = new Set([...document.querySelectorAll('#p-states input:checked')].map(i => i.value));
+  if (!document.querySelector('#p-states input')) (lic && lic.license_states || []).forEach(s => chosen.add(s));
+  $('p-states').innerHTML = BVP_ALL_STATES.slice().sort().map(s =>
+    `<label class="${s === resident ? 'resident' : ''}" title="${s === resident ? 'Your resident state' : ''}"><input type="checkbox" value="${s}" ${chosen.has(s) && s !== resident ? 'checked' : ''} ${s === resident ? 'disabled' : ''}>${s}</label>`).join('');
+}
+
+async function save() {
+  showMsg('');
+  const row = {
+    user_id: me.id,
+    full_name: blankToNull($('p-name').value),
+    npn: blankToNull($('p-npn').value),
+    resident_state: $('p-state').value || null,
+    license_states: [...document.querySelectorAll('#p-states input:checked')].map(i => i.value),
+    ahip_expires_on: $('p-ahip').value || null,
+    eo_expires_on: $('p-eo').value || null,
+    updated_at: new Date().toISOString(),
+  };
+  if (!row.full_name) return showMsg('Please enter your full legal name.');
+  if (!row.npn) return showMsg('Please enter your NPN.');
+  if (!/^[0-9]{1,10}$/.test(row.npn)) return showMsg('An NPN is numbers only (up to 10 digits).');
+  if (!row.resident_state) return showMsg('Please choose your resident state.');
+
+  // Sender details: all-or-nothing, since outreach needs every one of them.
+  let senderRow = null;
+  if (senderOpen) {
+    const s = { display_name: blankToNull($('s-name').value), phone: blankToNull($('s-phone').value),
+                reply_to_email: blankToNull($('s-reply').value), mailing_address: blankToNull($('s-address').value) };
+    {
+      if (!s.display_name) return showMsg('Enter the name clients should see, or choose "Do this later".');
+      if (!s.reply_to_email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.reply_to_email)) return showMsg('Enter a valid reply-to email, or choose "Do this later".');
+      if (!s.mailing_address || s.mailing_address.length < 5) return showMsg('Enter your business mailing address, or choose "Do this later".');
+      senderRow = { user_id: me.id, ...s, updated_at: new Date().toISOString() };
+    }
+  }
+
+  const btn = $('btn-save'); btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const { error } = await bvp.from('agent_licensing').upsert(row, { onConflict: 'user_id' });
+    if (error) throw new Error(error.message.includes('check constraint') ? 'One of the entries isn\'t in the right format.' : error.message);
+    if (senderRow) {
+      const { error: e2 } = await bvp.from('agent_profiles').upsert(senderRow, { onConflict: 'user_id' });
+      if (e2) throw new Error('Your licensing details were saved, but the sender details weren\'t: ' + e2.message);
+    }
+    await bvpGetSetup(true);
+    showMsg('Saved.', 'ok');
+    const next = bvpSetupNext();
+    if (next) location.href = next; else await bvpSmartRedirect(me.id);
+  } catch (e) { showMsg(e.message); btn.disabled = false; btn.textContent = 'Save and continue →'; }
+}
+
+(async () => {
+  const session = await bvpRequireLogin();
+  if (!session) return;
+  me = session.user;
+  const access = await bvpGetAccess();
+  if (!access.has_access) { location.replace(BVP_PLANS_PAGE); return; }
+  // An owner finishes agency setup first.
+  const setup = await bvpGetSetup(true);
+  if (setup.agency_setup_needed) { location.replace(BVP_AGENCY_SETUP_PAGE + location.search); return; }
+
+  const [{ data: l }, { data: s }] = await Promise.all([
+    bvp.from('agent_licensing').select('*').eq('user_id', me.id).maybeSingle(),
+    bvp.from('agent_profiles').select('*').eq('user_id', me.id).maybeSingle(),
+  ]);
+  lic = l; sender = s;
+  if (lic && !setup.profile_needed) {
+    $('eyebrow').textContent = 'Account';
+    $('intro').textContent = 'Update your licensing details any time.';
+    $('btn-save').textContent = 'Save';
+  }
+  $('p-state').innerHTML = '<option value="">Choose…</option>' + BVP_ALL_STATES.slice().sort().map(st => `<option>${st}</option>`).join('');
+  $('p-name').value = (lic && lic.full_name) || (sender && sender.display_name) || '';
+  $('p-npn').value = (lic && lic.npn) || '';
+  $('p-state').value = (lic && lic.resident_state) || '';
+  $('p-ahip').value = (lic && lic.ahip_expires_on) || '';
+  $('p-eo').value = (lic && lic.eo_expires_on) || '';
+  renderStates();
+  $('p-state').addEventListener('change', renderStates);
+
+  if (sender) {
+    $('s-name').value = sender.display_name || ''; $('s-phone').value = sender.phone || '';
+    $('s-reply').value = sender.reply_to_email || ''; $('s-address').value = sender.mailing_address || '';
+    $('sender-hint').textContent = "You've already set these up. Change them here or on your Account page.";
+    toggleSender(true); $('sender-toggle').classList.add('hidden');
+  } else {
+    $('s-reply').value = me.email;
+    $('p-name').addEventListener('input', () => { if (!$('s-name').dataset.touched) $('s-name').value = $('p-name').value; });
+    $('s-name').addEventListener('input', () => { $('s-name').dataset.touched = '1'; });
+    $('s-name').value = $('p-name').value;
+  }
+  $('loading').classList.add('hidden');
+  $('content').classList.remove('hidden');
+})();
+</script>
+</body>
+</html>

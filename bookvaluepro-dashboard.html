@@ -705,7 +705,7 @@ body { padding-left: 64px; }
 <div class="page">
 
   <!-- ASSUMPTION BAR -->
-  <div class="assumption-bar">
+  <div class="assumption-bar bvp-money">
     <span class="assumption-label">Assumptions</span>
     <div class="assumption-field">
       <label for="savings-pct">Avg. policyholder savings on switch</label>
@@ -722,8 +722,10 @@ body { padding-left: 64px; }
 
   <!-- ── PART 1: BOOK NPV ── -->
   <div class="section-header">
-    <span class="section-title">Book LTV</span>
-    <span class="section-sub">Net present value of your full commission stream</span>
+    <span class="section-title bvp-money">Book LTV</span>
+    <span class="section-sub bvp-money">Net present value of your full commission stream</span>
+    <span class="section-title bvp-loa-only">Your Book</span>
+    <span class="section-sub bvp-loa-only">Your clients by category</span>
   </div>
 
   <div class="npv-grid" id="npv-grid">
@@ -755,12 +757,12 @@ body { padding-left: 64px; }
   </div>
 
   <!-- ── PART 3: CASH FLOW CHART ── -->
-  <div class="section-header" style="margin-top:44px;">
+  <div class="section-header bvp-money" style="margin-top:44px;">
     <span class="section-title">10-Year Cash Flow Outlook</span>
     <span class="section-sub">Current commissions vs. Save &amp; Switch opportunity by year</span>
   </div>
 
-  <div class="chart-card">
+  <div class="chart-card bvp-money">
     <div class="chart-legend">
       <div class="legend-item">
         <div class="legend-dot" style="background:#3d5a80;"></div>
@@ -942,11 +944,13 @@ function renderNPV() {
   grid.innerHTML = `
     <div class="npv-card total">
       <div class="card-cohort">Total Book</div>
-      <div class="card-label">
+      <div class="card-label bvp-money">
         <span class="cohort-label-wrap">Current LTV ${ltvBtn(LTV_CURR_TITLE, LTV_CURR_BODY)}</span>
       </div>
-      <div class="card-value">${fmt$(totalCurr)}</div>
-      <div class="card-meta">
+      <div class="card-value bvp-money">${fmt$(totalCurr)}</div>
+      <div class="card-label bvp-loa-only">Clients</div>
+      <div class="card-value bvp-loa-only">${POLICIES.length}</div>
+      <div class="card-meta bvp-money">
         <div class="meta-item">
           <div class="meta-val">${fmt$(totalOpp)}</div>
           <div class="meta-lbl">
@@ -978,17 +982,19 @@ function renderNPV() {
                 aria-label="Learn about ${c.key}">i</button>
             </span>
           </div>
-          <div class="card-label">Current LTV</div>
-          <div class="card-value">${fmtK(d.current)}</div>
-          <div class="delta-pill ${c.pillCls}">
+          <div class="card-label bvp-money">Current LTV</div>
+          <div class="card-value bvp-money">${fmtK(d.current)}</div>
+          <div class="delta-pill ${c.pillCls} bvp-money">
             ↑ +${fmtK(delta)} opportunity
           </div>
+          <div class="card-label bvp-loa-only">Clients</div>
+          <div class="card-value bvp-loa-only">${d.policies}</div>
           <div class="card-meta">
             <div class="meta-item">
               <div class="meta-val">${d.policies}</div>
               <div class="meta-lbl">Policies</div>
             </div>
-            <div class="meta-item">
+            <div class="meta-item bvp-money">
               <div class="meta-val">${fmtK(d.opp)}</div>
               <div class="meta-lbl">Opp. LTV</div>
             </div>
@@ -1019,7 +1025,7 @@ function renderCarrierTable() {
           <th>Carrier</th>
           <th class="num">Policies</th>
           <th class="num">Avg monthly premium</th>
-          <th class="num">Current commission LTV</th>
+          <th class="num bvp-money">Current commission LTV</th>
         </tr>
       </thead>
       <tbody>
@@ -1028,7 +1034,7 @@ function renderCarrierTable() {
             <td class="carrier-name">${co}</td>
             <td class="num">${carriers[co].policies}</td>
             <td class="num">${fmt$(carriers[co].avgCurrPrem)}</td>
-            <td class="num">${fmt$(carriers[co].currNPV)}</td>
+            <td class="num bvp-money">${fmt$(carriers[co].currNPV)}</td>
           </tr>
         `).join('')}
       </tbody>
@@ -1037,7 +1043,7 @@ function renderCarrierTable() {
           <td>Total</td>
           <td class="num">${totPolicies}</td>
           <td class="num">${fmt$(wtdPrem)}</td>
-          <td class="num">${fmt$(totCurrNPV)}</td>
+          <td class="num bvp-money">${fmt$(totCurrNPV)}</td>
         </tr>
       </tfoot>
     `;
@@ -1053,7 +1059,7 @@ function renderCarrierTable() {
           <th>Carrier</th>
           <th class="num">Eligible policies</th>
           <th class="num">Avg current premium</th>
-          <th class="num">Commission LTV uplift</th>
+          <th class="num bvp-money">Commission LTV uplift</th>
           <th class="num">Annual policyholder savings</th>
         </tr>
       </thead>
@@ -1066,7 +1072,7 @@ function renderCarrierTable() {
               <td class="carrier-name">${co}</td>
               <td class="num">${c.eligible}</td>
               <td class="num">${fmt$(c.avgCurrPrem)}</td>
-              <td class="num opportunity-delta">+${fmt$(c.oppNPV - c.currNPV)}</td>
+              <td class="num opportunity-delta bvp-money">+${fmt$(c.oppNPV - c.currNPV)}</td>
               <td class="num savings-val">${fmt$(carrierSav)}/yr</td>
             </tr>
           `;
@@ -1077,7 +1083,7 @@ function renderCarrierTable() {
           <td>Total Save &amp; Switch</td>
           <td class="num">${totEligible}</td>
           <td class="num">—</td>
-          <td class="num opportunity-delta">+${fmt$(names.reduce((s,co) => s + carriers[co].oppNPV - carriers[co].currNPV, 0))}</td>
+          <td class="num opportunity-delta bvp-money">+${fmt$(names.reduce((s,co) => s + carriers[co].oppNPV - carriers[co].currNPV, 0))}</td>
           <td class="num savings-val">${fmt$(annualSav)}/yr</td>
         </tr>
       </tfoot>
@@ -1320,7 +1326,7 @@ function renderGI() {
       <td>${p.co ? bvpCarrierDisplay(p.co) : '—'}</td>
       <td class="mono">${bvpGIWindowLabel(p.gi)}</td>
       <td class="mono ${due ? 'gi-due' : ''}">${fmtD(p.gi.underwriteBy)}${due ? ' (passed)' : ''}</td>
-      <td class="mono">${fmt$(Math.max(0, (p.ren_npv || 0) - (p.gi_ren_npv || 0)))}</td>
+      <td class="mono bvp-money">${fmt$(Math.max(0, (p.ren_npv || 0) - (p.gi_ren_npv || 0)))}</td>
     </tr>`;
   }).join('');
   el.innerHTML = `
@@ -1328,10 +1334,10 @@ function renderGI() {
       <div class="gi-stat"><div class="gi-stat-val">${opening90.length}</div><div class="gi-stat-lbl">GI windows opening in 90 days</div></div>
       <div class="gi-stat urgent"><div class="gi-stat-val">${uwDue90.length}</div><div class="gi-stat-lbl">Underwrite-by dates in 90 days</div></div>
       <div class="gi-stat"><div class="gi-stat-val">${openNow.length}</div><div class="gi-stat-lbl">Windows open now (GI only)</div></div>
-      <div class="gi-stat"><div class="gi-stat-val">${fmtK(atRisk)}</div><div class="gi-stat-lbl">LTV at risk if written as GI (next 90 days)</div></div>
+      <div class="gi-stat bvp-money"><div class="gi-stat-val">${fmtK(atRisk)}</div><div class="gi-stat-lbl">LTV at risk if written as GI (next 90 days)</div></div>
     </div>
     ${opening90.length ? `<div style="overflow-x:auto"><table class="gi-list">
-      <thead><tr><th>Client</th><th>State</th><th>Carrier</th><th>GI window</th><th>Underwrite by</th><th>LTV at risk</th></tr></thead>
+      <thead><tr><th>Client</th><th>State</th><th>Carrier</th><th>GI window</th><th>Underwrite by</th><th class="bvp-money">LTV at risk</th></tr></thead>
       <tbody>${rows}</tbody></table></div>`
       : '<div style="color:var(--ink-3);font-size:13px">No GI windows open in the next 90 days.</div>'}
     <div class="gi-foot">
