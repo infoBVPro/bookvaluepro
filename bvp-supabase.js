@@ -530,9 +530,7 @@ const _bvpPct = v => (v === null || v === undefined || v === '') ? '' : String(N
 // Short text, e.g. "LOA", "Contracted · Split 70% / 60%".
 function bvpTermsSummary(t) {
   if (!t || !t.model) return 'Not set';
-  if (t.model === 'loa') {
-    return t.agency_first_year_pct != null ? `LOA · agency keeps ${_bvpPct(t.agency_first_year_pct)}% / ${_bvpPct(t.agency_renewal_pct)}%` : 'LOA';
-  }
+  if (t.model === 'loa') return 'LOA · 100% to agency';
   if (t.pay_method === 'split')    return `Contracted · agent ${_bvpPct(t.agent_first_year_pct)}% / ${_bvpPct(t.agent_renewal_pct)}% (first year / renewal)`;
   if (t.pay_method === 'override') return `Contracted · agency override ${_bvpPct(t.agency_first_year_pct)}% / ${_bvpPct(t.agency_renewal_pct)}%`;
   if (t.pay_method === 'none')     return 'Contracted · agency not paid';
@@ -566,8 +564,7 @@ function bvpTermsFormHTML(prefix, opts = {}) {
       <div class="pct-row" id="${prefix}-override">${pct('ovr_first_year_pct', 'Agency override, first year')}${pct('ovr_renewal_pct', 'Agency override, renewals')}</div>
     </div>
     <div class="terms-block" id="${prefix}-loa">
-      <div class="terms-q">Agency's share for LOA agents <span class="optional">optional · only you see this</span></div>
-      <div class="pct-row">${pct('loa_first_year_pct', 'Agency keeps, first year')}${pct('loa_renewal_pct', 'Agency keeps, renewals')}</div>
+      <div class="pct-note" style="margin:10px 2px 4px;">LOA: 100% of the commission goes to the agency, so there's nothing else to enter.</div>
     </div>
   </div>`;
 }
@@ -577,9 +574,6 @@ function bvpTermsFormInit(prefix, values = {}) {
   const $ = id => document.getElementById(prefix + '-' + id);
   if (values.pay_method !== 'split' || values.model === 'loa') { $('agent_first_year_pct').value = ''; $('agent_renewal_pct').value = ''; }
   if (values.pay_method === 'override') { $('ovr_first_year_pct').value = _bvpPct(values.agency_first_year_pct); $('ovr_renewal_pct').value = _bvpPct(values.agency_renewal_pct); }
-  const loaFy = values.loa_agency_first_year_pct !== undefined ? values.loa_agency_first_year_pct : (values.model === 'loa' ? values.agency_first_year_pct : null);
-  const loaRn = values.loa_agency_renewal_pct    !== undefined ? values.loa_agency_renewal_pct    : (values.model === 'loa' ? values.agency_renewal_pct    : null);
-  $('loa_first_year_pct').value = _bvpPct(loaFy); $('loa_renewal_pct').value = _bvpPct(loaRn);
   const sync = () => {
     const model = (document.querySelector(`input[name="${prefix}-model"]:checked`) || {}).value;
     const pay = (document.querySelector(`input[name="${prefix}-pay"]:checked`) || {}).value;
@@ -617,12 +611,10 @@ function bvpTermsFormRead(prefix, opts = {}) {
       if (bad(terms.agency_first_year_pct) || bad(terms.agency_renewal_pct)) return { ok: false, error: "Enter the agency's override (0–100%) for first year and renewals." };
     }
   }
+  // LOA: the agency holds the contracts, so 100% of the commission goes to the agency.
   if (model === 'loa' || model === 'mixed') {
-    const fy = num('loa_first_year_pct'), rn = num('loa_renewal_pct');
-    if ((fy === null) !== (rn === null)) return { ok: false, error: "Enter both the first-year and renewal share for LOA agents, or leave both blank." };
-    if (fy !== null && (bad(fy) || bad(rn))) return { ok: false, error: "The LOA agency share must be between 0 and 100%." };
-    terms.loa_agency_first_year_pct = fy; terms.loa_agency_renewal_pct = rn;
-    if (model === 'loa') { terms.agency_first_year_pct = fy; terms.agency_renewal_pct = rn; }
+    terms.loa_agency_first_year_pct = 100; terms.loa_agency_renewal_pct = 100;
+    if (model === 'loa') { terms.agency_first_year_pct = 100; terms.agency_renewal_pct = 100; }
   }
   return { ok: true, terms };
 }
@@ -1271,15 +1263,13 @@ async function bvpViewerShare(agentId) {
 
 // The agency's share of one member's business, from their terms. null = unknown.
 //   Split → agency %; Override → override %; Not paid → 0;
-//   LOA → the agency share if entered, else 100% (the agency holds the contracts);
+//   LOA → always 100% (the agency holds the contracts);
 //   the owner's own book → 100%.
 function bvpAgencyShareFor(terms, role) {
   if (role === 'owner') return { fy: 1, rn: 1 };
   if (!terms || !terms.model) return null;
   const f = v => Number(v) / 100;
-  if (terms.model === 'loa') {
-    return terms.agency_first_year_pct == null ? { fy: 1, rn: 1 } : { fy: f(terms.agency_first_year_pct), rn: f(terms.agency_renewal_pct) };
-  }
+  if (terms.model === 'loa') return { fy: 1, rn: 1 };
   if (terms.pay_method === 'none') return { fy: 0, rn: 0 };
   if (terms.agency_first_year_pct == null || terms.agency_renewal_pct == null) return null;
   return { fy: f(terms.agency_first_year_pct), rn: f(terms.agency_renewal_pct) };

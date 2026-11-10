@@ -202,11 +202,11 @@ function fill() {
   const note = () => {
     const m = radioVal('def-model');
     $('model-note').innerHTML = m === 'loa'
-      ? '<strong>LOA:</strong> agents see their clients, renewal schedule, client categories, State GI dates and outreach, but not book value or commissions. If an LOA agent leaves, their clients move to someone on your team.'
+      ? '<strong>LOA:</strong> 100% of the commission goes to the agency. Agents see their clients, renewal schedule, client categories, State GI dates and outreach, but not book value or commissions. If an LOA agent leaves, their clients move to someone on your team.'
       : m === 'contracted'
       ? '<strong>Contracted:</strong> agents see everything, including their own expected commission after the agency\'s share. If a Contracted agent leaves, they keep their book unless you choose to move it.'
       : m === 'mixed'
-      ? '<strong>Some of each:</strong> you\'ll pick LOA or Contracted for each person when you invite them. The percentages here are pre-filled on each invite, and you can change them there.'
+      ? '<strong>Some of each:</strong> you\'ll pick LOA or Contracted for each person when you invite them. LOA agents are always 100% to the agency. The Contracted percentages here are pre-filled on each invite, and you can change them there.'
       : 'Choose one to continue.';
   };
   $('defaults-form').addEventListener('change', note); note();
