@@ -321,7 +321,7 @@ function upgradeBox(sub) {
     <p class="muted-note" style="margin:0 0 12px;">${fmtMoney(a.amount)}/month includes ${a.includedLicenses} licenses (you plus ${a.includedLicenses - 1} agents or staff), then ${fmtMoney(a.extraLicense)}/month each. ${when} Your book, clients and settings stay as they are. You can't switch back to Individual afterwards.</p>
     <label for="up-name" style="font-size:13px;font-weight:600;color:var(--slate);">Agency name</label>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
-      <input id="up-name" maxlength="100" placeholder="e.g. Jordan Insurance Group" style="flex:1;min-width:220px;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;font-size:14px;">
+      <input id="up-name" maxlength="100" placeholder="e.g. ABC Insurance Agency" style="flex:1;min-width:220px;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;font-size:14px;">
       <button class="btn btn-primary" id="up-go" onclick="upgradeToAgency()">Upgrade</button>
     </div>
     <div class="err" id="up-err"></div>
