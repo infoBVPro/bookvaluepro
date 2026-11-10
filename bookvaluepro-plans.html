@@ -98,8 +98,8 @@ h1{font-family:'DM Serif Display',serif;font-size:clamp(32px,5vw,44px);color:var
 <main class="wrap">
   <div class="head">
     <div class="eyebrow">Choose your plan</div>
-    <h1>Start with 3 months free</h1>
-    <p>Every plan includes a <strong>3-month free trial</strong>. You won't be charged until <strong id="trial-date">—</strong>, and you can cancel anytime before then.</p>
+    <h1>Start with <span data-bvp-trial="days">14 days</span> free</h1>
+    <p>Every plan includes a <strong><span data-bvp-trial="adj">14-day</span> free trial</strong>. You won't be charged until <strong id="trial-date">—</strong>, and you can cancel anytime before then.</p>
   </div>
 
   <div class="banner" id="banner"></div>
@@ -127,7 +127,7 @@ h1{font-family:'DM Serif Display',serif;font-size:clamp(32px,5vw,44px);color:var
         <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Underwriting Assistant</li>
       </ul>
 
-      <button class="btn-go" id="btn-individual" onclick="choose('individual')">Start 3-month free trial</button>
+      <button class="btn-go" id="btn-individual" onclick="choose('individual')">Start <span data-bvp-trial="adj">14-day</span> free trial</button>
       <div class="plan-err" id="err-individual"></div>
     </section>
 
@@ -152,7 +152,7 @@ h1{font-family:'DM Serif Display',serif;font-size:clamp(32px,5vw,44px);color:var
         <input id="agency-name" type="text" maxlength="100" placeholder="e.g. Jordan Insurance Group" autocomplete="organization"/>
       </div>
 
-      <button class="btn-go" id="btn-agency" onclick="choose('agency')">Start 3-month free trial</button>
+      <button class="btn-go" id="btn-agency" onclick="choose('agency')">Start <span data-bvp-trial="adj">14-day</span> free trial</button>
       <div class="plan-err" id="err-agency"></div>
     </section>
   </div>
@@ -208,7 +208,7 @@ async function choose(kind) {
   }
 
   document.querySelectorAll('.btn-go').forEach(b => b.disabled = true);
-  const label = btn.textContent;
+  const label = btn.innerHTML;
   btn.textContent = 'Opening secure checkout…';
   try {
     await bvpStartCheckout(plan, agencyName);
@@ -216,7 +216,7 @@ async function choose(kind) {
     err.textContent = e.message || 'Something went wrong. Please try again.';
     err.classList.add('show');
     document.querySelectorAll('.btn-go').forEach(b => b.disabled = false);
-    btn.textContent = label;
+    btn.innerHTML = label;
   }
 }
 
@@ -225,8 +225,7 @@ async function choose(kind) {
   if (!session) return;
   document.getElementById('user-email').textContent = session.user.email;
 
-  const trialEnd = new Date();
-  trialEnd.setMonth(trialEnd.getMonth() + BVP_TRIAL_MONTHS);
+  const trialEnd = bvpTrialEndDate();
   document.getElementById('trial-date').textContent = fmtDate(trialEnd);
   document.getElementById('trial-date-2').textContent = fmtDate(trialEnd);
 

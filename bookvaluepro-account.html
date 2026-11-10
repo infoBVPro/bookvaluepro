@@ -414,7 +414,7 @@ async function render(session) {
       return access;
     default:
       renderSimple('No active plan', '<span class="chip grey">None</span>',
-        `Choose a plan to start your ${BVP_TRIAL_MONTHS}-month free trial.`,
+        `Choose a plan to start your ${bvpTrialText('adj')} free trial.`,
         `<a class="btn btn-primary" href="${BVP_PLANS_PAGE}">Choose a plan</a>`);
       return access;
   }
@@ -478,7 +478,7 @@ async function saveSenderProfile() {
     if (done(access)) {
       // New agency: go straight to agency setup.
       if (access.reason === 'agency_owner') { location.href = BVP_AGENCY_SETUP_PAGE; return; }
-      showBanner('info', `You're all set. Your ${BVP_TRIAL_MONTHS}-month free trial has started. <a href="bookvaluepro-upload.html" style="color:inherit;font-weight:600;">Upload your book →</a>`);
+      showBanner('info', `You're all set. Your ${bvpTrialText('adj')} free trial has started. <a href="bookvaluepro-upload.html" style="color:inherit;font-weight:600;">Upload your book →</a>`);
     } else {
       showBanner('warn', 'Your payment details were received, but your plan is still being set up. Please refresh this page in a minute.');
     }

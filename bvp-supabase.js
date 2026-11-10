@@ -231,7 +231,35 @@ const BVP_PRICING = {
   individual_annual:  { label: 'Individual — Annual',  amount: 499,   interval: 'year'  },
   agency:             { label: 'Agency',               amount: 400,   interval: 'month', includedLicenses: 10, extraLicense: 40 },
 };
-const BVP_TRIAL_MONTHS = 3;
+// Free-trial length in days. Must match the trial set in Stripe /
+// the create-checkout-session function. All trial wording on the site
+// (home, Plans, Account) is filled in from this value.
+const BVP_TRIAL_DAYS = 14;
+
+// "14 days" / "14-day" wording for the trial.
+function bvpTrialText(kind) {
+  const d = BVP_TRIAL_DAYS;
+  if (kind === 'adj') return `${d}-day`;
+  return `${d} ${d === 1 ? 'day' : 'days'}`;
+}
+
+// Date the trial ends if started today.
+function bvpTrialEndDate(from) {
+  const d = from ? new Date(from) : new Date();
+  d.setDate(d.getDate() + BVP_TRIAL_DAYS);
+  return d;
+}
+
+// Fill any element marked data-bvp-trial="days" or "adj" with the trial wording.
+function bvpFillTrialText(root) {
+  (root || document).querySelectorAll('[data-bvp-trial]').forEach(el => {
+    el.textContent = bvpTrialText(el.getAttribute('data-bvp-trial'));
+  });
+}
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => bvpFillTrialText());
+  else bvpFillTrialText();
+}
 
 // Monthly agency price for a given number of licenses in use.
 function bvpAgencyMonthly(licenses) {
