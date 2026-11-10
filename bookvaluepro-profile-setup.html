@@ -83,15 +83,6 @@ h1{font-family:'DM Serif Display',serif;font-size:32px;color:var(--deep);font-we
       <div class="states" id="p-states"></div>
     </section>
 
-    <section class="card">
-      <h2>Renewal reminders <span class="opt-tag" style="font-family:'DM Sans';font-size:13px;">optional</span></h2>
-      <p class="hint">Add these if you know them and we'll remind you before they lapse.</p>
-      <div class="grid">
-        <div class="field"><label for="p-ahip">AHIP certification expires</label><input id="p-ahip" type="date"/></div>
-        <div class="field"><label for="p-eo">E&amp;O insurance expires</label><input id="p-eo" type="date"/></div>
-      </div>
-    </section>
-
     <section class="card" id="sender-card">
       <h2>Email sender details <span class="opt-tag" style="font-family:'DM Sans';font-size:13px;">optional now · needed to send outreach</span></h2>
       <p class="hint" id="sender-hint">What clients see on emails you send from BookValuePro. The law requires a mailing address on marketing emails.</p>
@@ -138,8 +129,6 @@ async function save() {
     npn: blankToNull($('p-npn').value),
     resident_state: $('p-state').value || null,
     license_states: [...document.querySelectorAll('#p-states input:checked')].map(i => i.value),
-    ahip_expires_on: $('p-ahip').value || null,
-    eo_expires_on: $('p-eo').value || null,
     updated_at: new Date().toISOString(),
   };
   if (!row.full_name) return showMsg('Please enter your full legal name.');
@@ -199,8 +188,6 @@ async function save() {
   $('p-name').value = (lic && lic.full_name) || (sender && sender.display_name) || '';
   $('p-npn').value = (lic && lic.npn) || '';
   $('p-state').value = (lic && lic.resident_state) || '';
-  $('p-ahip').value = (lic && lic.ahip_expires_on) || '';
-  $('p-eo').value = (lic && lic.eo_expires_on) || '';
   renderStates();
   $('p-state').addEventListener('change', renderStates);
 
