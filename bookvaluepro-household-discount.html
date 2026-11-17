@@ -703,11 +703,21 @@ function renderHH(results, state, h) {
     if (res.status === 'notOffered') return card('none', `— Not Offered${uwTip('notOffered')}`, `<div class="result-clean">${_hhEsc(name)} does not currently offer Medicare Supplement in ${stName}.</div>`);
     if (res.status === 'noData') return card('none', `— Not loaded${uwTip('noData')}`, `<div class="result-clean">Household discount rules for ${_hhEsc(name)} aren't loaded yet.</div>`);
     if (res.products) {
+      // Products that reach the same result (same status and %) show it once, in the header.
+      const pctOf = p => p.status === 'qualifies' ? p.best.r.discount_pct : null;
+      const agree = res.products.every(p => p.status === res.products[0].status && pctOf(p) === pctOf(res.products[0]));
+      const allTxt = res.products.length === 2 ? 'both products' : `all ${res.products.length} products`;
       const secs = res.products.map(p => {
         const s = hhBody(p, name, stName, h);
-        return `<div class="result-product"><div class="result-product-head"><span class="result-product-name">${_hhEsc(name)} ${_hhEsc(p.product)}</span><span class="result-badge ${s.cls}">${s.badge}</span></div>${s.body}</div>`;
+        return `<div class="result-product"><div class="result-product-head"><span class="result-product-name">${_hhEsc(name)} ${_hhEsc(p.product)}</span>${agree ? '' : `<span class="result-badge ${s.cls}">${s.badge}</span>`}</div>${s.body}</div>`;
       }).join('');
       const top = hhBody(res, name, stName, h);
+      if (agree) {
+        const label = { qualifies: `✓ ${pctOf(res)}% discount`, noQualify: '– No discount', none: '— No household discount' }[res.status] || '';
+        const tip = { qualifies: 'qualifies', noQualify: 'noQualify', none: 'noDiscount' }[res.status];
+        const intro = `<div class="result-products-intro">${_hhEsc(name)} sells ${res.products.length} Medicare Supplement products in ${stName} — the same result for ${allTxt}:</div>`;
+        return card(top.cls, `${label} (${allTxt})${uwTip(tip)}`, intro + secs);
+      }
       const intro = `<div class="result-products-intro">${_hhEsc(name)} sells ${res.products.length} Medicare Supplement products in ${stName}, each with its own household discount — results for each:</div>`;
       return card(top.cls, res.status === 'qualifies' ? `✓ Best: ${res.best.r.discount_pct}% (${_hhEsc(res.product)})${uwTip('qualifies')}` : top.badge, intro + secs);
     }

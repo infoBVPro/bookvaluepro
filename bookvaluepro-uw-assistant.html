@@ -1062,14 +1062,20 @@ function renderResults(results, carriers) {
           ${!hasData ? `<div class="result-nodata">No underwriting data has been loaded yet for ${bvpCarrierDisplay(x0.carrier)} — this result only reflects what's entered above, not ${bvpCarrierDisplay(x0.carrier)}'s actual rules.</div>` : ''}`;
     };
     // More than one product loaded for this state (e.g. Humana Traditional and Achieve): one
-    // section per product, each with its own badge; the header badge is the best of them.
+    // section per product (Traditional first). When the products disagree, each section has its
+    // own badge and the header shows the best of them; when they agree, the header alone shows
+    // the result ("both products") and the sections carry no badge.
     if (r.products && r.products.length > 1) {
       const stName = UW_STATE_NAMES[r.ruleState] || r.ruleState;
-      const parts = r.products.map(p => `
+      const PRODUCT_ORDER = ['Traditional', 'Achieve'];
+      const prods = r.products.slice().sort((a, b) => ((PRODUCT_ORDER.indexOf(a.product) + 1) || 99) - ((PRODUCT_ORDER.indexOf(b.product) + 1) || 99) || String(a.product).localeCompare(String(b.product)));
+      const agree = prods.every(p => p.status === prods[0].status);
+      const allTxt = prods.length === 2 ? 'both products' : `all ${prods.length} products`;
+      const parts = prods.map(p => `
           <div class="result-product">
             <div class="result-product-head">
               <span class="result-product-name">${bvpCarrierDisplay(r.carrier)} ${p.product}</span>
-              <span class="result-badge ${p.status}">${badgeIcon[p.status]} ${badgeLabel[p.status]}</span>
+              ${agree ? '' : `<span class="result-badge ${p.status}">${badgeIcon[p.status]} ${badgeLabel[p.status]}</span>`}
             </div>
             ${bodyHTML(p, false)}
           </div>`).join('');
@@ -1077,10 +1083,10 @@ function renderResults(results, carriers) {
       <div class="result-card ${r.status}">
         <div class="result-header">
           <span class="result-carrier">${bvpCarrierDisplay(r.carrier)}</span>
-          <span class="result-badge ${r.status}">${badgeIcon[r.status]} Best: ${badgeLabel[r.status]}${uwTip(r.status)}</span>
+          <span class="result-badge ${r.status}">${badgeIcon[r.status]} ${agree ? `${badgeLabel[r.status]} (${allTxt})` : `Best: ${badgeLabel[r.status]}`}${uwTip(r.status)}</span>
         </div>
         <div class="result-body">
-          <div class="result-products-intro">${bvpCarrierDisplay(r.carrier)} sells ${r.products.length} Medicare Supplement products in ${stName}, each with its own application — results for each:</div>
+          <div class="result-products-intro">${bvpCarrierDisplay(r.carrier)} sells ${r.products.length} Medicare Supplement products in ${stName}, each with its own application — ${agree ? `the same result for ${allTxt}:` : 'results for each:'}</div>
           ${parts}
           ${uwCarrierNote(r.carrier)?.note ? `<div class="result-note">${uwCarrierNote(r.carrier).note}</div>` : ''}
         </div>
