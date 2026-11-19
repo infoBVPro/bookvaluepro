@@ -1014,7 +1014,9 @@ let bvpBook = null;
     const policies = await bvpGetPolicies(bvpBook.id);
     // Enrich with live NPV from Supabase commission rates
     await bvpLoadCarriers(); // carrier master list (Supabase `carriers` table)
-    const enriched = await bvpEnrichPolicies(view.agentId, policies);
+    // Same assumptions as the dashboard: the book's own discount rate and savings %.
+    const enriched = await bvpEnrichPolicies(view.agentId, policies,
+      Number(bvpBook.discount_rate) || 10, Number(bvpBook.savings_pct) || 10);
     allClients = enriched.map(p => ({
       ...p,
       name: [p.first_name, p.last_name].filter(Boolean).join(' ') || null,
@@ -1213,6 +1215,9 @@ function priorityBadge(p, isOverride) {
   return `<span class="priority-badge ${cls[p] || 'p2'}">P${p} ${labels[p] || ''}${manual}</span>`;
 }
 function formatDate(d) { return d ? d.substring(0, 10) : '—'; }
+// Payments per year for the Renewal Premium Mode (ren_prem is stored annual).
+function renPremPeriods(mode) { return mode === 'monthly' ? 12 : mode === 'quarterly' ? 4 : 1; }
+
 // Outreach month: eff_month shifted back by lead months (default 3), same logic as outreach page
 const BVP_LEAD_MONTHS = +(localStorage.getItem('bvp_lead_months') || 3);
 // Client panel: State GI Right details
@@ -1428,9 +1433,9 @@ function renderPanel() {
           <div class="field-label">Renewal Premium</div>
           ${editMode
             ? `<input class="field-input" id="edit-ren_prem" type="number" step="0.01" min="0"
-                value="${c.ren_prem || ''}" placeholder="Enter amount"/>`
+                value="${c.ren_prem ? +(c.ren_prem / renPremPeriods(c.prem_mode)).toFixed(2) : ''}" placeholder="Enter amount"/>`
             : `<div class="field-value mono">${c.ren_prem
-                ? fmt$(c.ren_prem)
+                ? fmt$(c.ren_prem) + '/yr'
                 : '<span style="color:var(--text-muted)">Using savings % estimate</span>'}</div>`}
         </div>
       </div>
@@ -1496,9 +1501,10 @@ async function saveClient() {
   const oldPriority = activeClient.priority;
   const priorityChanged = newPriority && newPriority !== oldPriority;
 
-  // Normalize agent-entered renewal premium to annual based on prem_mode
+  // Normalize agent-entered renewal premium to annual based on prem_mode (stored annual;
+  // the edit box shows it back per mode, so re-saving doesn't multiply it again)
   const premMode   = document.getElementById('edit-prem_mode')?.value || 'annual';
-  const premMulti  = premMode === 'monthly' ? 12 : premMode === 'quarterly' ? 4 : 1;
+  const premMulti  = renPremPeriods(premMode);
   const renPremRaw = parseFloat(document.getElementById('edit-ren_prem')?.value) || null;
   const annualRenPrem = renPremRaw != null ? renPremRaw * premMulti : null;
 

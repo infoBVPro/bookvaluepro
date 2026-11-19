@@ -1616,7 +1616,7 @@ async function initFromSupabase() {
     const dbPolicies = await bvpGetPolicies(bvpBook.id);
     if (dbPolicies.length > 0) {
       // Enrich with live NPV using current commission rates
-      const enriched = await bvpEnrichPolicies(bvpSession.user.id, dbPolicies, 10, SAVINGS_PCT);
+      const enriched = await bvpEnrichPolicies(bvpSession.user.id, dbPolicies, Number(bvpBook.discount_rate) || 10, Number(bvpBook.savings_pct) || SAVINGS_PCT);
       POLICIES.length = 0;
       enriched.forEach(p => {
         POLICIES.push({

@@ -288,7 +288,7 @@
       let bookContext = 'No active book of business found.';
       if (book) {
         const policies = await bvpGetPolicies(book.id);
-        const enriched = await bvpEnrichPolicies(agentId, policies);
+        const enriched = await bvpEnrichPolicies(agentId, policies, Number(book.discount_rate) || 10, Number(book.savings_pct) || 10);
         bookContext = buildBookContext(book, enriched) + '\n\n' + buildGIContext(enriched);
       }
 

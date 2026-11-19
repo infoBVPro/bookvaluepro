@@ -244,14 +244,6 @@ const moneyShort = v => { const n = Math.round(v || 0); if (Math.abs(n) >= 1e6) 
 const fmtDay = iso => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
 const validEmail = e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e || '');
 
-// Same formula as the dashboard and Agency Overview.
-function oppLTV(p, savPct, discount) {
-  const rr = p._renRates || [];
-  let v = 0;
-  for (let i = 0; i < rr.length; i++) v += (rr[i] * (p.curr_prem || 0) * (1 - savPct / 100) * 12) / Math.pow(1 + discount, i + 1);
-  return v;
-}
-
 function toRow(r, p) {
   const email = (p.email || '').trim().toLowerCase();
   return {

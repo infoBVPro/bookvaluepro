@@ -789,33 +789,45 @@ body { padding-left: 64px; }
 
 <script>
 // ── YEARS & CONSTANTS ────────────────────────────────────────────────
-const YEARS    = [2026,2027,2028,2029,2030,2031,2032,2033,2034,2035];
+// Ten calendar years starting this year (this year = anniversaries still to come).
+const YEARS    = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() + i);
 let DISCOUNT = 0.10;
 
 
-// Fields: pr=priority, co=company, mp=commPrem, cp=currPrem,
-//         rc=curr_commission_%s (11 values), rr=renewal_commission_%s (11 values)
+// Fields: pr=priority, co=company, mp=commPrem (monthly), cp=currPrem (monthly),
+//         pt=years from today to each future commission payment (one per anniversary),
+//         py=calendar year of each payment,
+//         rc=current-policy rate paid at each payment, rr=switched-policy rate at each payment
+//         (a switch takes effect on the next anniversary and restarts at duration 1),
+//         ra=agent-entered ANNUAL renewal premium (null → current premium less the savings %).
+// Commission is paid in full on each anniversary (see bvp-supabase.js, NPV CALCULATION).
 const POLICIES = []; // Populated from Supabase
 // ── LIVE CALCULATION ENGINE ──────────────────────────────────────────
-// Current LTV: CommPrem × curr_commission% at each duration / (1+r)^i × 12
-function policyCurrentNPV(p) {
-  // Use pre-calculated curr_npv from bvpEnrichPolicies
-  return p.curr_npv || 0;
+// Recalculated here (not read from curr_npv/ren_npv) so both sliders update live.
+function policyOppAnnualPrem(p, savPct) {
+  return p.ra != null ? p.ra : p.cp * 12 * (1 - savPct / 100);
 }
-function policyOppNPV(p, savPct) {
-  // Recalculate live from renewal rate schedule so slider changes are reflected instantly.
-  // Mirrors policyOppCF: CurrPrem × (1 - savPct%) × renewalRate × 12, discounted per year.
-  if (!p.rr || !p.rr.length) return 0;
+// Current LTV: CommPrem × 12 × rate at each payment, discounted from today to its anniversary.
+function policyCurrentNPV(p) {
+  if (!p.rc || !p.pt) return p.curr_npv || 0;
   let npv = 0;
-  for (let i = 0; i < p.rr.length; i++) {
-    npv += (p.rr[i] * p.cp * (1 - savPct / 100) * 12) / Math.pow(1 + DISCOUNT, i + 1);
-  }
+  for (let k = 0; k < p.rc.length; k++) npv += ((p.rc[k] || 0) * p.mp * 12) / Math.pow(1 + DISCOUNT, p.pt[k]);
   return npv;
 }
-// Annual current CF for policy in year slot i: CommPrem × curr% × 12
-function policyCurrCF(p, i) { return (p.rc[i] || 0) * p.mp * 12; }
-// Annual opportunity CF for policy in year slot i: CurrPrem × (1-sav%) × renewal% × 12
-function policyOppCF(p, i, savPct) { return (p.rr[i] || 0) * p.cp * (1 - savPct/100) * 12; }
+// Opportunity LTV: switch on the next anniversary; same payment dates, durations 1, 2, 3 …
+function policyOppNPV(p, savPct) {
+  if (!p.rr || !p.pt) return p.ren_npv || 0;
+  const prem = policyOppAnnualPrem(p, savPct);
+  let npv = 0;
+  for (let k = 0; k < p.rr.length; k++) npv += ((p.rr[k] || 0) * prem) / Math.pow(1 + DISCOUNT, p.pt[k]);
+  return npv;
+}
+// Payment index falling in calendar year YEARS[i] (one anniversary per year), or -1.
+function policyPayIdx(p, i) { return (p.py || []).indexOf(YEARS[i]); }
+// Current commission paid in calendar year YEARS[i]
+function policyCurrCF(p, i) { const k = policyPayIdx(p, i); return k < 0 ? 0 : (p.rc[k] || 0) * p.mp * 12; }
+// Opportunity commission paid in calendar year YEARS[i]
+function policyOppCF(p, i, savPct) { const k = policyPayIdx(p, i); return k < 0 ? 0 : (p.rr[k] || 0) * policyOppAnnualPrem(p, savPct); }
 
 function cohortPolicies(pr) { return POLICIES.filter(p => p.pr === pr); }
 
@@ -1408,6 +1420,9 @@ async function initFromSupabase() {
           cp:       p.curr_prem,
           rc:       p._currRates || [],
           rr:       p._renRates  || [],
+          pt:       p._payT      || [],
+          py:       p._payYear   || [],
+          ra:       p._renAnnualPrem,
           curr_npv: p.curr_npv,
           ren_npv:  p.ren_npv,
           nm:       [p.first_name, p.last_name].filter(Boolean).join(' ') || null,
@@ -1522,6 +1537,9 @@ async function startRealtimeListener(agentId) {
                 cp:       p.curr_prem,
                 rc:       p._currRates || [],
                 rr:       p._renRates  || [],
+                pt:       p._payT      || [],
+                py:       p._payYear   || [],
+                ra:       p._renAnnualPrem,
                 curr_npv: p.curr_npv,
                 ren_npv:  p.ren_npv,
                 nm:       [p.first_name, p.last_name].filter(Boolean).join(' ') || null,

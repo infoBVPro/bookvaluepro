@@ -1843,8 +1843,9 @@ async function _doUpload(mode, versionName) {
         plan_type:       planTypeVal,
         company:         carrier,
         issued_state:    stateCode,
+        eff_date:        effDateStr,               // full date: duration and payment dates are worked out live from it
         eff_month:       effMonth(effDateStr),
-        duration_yr:     currDurYr,
+        duration_yr:     currDurYr,                // as of upload; pages use the live duration from eff_date
         enrollment_type: enrollmentType,
         priority,
         calc_priority:   priority,
