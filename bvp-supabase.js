@@ -973,119 +973,56 @@ async function bvpSaveAssumptions(bookId, discountRate, savingsPct) {
 }
 
 // ── NPV CALCULATION (client-side) ────────────────────────────
-// How commission is paid (Josh, 2026-11-18 — true for every carrier we support):
-//   the FULL year's commission is paid on each policy anniversary, at the moment
-//   the duration goes up. So the commission for the current policy year has
-//   already been paid; the next payment is on the next anniversary.
-// Payment k (k = 0 .. years-1) is paid on the (k+1)th anniversary after today,
-//   at duration (current + 1 + k), discounted from TODAY to that date:
-//   value = annual premium × rate(duration) / (1 + r)^(years from today).
-// A Save & Switch / renewal takes effect on the NEXT anniversary and restarts at
-//   duration 1 (same payment dates, duration 1, 2, 3 …).
-// Premium units: comm_prem and curr_prem are MONTHLY (as uploaded); ren_prem is
-//   stored ANNUAL (the Clients page annualizes it from its Renewal Premium Mode).
-// Horizon: the `npv_years` setting (number of payments counted).
+// commRates: array of 11 rates [yr1, yr2, ... yr11]
+// Current NPV: policy is at currentDurationYr, rates step through remaining schedule
+// Renewal NPV: restarts at duration 1, uses newPrem = currPrem * (1 - savingsPct/100)
 
-const BVP_MAX_DURATION = 40; // rate arrays cover durations 1..40; past the last loaded duration the last rate carries forward
-
-function _bvpAnniversary(year, month0, day) {
-  const last = new Date(year, month0 + 1, 0).getDate(); // Feb 29 → Feb 28 in non-leap years
-  return new Date(year, month0, Math.min(day, last));
-}
-
-// Where a policy is today and when its next `years` commission payments happen.
-// Returns { duration, firstPayDuration, nextAnniversary, payT[], payYear[], approximate }.
-//   duration          – current policy year (1 = first year)
-//   firstPayDuration  – duration paid on the next anniversary
-//   payT[k]           – years from today to payment k
-//   payYear[k]        – calendar year of payment k
-//   approximate       – true when only the effective MONTH is known (day taken as the 1st)
-function bvpPolicyTiming(p, years = 11, today = new Date()) {
-  today = _bvpDay(today);
-  const eff = _bvpParseDate(p.eff_date);
-  let duration, firstPayDuration, next, approximate = false;
-
-  if (eff && eff > today) {
-    // Not in force yet: the first-year commission is paid on the effective date.
-    duration = 1; firstPayDuration = 1; next = eff;
-  } else if (eff) {
-    let n = today.getFullYear() - eff.getFullYear();                       // anniversaries passed …
-    if (_bvpAnniversary(eff.getFullYear() + n, eff.getMonth(), eff.getDate()) > today) n--; // … on or before today
-    duration = n + 1;
-    firstPayDuration = duration + 1;
-    next = _bvpAnniversary(eff.getFullYear() + n + 1, eff.getMonth(), eff.getDate());
-  } else {
-    // Older rows with no eff_date: trust the stored duration, anniversary on the 1st of eff_month.
-    approximate = true;
-    duration = Number(p.duration_yr) || 1;
-    firstPayDuration = duration + 1;
-    const m = Number(p.eff_month);
-    if (m >= 1 && m <= 12) {
-      next = new Date(today.getFullYear(), m - 1, 1);
-      if (next <= today) next = new Date(today.getFullYear() + 1, m - 1, 1);
-    } else {
-      next = _bvpAddDays(today, 365); // nothing known: assume a year out
-    }
-  }
-
-  const t0 = _bvpDaysBetween(today, next) / 365;
-  const payT = [], payYear = [];
-  for (let k = 0; k < years; k++) { payT.push(t0 + k); payYear.push(next.getFullYear() + k); }
-  return { duration, firstPayDuration, nextAnniversary: next, payT, payYear, approximate };
-}
-
-// Rate for a duration from a duration-indexed array (index 0 = duration 1).
-function bvpRateAt(rates, duration) {
-  if (!rates || !rates.length) return 0;
-  return rates[Math.min(Math.max(duration, 1), rates.length) - 1] || 0;
-}
-
-// Present value of the payments in `timing`, starting at duration `startDuration`.
-// annualPrem: the ANNUAL premium the commission % applies to.
-function bvpCommissionNPV(annualPrem, rates, startDuration, timing, discountPct = 10) {
-  const r = discountPct / 100;
+function bvpCalcCurrentNPV(commPrem, currentDurationYr, effMonth, commRates, discountPct = 10) {
+  const VALUATION_MONTH = new Date().getMonth() + 1;
+  const alreadyRenewed  = effMonth !== null && effMonth <= VALUATION_MONTH;
+  const nextDur         = currentDurationYr + 1;
+  const r               = discountPct / 100;
   let npv = 0;
-  timing.payT.forEach((t, k) => {
-    npv += annualPrem * bvpRateAt(rates, startDuration + k) / Math.pow(1 + r, t);
-  });
-  return npv;
-}
-
-// Current LTV: keep the policy; payments continue at the next durations.
-function bvpCalcCurrentNPV(annualCommPrem, timing, commRates, discountPct = 10) {
-  return bvpCommissionNPV(annualCommPrem, commRates, timing.firstPayDuration, timing, discountPct);
-}
-
-// Renewal LTV: switch on the next anniversary; the new policy restarts at duration 1.
-// annualRenPrem: the new policy's ANNUAL premium (agent-entered, or current × (1 − savings %)).
-function bvpCalcRenewalNPV(annualRenPrem, timing, commRates, discountPct = 10) {
-  return bvpCommissionNPV(annualRenPrem, commRates, 1, timing, discountPct);
-}
-
-// Horizon (`npv_years`) per agent, cached for the page.
-const _bvpNpvYearsCache = new Map();
-async function bvpNpvYears(agentId) {
-  if (_bvpNpvYearsCache.has(agentId)) return _bvpNpvYearsCache.get(agentId);
-  let years = null;
-  try {
-    const s = await bvpGetSettingsFor(agentId);
-    years = Math.round(Number(s && s.npv_years));
-  } catch (e) {
-    console.warn('bvpNpvYears: settings could not be loaded, using 11 years.', e.message || e);
+  for (let i = 0; i < 11; i++) {
+    let rate = 0;
+    if (alreadyRenewed) {
+      rate = i === 0 ? 0 : (commRates[Math.min(nextDur - 1 + (i - 1), 10)] || 0);
+    } else {
+      rate = commRates[Math.min(nextDur - 1 + i, 10)] || 0;
+    }
+    npv += (commPrem * rate) / Math.pow(1 + r, i + 1);
   }
-  if (!(years >= 1 && years <= 40)) years = 11;
-  _bvpNpvYearsCache.set(agentId, years);
-  return years;
+  return npv * 12;
+}
+
+function bvpCalcRenewalNPV(currPrem, savingsPct, effMonth, commRates, discountPct = 10) {
+  // Same already-renewed logic as current NPV:
+  // If policy already renewed this year → cf[0] = $0, cf[1..10] = Dur1..10 rates
+  // If not yet renewed → cf[0..10] = Dur1..11 rates
+  // Renewal always restarts at Duration 1 commission rates
+  const VALUATION_MONTH = new Date().getMonth() + 1;
+  const alreadyRenewed  = effMonth !== null && effMonth <= VALUATION_MONTH;
+  const r               = discountPct / 100;
+  const newPrem         = currPrem * (1 - savingsPct / 100);
+  let npv = 0;
+  for (let i = 0; i < 11; i++) {
+    let rate = 0;
+    if (alreadyRenewed) {
+      rate = i === 0 ? 0 : (commRates[Math.min(i - 1, 10)] || 0);
+    } else {
+      rate = commRates[Math.min(i, 10)] || 0;
+    }
+    npv += (newPrem * rate) / Math.pow(1 + r, i + 1);
+  }
+  return npv * 12;
 }
 
 // ── LIVE NPV ENRICHMENT ───────────────────────────────────────
 // Calculates curr_npv and ren_npv live from current commission rates.
 // Call this after loading policies — replaces stored NPV values with
 // fresh calculations using the agent's current commission schedule.
-// discountPct: discount rate % (pass the book's discount_rate)
-// savingsPct:  avg policyholder savings on switch % (pass the book's savings_pct)
-// opts.years:  horizon override (default: the agent's npv_years setting)
-// Also replaces duration_yr with the LIVE duration (stored value kept as _storedDurationYr).
+// discountPct: discount rate % (default 10)
+// savingsPct:  avg policyholder savings on switch % (default 10)
 
 async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct = 10, opts = {}) {
   // Collect unique states + carriers from the book for a scoped fetch
@@ -1097,28 +1034,13 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
   // LOA agents can't read commission rates (database rule) and see no $ figures.
   const loaSelf = share.loa === true;
 
-  const years = opts.years || await bvpNpvYears(agentId);
-
   const comms = loaSelf ? [] : await bvpGetCommissionRates(agentId, states, carriers);
   const generic = bvpGenericCarrier(); // carriers table is loaded by bvpGetCommissionRates
   const _rateMemo = new Map();
 
-  // Duration-indexed rate array (index 0 = duration 1) from commission_rates rows.
-  // Past the last duration loaded, that duration's rate carries forward.
-  function rateArray(rows) {
-    const rates = Array(BVP_MAX_DURATION).fill(null);
-    rows.forEach(r => {
-      const i = (r.duration_yr || 1) - 1;
-      if (i >= 0 && i < BVP_MAX_DURATION) rates[i] = parseFloat(r.rate) || 0;
-    });
-    let last = 0;
-    for (let i = 0; i < BVP_MAX_DURATION; i++) { if (rates[i] == null) rates[i] = last; else last = rates[i]; }
-    return rates;
-  }
-  const ZERO = Array(BVP_MAX_DURATION).fill(0);
-
-  // Rate lookup: carrier + state + plan + enrollment_type → duration-indexed rate array
+  // Rate lookup: carrier + state + plan + enrollment_type → 11-element rate array
   // Fallback chain: exact carrier+state → carrier+any state → Generic+state → Generic+any
+  // NPV calculations use only years 1-11 (indices 0-10); data goes to 20 but we cap at 11.
   function getRates(carrier, state, plan, enrollmentType) {
     const memoKey = ['R', carrier, state, plan, enrollmentType].join('|');
     if (_rateMemo.has(memoKey)) return _rateMemo.get(memoKey);
@@ -1139,13 +1061,20 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
     for (const match of attempts) {
       const rows = comms.filter(match);
       if (rows.length > 0) {
-        const rates = rateArray(rows);
+        // Build 11-slot array (NPV window). Data has 20 yrs; we only need 1-11.
+        const rates = Array(11).fill(0);
+        rows.forEach(r => {
+          const idx = (r.duration_yr || 1) - 1;
+          if (idx >= 0 && idx < 11) rates[idx] = parseFloat(r.rate) || 0;
+        });
         if (rates.some(r => r > 0)) return rates;
       }
     }
     if (!loaSelf) console.warn('bvpEnrichPolicies: no rates found for', carrier, state, plan, enrollmentType);
-    return ZERO;
+    return Array(11).fill(0);
   }
+
+  const VALUATION_MONTH = new Date().getMonth() + 1;
 
   // State GI rules (loaded once per page; null if the table can't be read).
   const giRules = await bvpLoadStateGIRules().catch(() => null);
@@ -1153,8 +1082,6 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
   // GI commission schedule: exact enrollment-type match only, and a 0% schedule
   // stays 0% (it must not fall back to open-enrollment rates). None → 0%.
   function getGIRates(carrier, state, plan) {
-    const memoKey = ['G', carrier, state, plan].join('|');
-    if (_rateMemo.has(memoKey)) return _rateMemo.get(memoKey);
     const T = 'StateGuaranteedIssue';
     const attempts = [
       r => r.carrier === carrier && r.issued_state === state && r.plan === plan && r.enrollment_type === T,
@@ -1162,13 +1089,15 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
       r => generic && r.carrier === generic && r.issued_state === state && r.plan === plan && r.enrollment_type === T,
       r => generic && r.carrier === generic && r.plan === plan && r.enrollment_type === T,
     ];
-    let found = ZERO;
     for (const match of attempts) {
       const rows = comms.filter(match);
-      if (rows.length) { found = rateArray(rows); break; }
+      if (rows.length) {
+        const rates = Array(11).fill(0);
+        rows.forEach(r => { const i = (r.duration_yr || 1) - 1; if (i >= 0 && i < 11) rates[i] = parseFloat(r.rate) || 0; });
+        return rates;
+      }
     }
-    _rateMemo.set(memoKey, found);
-    return found;
+    return Array(11).fill(0);
   }
 
   // Scales a rate schedule by a share: index 0 (policy year 1) gets the
@@ -1179,45 +1108,93 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
   const enriched = policies.map(p => {
     const carrier      = p.company      || generic;
     const state        = p.issued_state || null;
+    const durYr        = p.duration_yr  || 1;
+    const effMonth     = p.eff_month    || null;
+    const commPrem     = p.comm_prem    || 0;
+    const currPrem     = p.curr_prem    || 0;
     const plan         = bvpNormalizePlan(p.plan_type);
     const enrollType   = 'OpenEnrollment'; // enrollment type stored on policy; default to OE
     // A replacement policy is assumed to be UNDERWRITTEN (Josh, 2026-11-02): carriers pay more
     // for underwritten business than GI, and the agent's goal is to get the client approved.
     const renEnrollType = 'Underwritten';
 
-    // Premiums on file are monthly.
-    const annualCurrPrem = (Number(p.curr_prem) || 0) * 12;
-    const annualCommPrem = (Number(p.comm_prem) || 0) * 12;
-    // Agent-entered renewal premium is stored annual; otherwise current × (1 − savings %).
-    const agentRen       = !!(p.ren_carrier && p.ren_prem != null);
-    const renAnnualPrem  = agentRen ? Number(p.ren_prem) || 0 : annualCurrPrem * (1 - savingsPct / 100);
-    const renCarrier     = agentRen ? p.ren_carrier : carrier;
-
-    const timing = bvpPolicyTiming(p, years);
-    const live   = { ...p, duration_yr: timing.duration };
+    const premMulti      = p.prem_mode === 'monthly' ? 12 : p.prem_mode === 'quarterly' ? 4 : 1;
+    const annualCurrPrem = currPrem * premMulti;
+    const annualCommPrem = commPrem * premMulti;
 
     // State GI rights (evaluated once; the values below are per share).
-    const gi = giRules ? bvpEvaluateGI(live, giRules) : undefined;
+    const gi = giRules ? bvpEvaluateGI(p, giRules) : undefined;
 
     // All commission math for one share of the commission.
     function run(sh) {
-      const currSched = scaleRates(getRates(carrier, state, plan, enrollType), sh);
-      const renSched  = scaleRates(getRates(renCarrier, state, plan, renEnrollType), sh);
+      const R = (c, st, pl, et) => scaleRates(getRates(c, st, pl, et), sh);
+      const G = (c, st, pl) => scaleRates(getGIRates(c, st, pl), sh);
 
-      const curr_npv = bvpCalcCurrentNPV(annualCommPrem, timing, currSched, discountPct);
-      const ren_npv  = bvpCalcRenewalNPV(renAnnualPrem, timing, renSched, discountPct);
+      const currRates = R(carrier, state, plan, enrollType);
+      const curr_npv = bvpCalcCurrentNPV(annualCommPrem, durYr, effMonth, currRates, discountPct);
+
+      // Renewal NPV: agent-entered renewal carrier/prem takes priority over savings % estimate.
+      // Renewal restarts at duration 1 rates, same plan and enrollment type.
+      let ren_npv;
+      if (p.ren_carrier && p.ren_prem != null) {
+        const renRates      = R(p.ren_carrier, state, plan, renEnrollType);
+        const alreadyRenewed = effMonth !== null && effMonth <= VALUATION_MONTH;
+        const r = discountPct / 100;
+        let npv = 0;
+        for (let i = 0; i < 11; i++) {
+          const rate = alreadyRenewed
+            ? (i === 0 ? 0 : (renRates[Math.min(i - 1, 10)] || 0))
+            : (renRates[Math.min(i, 10)] || 0);
+          npv += (p.ren_prem * rate) / Math.pow(1 + r, i + 1);
+        }
+        ren_npv = npv * 12;
+      } else {
+        const renRates = R(carrier, state, plan, renEnrollType);
+        ren_npv = bvpCalcRenewalNPV(annualCurrPrem, savingsPct, effMonth, renRates, discountPct);
+      }
+
+      // Build offset arrays for dashboard engine
+      const alreadyRenewed = effMonth !== null && effMonth <= VALUATION_MONTH;
+      const nextDur        = durYr + 1;
+
+      // renRatesForOffset: use agent-set renewal carrier if available, else current carrier
+      const renRatesForOffset = (p.ren_carrier && p.ren_prem != null)
+        ? R(p.ren_carrier, state, plan, renEnrollType)
+        : R(carrier, state, plan, renEnrollType);
+
+      const offsetCurrRates = Array(11).fill(0).map((_, i) => {
+        if (alreadyRenewed) {
+          if (i === 0) return 0;
+          return currRates[Math.min(nextDur - 1 + (i - 1), 10)] || 0;
+        }
+        return currRates[Math.min(nextDur - 1 + i, 10)] || 0;
+      });
+
+      const offsetRenRates = Array(11).fill(0).map((_, i) => {
+        if (alreadyRenewed) {
+          return i === 0 ? 0 : (renRatesForOffset[Math.min(i - 1, 10)] || 0);
+        }
+        return renRatesForOffset[Math.min(i, 10)] || 0;
+      });
 
       // What the same switch would be worth if written as GI.
       let gi_ren_npv = null;
       if (gi && gi.hasRight) {
-        const giSched = scaleRates(getGIRates(renCarrier, state, plan), sh);
-        gi_ren_npv = bvpCalcRenewalNPV(renAnnualPrem, timing, giSched, discountPct);
+        if (p.ren_carrier && p.ren_prem != null) {
+          // Same math as ren_npv's agent-entered branch, on the GI schedule.
+          const giRates = G(p.ren_carrier, state, plan);
+          const r = discountPct / 100;
+          let npv = 0;
+          for (let i = 0; i < 11; i++) {
+            const rate = alreadyRenewed ? (i === 0 ? 0 : (giRates[Math.min(i - 1, 10)] || 0)) : (giRates[Math.min(i, 10)] || 0);
+            npv += (p.ren_prem * rate) / Math.pow(1 + r, i + 1);
+          }
+          gi_ren_npv = npv * 12;
+        } else {
+          gi_ren_npv = bvpCalcRenewalNPV(annualCurrPrem, savingsPct, effMonth, G(carrier, state, plan), discountPct);
+        }
       }
-
-      // Rate paid on each payment date (payment k ↔ timing.payT[k] / payYear[k]).
-      const payCurrRates = timing.payT.map((_, k) => bvpRateAt(currSched, timing.firstPayDuration + k));
-      const payRenRates  = timing.payT.map((_, k) => bvpRateAt(renSched, 1 + k));
-      return { curr_npv, ren_npv, gi_ren_npv, payCurrRates, payRenRates };
+      return { curr_npv, ren_npv, gi_ren_npv, offsetCurrRates, offsetRenRates };
     }
 
     const v = run(share);                          // what this viewer sees
@@ -1231,24 +1208,15 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
       gi.sameCommission = bvpSplitValue(part('ren_npv'), { fy: 1, rn: 1 }) - bvpSplitValue(part('gi_ren_npv'), { fy: 1, rn: 1 }) < 1;
     }
 
-    return { ...p,
-      duration_yr: timing.duration,           // live; the uploaded value is kept below
-      _storedDurationYr: p.duration_yr,
-      _nextAnniversary: timing.nextAnniversary,
-      _timingApprox: timing.approximate,
-      curr_npv: v.curr_npv, ren_npv: v.ren_npv, gi, gi_ren_npv: v.gi_ren_npv,
+    return { ...p, curr_npv: v.curr_npv, ren_npv: v.ren_npv, gi, gi_ren_npv: v.gi_ren_npv,
       // Full (100%) commission split into first-year and renewal parts, so any
       // share can be worked out with bvpSplitValue (e.g. the agency's share).
       _parts: { curr: part('curr_npv'), ren: part('ren_npv'), gi: part('gi_ren_npv') },
       _share: share,
       _annualCurrPrem: annualCurrPrem,
       _annualCommPrem: annualCommPrem,
-      _renAnnualPrem: agentRen ? renAnnualPrem : null, // agent-entered only; else the page applies its savings %
-      // Payment schedule (index k = k-th future payment) for cash-flow views:
-      _payT: timing.payT,
-      _payYear: timing.payYear,
-      _currRates: v.payCurrRates,
-      _renRates: v.payRenRates };
+      _currRates: v.offsetCurrRates,
+      _renRates: v.offsetRenRates };
   });
   if (share.applied) bvpShowShareNote(share);
   return enriched;
@@ -1966,36 +1934,87 @@ const BVP_UW_FALLBACK_DRUGS = [
 // every getter below returns the FULL table regardless of that limit.
 const BVP_UW_PAGE_SIZE = 1000;
 
-async function _bvpFetchAllRows(buildQuery) {
-  let allRows = [];
-  let from = 0;
-  while (true) {
-    const { data, error } = await buildQuery().range(from, from + BVP_UW_PAGE_SIZE - 1);
-    if (error) throw error;
-    if (!data || !data.length) break;
-    allRows = allRows.concat(data);
-    if (data.length < BVP_UW_PAGE_SIZE) break; // last page was short — done
-    from += BVP_UW_PAGE_SIZE;
+// Every page is also sorted by the row id after the table's own sort, so
+// rows that tie on the sort column (thousands of knockout rows share the
+// same question_order) come back in the same order on every page. Without
+// that tie-breaker the database may order ties differently per request,
+// and paging can silently skip some rows and repeat others.
+// Pages are fetched in parallel (a few at a time) after the first page
+// reports the total row count, and a failed page is retried once.
+const BVP_UW_PAGE_CONCURRENCY = 6;
+
+async function _bvpFetchPage(buildQuery, tie, from, withCount) {
+  const opts = withCount ? { count: 'exact' } : undefined;
+  let lastErr = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let q = buildQuery(opts);
+    if (tie) q = q.order(tie, { ascending: true });
+    const res = await q.range(from, from + BVP_UW_PAGE_SIZE - 1);
+    if (!res.error) return res;
+    lastErr = res.error;
+    // Table has no such column: tell the caller to drop the tie-breaker.
+    if (tie && /column|42703|does not exist/i.test((lastErr.message || '') + ' ' + (lastErr.code || ''))) {
+      lastErr._noTie = true; break;
+    }
   }
-  return allRows;
+  throw lastErr;
+}
+
+async function _bvpFetchAllRows(buildQuery, tie = 'id') {
+  let first;
+  try {
+    first = await _bvpFetchPage(buildQuery, tie, 0, true);
+  } catch (e) {
+    if (e && e._noTie) { tie = null; first = await _bvpFetchPage(buildQuery, null, 0, true); }
+    else throw e;
+  }
+  let rows = first.data || [];
+  if (rows.length < BVP_UW_PAGE_SIZE) return rows;
+  const total = typeof first.count === 'number' ? first.count : null;
+  if (total === null) {
+    // No count returned: fall back to fetching one page after another.
+    let from = BVP_UW_PAGE_SIZE;
+    while (true) {
+      const { data } = await _bvpFetchPage(buildQuery, tie, from, false);
+      if (!data || !data.length) break;
+      rows = rows.concat(data);
+      if (data.length < BVP_UW_PAGE_SIZE) break;
+      from += BVP_UW_PAGE_SIZE;
+    }
+    return rows;
+  }
+  const starts = [];
+  for (let f = BVP_UW_PAGE_SIZE; f < total; f += BVP_UW_PAGE_SIZE) starts.push(f);
+  const pages = new Array(starts.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < starts.length) {
+      const i = next++;
+      const { data } = await _bvpFetchPage(buildQuery, tie, starts[i], false);
+      pages[i] = data || [];
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(BVP_UW_PAGE_CONCURRENCY, starts.length) }, worker));
+  pages.forEach(p => { rows = rows.concat(p); });
+  return rows;
 }
 
 async function bvpGetUWConditionList() {
   try {
-    return await _bvpFetchAllRows(() => bvp.from('uw_condition_list').select('*').order('name'));
+    return await _bvpFetchAllRows(opts => bvp.from('uw_condition_list').select('*', opts).order('name'));
   } catch (e) { console.warn('bvpGetUWConditionList:', e.message || e); return []; }
 }
 
 async function bvpGetUWDrugList() {
   try {
-    return await _bvpFetchAllRows(() => bvp.from('uw_drug_list').select('*').order('name'));
+    return await _bvpFetchAllRows(opts => bvp.from('uw_drug_list').select('*', opts).order('name'));
   } catch (e) { console.warn('bvpGetUWDrugList:', e.message || e); return []; }
 }
 
 async function bvpGetUWBuildCharts(carriers = null) {
   try {
-    return await _bvpFetchAllRows(() => {
-      let q = bvp.from('uw_build_charts').select('*').order('id');
+    return await _bvpFetchAllRows(opts => {
+      let q = bvp.from('uw_build_charts').select('*', opts).order('id');
       if (carriers && carriers.length) q = q.in('carrier', carriers);
       return q;
     });
@@ -2010,8 +2029,8 @@ async function bvpGetUWBuildCharts(carriers = null) {
 // attached, e.g. "diagnosed or treated for CHF in the last 2 years?").
 async function bvpGetUWKnockoutQuestions(carriers = null) {
   try {
-    return await _bvpFetchAllRows(() => {
-      let q = bvp.from('uw_knockout_questions').select('*').order('question_order');
+    return await _bvpFetchAllRows(opts => {
+      let q = bvp.from('uw_knockout_questions').select('*', opts).order('question_order');
       if (carriers && carriers.length) q = q.in('carrier', carriers);
       return q;
     });
@@ -2020,8 +2039,8 @@ async function bvpGetUWKnockoutQuestions(carriers = null) {
 
 async function bvpGetUWDeclinableDrugs(carriers = null) {
   try {
-    return await _bvpFetchAllRows(() => {
-      let q = bvp.from('uw_declinable_drugs').select('*').order('id');
+    return await _bvpFetchAllRows(opts => {
+      let q = bvp.from('uw_declinable_drugs').select('*', opts).order('id');
       if (carriers && carriers.length) q = q.in('carrier', carriers);
       return q;
     });
@@ -2048,7 +2067,7 @@ async function bvpLogUnrecognizedTerm(term, kind = 'condition') {
 // (e.g. Irregular Heartbeat). Fail-soft like the other getters.
 async function bvpGetUWConditionLinks() {
   try {
-    return await _bvpFetchAllRows(() => bvp.from('uw_condition_links').select('*').order('condition_name'));
+    return await _bvpFetchAllRows(opts => bvp.from('uw_condition_links').select('*', opts).order('condition_name'));
   } catch (e) { console.warn('bvpGetUWConditionLinks:', e.message || e); return []; }
 }
 
@@ -2057,34 +2076,61 @@ async function bvpGetUWConditionLinks() {
 // carrier's rule for the condition it treats. Fail-soft like the others.
 async function bvpGetUWDrugConditions() {
   try {
-    return await _bvpFetchAllRows(() => bvp.from('uw_drug_conditions').select('*').order('drug_name'));
+    return await _bvpFetchAllRows(opts => bvp.from('uw_drug_conditions').select('*', opts).order('drug_name'));
   } catch (e) { console.warn('bvpGetUWDrugConditions:', e.message || e); return []; }
 }
 
-async function bvpLoadUWData(carriers = null) {
-  if (!carriers) {
-    await bvpLoadCarriers();
-    carriers = bvpUWCarriers();
-  }
-  const [conditionsDb, drugsDb, buildCharts, knockouts, declinableDrugs, conditionLinks, drugConditions] = await Promise.all([
-    bvpGetUWConditionList(),
-    bvpGetUWDrugList(),
-    bvpGetUWBuildCharts(carriers),
-    bvpGetUWKnockoutQuestions(carriers),
-    bvpGetUWDeclinableDrugs(carriers),
-    bvpGetUWConditionLinks(),
-    bvpGetUWDrugConditions(),
-  ]);
+// One shared load per page: the UW page, its Check button and the chat
+// all reuse the same in-flight request instead of starting their own.
+// onLists(conditionList, drugList) fires as soon as the two small pick
+// lists arrive, so the type-ahead boxes work before the large rule tables
+// (40,000+ knockout rows) finish downloading.
+let _bvpUWLoadJob = null;
 
-  return {
-    conditionList:   conditionsDb.length ? conditionsDb : BVP_UW_FALLBACK_CONDITIONS,
-    drugList:        drugsDb.length ? drugsDb : BVP_UW_FALLBACK_DRUGS,
-    buildCharts:     buildCharts,
-    knockouts:       knockouts,       // per-condition decline/case-by-case decisions + lookback live here now
-    declinableDrugs: declinableDrugs,
-    conditionLinks:  conditionLinks,
-    drugConditions:  drugConditions,
-  };
+function _bvpStartUWLoad(carriers) {
+  const lists = Promise.all([bvpGetUWConditionList(), bvpGetUWDrugList()]).then(([c, d]) => ({
+    conditionList: c.length ? c : BVP_UW_FALLBACK_CONDITIONS,
+    drugList:      d.length ? d : BVP_UW_FALLBACK_DRUGS,
+  }));
+  const all = (async () => {
+    if (!carriers) {
+      await bvpLoadCarriers();
+      carriers = bvpUWCarriers();
+    }
+    const [l, buildCharts, knockouts, declinableDrugs, conditionLinks, drugConditions] = await Promise.all([
+      lists,
+      bvpGetUWBuildCharts(carriers),
+      bvpGetUWKnockoutQuestions(carriers),
+      bvpGetUWDeclinableDrugs(carriers),
+      bvpGetUWConditionLinks(),
+      bvpGetUWDrugConditions(),
+    ]);
+    return {
+      conditionList:   l.conditionList,
+      drugList:        l.drugList,
+      buildCharts:     buildCharts,
+      knockouts:       knockouts,       // per-condition decline/case-by-case decisions + lookback live here now
+      declinableDrugs: declinableDrugs,
+      conditionLinks:  conditionLinks,
+      drugConditions:  drugConditions,
+    };
+  })();
+  return { lists, all };
+}
+
+function bvpLoadUWData(carriers = null, onLists = null) {
+  let job;
+  if (!carriers) {
+    if (!_bvpUWLoadJob) {
+      _bvpUWLoadJob = _bvpStartUWLoad(null);
+      _bvpUWLoadJob.all.catch(() => { _bvpUWLoadJob = null; });
+    }
+    job = _bvpUWLoadJob;
+  } else {
+    job = _bvpStartUWLoad(carriers);
+  }
+  if (onLists) job.lists.then(l => onLists(l.conditionList, l.drugList));
+  return job.all;
 }
 
 // Where a rule comes from, for the small print under a result. Rows taken
@@ -2481,6 +2527,11 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
     conditions.forEach(cond => {
       let matches = (data.knockouts || []).filter(r =>
         r.carrier === carrier && _bvpUwNamesMatch(r.condition_name, cond));
+      // A carrier rule written for this exact condition wins over rules that match only
+      // through a "same" name link (e.g. Iowa's "HIV infection" row = Needs Review must not
+      // be overridden by its "HIV/AIDS" row for the AIDS question = Decline).
+      const _exact = matches.filter(r => (r.condition_name || '').trim().toLowerCase() === cond.trim().toLowerCase());
+      if (_exact.length) matches = _exact;
 
       // Informational rows (decision 'info'): "not a knockout by itself, but
       // confirm ..." notes. Shown as a green info line; they don't change the

@@ -450,6 +450,8 @@ body { padding-left: 64px; }
 let bvpSession = null;
 const unrecognizedConditions = new Set(); // lowercase free-typed conditions not in the list
 let bvpBook    = null;
+let uwDataPromise = null;
+let uwLoading     = false; // true while the UW rule tables are still downloading
 let uwData     = null; // { conditionList, drugList, buildCharts, knockouts, declinableConditions, declinableDrugs }
 let selectedSex = 'M';
 const selectedCarriers   = new Set();
@@ -638,7 +640,7 @@ function updateRunHint() {
     btn.disabled = true;
   } else {
     hint.textContent = `${selectedCarriers.size} carrier${selectedCarriers.size > 1 ? 's' : ''} selected`;
-    btn.disabled = false;
+    btn.disabled = uwLoading;
   }
 }
 
@@ -820,7 +822,7 @@ function setupTagInput({ inputId, boxId, suggestId, list, selectedArr, getLabel,
 
 // ── RUN CHECK ─────────────────────────────────────────────────────────
 async function runUWCheck() {
-  if (selectedCarriers.size === 0) return;
+  if (selectedCarriers.size === 0 || uwLoading) return;
   const btn = document.getElementById('btn-run-uw');
   btn.disabled = true;
   btn.textContent = 'Checking…';
@@ -851,7 +853,7 @@ async function runUWCheck() {
     return;
   }
 
-  if (!uwData) uwData = await bvpLoadUWData();
+  if (!uwData) uwData = await (uwDataPromise || bvpLoadUWData());
 
   const results = (typeof bvpEvaluateUWByProduct === 'function' ? bvpEvaluateUWByProduct : bvpEvaluateUW)(profile, selectedConditions, selectedDrugs, carriers, uwData)
     .map(r => uwNotOffered(r.carrier, state) ? notOfferedResult(r.carrier) : r);
@@ -1118,21 +1120,44 @@ async function initFromSupabase() {
   const bnEl = document.getElementById('book-name');
   if (bnEl) bnEl.textContent = bvpBook ? (bvpBook.file_name + ' — ' + bvpBook.policy_count + ' policies') : 'No book uploaded';
 
-  // Pre-load UW reference data in the background so the first check is instant.
-  uwData = await bvpLoadUWData();
+  // Load the UW reference data. The condition and medication boxes are
+  // connected as soon as their (small) lists arrive; the Check button waits
+  // for the full rule tables, which take longer.
+  setUWLoading(true);
+  uwDataPromise = bvpLoadUWData(null, (conditionList, drugList) => {
+    setupTagInput({
+      inputId: 'uw-condition-input', boxId: 'uw-condition-box', suggestId: 'uw-condition-suggest',
+      list: conditionList, selectedArr: selectedConditions,
+      getLabel: item => item.name, getMeta: item => item.description || item.category || '',
+      freeTextMode: 'flag', unrecognized: unrecognizedConditions,
+      onUnrecognized: term => bvpLogUnrecognizedTerm(term, 'condition'),
+    });
+    setupTagInput({
+      inputId: 'uw-drug-input', boxId: 'uw-drug-box', suggestId: 'uw-drug-suggest',
+      list: drugList, selectedArr: selectedDrugs,
+      getLabel: item => item.name, getMeta: item => item.generic_name || '',
+    });
+  });
+  try {
+    uwData = await uwDataPromise;
+  } finally {
+    setUWLoading(false);
+  }
+}
 
-  setupTagInput({
-    inputId: 'uw-condition-input', boxId: 'uw-condition-box', suggestId: 'uw-condition-suggest',
-    list: uwData.conditionList, selectedArr: selectedConditions,
-    getLabel: item => item.name, getMeta: item => item.description || item.category || '',
-    freeTextMode: 'flag', unrecognized: unrecognizedConditions,
-    onUnrecognized: term => bvpLogUnrecognizedTerm(term, 'condition'),
-  });
-  setupTagInput({
-    inputId: 'uw-drug-input', boxId: 'uw-drug-box', suggestId: 'uw-drug-suggest',
-    list: uwData.drugList, selectedArr: selectedDrugs,
-    getLabel: item => item.name, getMeta: item => item.generic_name || '',
-  });
+// While the underwriting rules are still downloading, the Check button
+// says so and can't be pressed (a check then would miss rules).
+function setUWLoading(on) {
+  uwLoading = on;
+  const btn = document.getElementById('btn-run-uw');
+  if (!btn) return;
+  if (on) {
+    btn.disabled = true;
+    btn.textContent = 'Loading underwriting rules…';
+  } else if (btn.textContent === 'Loading underwriting rules…') {
+    btn.textContent = 'Check eligibility →';
+    updateRunHint();
+  }
 }
 
 // ── TOOLTIPS ──────────────────────────────────────────────────────────
