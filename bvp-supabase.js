@@ -2207,6 +2207,21 @@ function _bvpUwDrugKeys(name, drugList) {
   return keys;
 }
 
+// True when a drug the agent picked is the same drug as one a carrier lists.
+// Besides an exact name, brand or generic match, a carrier's listing covers
+// the versions of that drug that start with its name: a carrier that lists
+// "Spiriva" also catches "Spiriva HandiHaler" and "Spiriva Respimat", and
+// "Tiotropium" catches "Tiotropium Bromide". Only whole words count, and
+// only listings of 4+ letters, so "Spiriva" doesn't catch "Spirivax".
+function _bvpUwDrugKeysMatch(pickedKeys, listedKeys) {
+  for (const l of listedKeys) {
+    if (pickedKeys.has(l)) return true;
+    if (l.length < 4) continue;
+    for (const p of pickedKeys) if (p.startsWith(l + ' ')) return true;
+  }
+  return false;
+}
+
 // Formats a lookback period onto a result message, e.g. " (within the last 2 years)".
 function _bvpUwLookbackSuffix(lookbackYears) {
   if (lookbackYears === null || lookbackYears === undefined) return '';
@@ -2662,7 +2677,7 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
     const verbOf = { decline: 'declines', case_by_case: 'reviews case by case', flag: 'asks about', accept_with_rating: 'rates up' };
     const _bvpUwDrugByCondition = (drug, drugKeys) => {
       const maps = (data.drugConditions || []).filter(m =>
-        [..._bvpUwDrugKeys(m.drug_name, data.drugList)].some(k => drugKeys.has(k)));
+        _bvpUwDrugKeysMatch(drugKeys, _bvpUwDrugKeys(m.drug_name, data.drugList)));
       if (!maps.length) return false;
       const seen = new Set();
       const items = [];
@@ -2738,7 +2753,7 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
       const drugKeys = _bvpUwDrugKeys(drug, data.drugList);
       const allMatches = (data.declinableDrugs || []).filter(r =>
         r.carrier === carrier &&
-        [..._bvpUwDrugKeys(r.drug_name, data.drugList)].some(k => drugKeys.has(k)));
+        _bvpUwDrugKeysMatch(drugKeys, _bvpUwDrugKeys(r.drug_name, data.drugList)));
       // Age-limited drug rows (min_age, e.g. Physicians Mutual's 69+ list):
       // skipped for younger applicants; with no age entered, shown as review.
       const drugAgeUnknown = allMatches.filter(m => m.min_age != null && age == null &&
