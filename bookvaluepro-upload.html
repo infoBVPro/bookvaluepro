@@ -1714,32 +1714,10 @@ async function _doUpload(mode, versionName) {
       return Math.max(1, Math.min(yrs + 1, 11));
     }
 
-    // ── Priority business rules — Issue Age x Policy Duration ─────
-    // Verified against CF_Template_Prototype_3_5_HTMLChecks.xlsx
-    const PRIORITY_RULES = {
-      64: [2,2,2,2,2,1,1,1,1,1,3],
-      65: [2,2,2,2,2,1,1,1,1,1,3],
-      66: [2,2,2,2,2,1,1,1,1,1,3],
-      67: [2,2,2,2,2,1,1,1,1,1,3],
-      68: [2,2,2,2,2,1,1,1,1,1,3],
-      69: [2,2,2,2,2,1,1,1,3,3,3],
-      70: [2,2,2,2,1,1,1,1,3,3,3],
-      71: [2,2,2,1,1,1,1,3,3,3,3],
-      72: [2,2,1,1,1,1,3,3,3,3,3],
-      73: [2,1,1,1,1,3,3,3,3,3,3],
-      74: [2,1,1,1,3,3,3,3,3,3,3],
-      75: [2,1,1,3,3,3,3,3,3,3,3],
-    };
-
-    function calcPriority(dobStr, effDateStr, durYr) {
-      const iAge = issueAge(dobStr, effDateStr);
-      if (iAge === null) return 2;
-      if (iAge <= 63) return 3;
-      if (iAge >= 76) return 3;
-      if (durYr >= 11) return 3;
-      const rules = PRIORITY_RULES[iAge] || [3,3,3,3,3,3,3,3,3,3,3];
-      return rules[Math.min(durYr - 1, 10)];
-    }
+    // ── Priority business rules live in bvp-supabase.js (BVP_PRIORITY_RULES).
+    // The cohort is recalculated on every page load as policies age; the value
+    // saved here is just the cohort on upload day.
+    const calcPriority = bvpCalcPriority;
 
     // ── Load commission rates from Supabase once ──────────────────
     showParsing(true, 'Loading commission schedules…');

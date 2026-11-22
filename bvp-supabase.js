@@ -866,13 +866,93 @@ async function bvpUploadBook(agentId, fileName, policies, mode = 'version', vers
   return bookId;
 }
 
+// ── POLICYHOLDER CLASSIFICATION (cohort) ─────────────────────
+// 1 = Save & Switch, 2 = Steady Book, 3 = Loyalty Watch.
+// Business rules: Issue Age (rows) x Policy Duration Year 1..11 (columns).
+// Worked out LIVE every time policies load, so a client moves cohorts as the
+// policy ages. A manual override (priority_override) always wins.
+// Verified against CF_Template_Prototype_3_5_HTMLChecks.xlsx
+const BVP_PRIORITY_RULES = {
+  64: [2,2,2,2,2,1,1,1,1,1,3],
+  65: [2,2,2,2,2,1,1,1,1,1,3],
+  66: [2,2,2,2,2,1,1,1,1,1,3],
+  67: [2,2,2,2,2,1,1,1,1,1,3],
+  68: [2,2,2,2,2,1,1,1,1,1,3],
+  69: [2,2,2,2,2,1,1,1,3,3,3],
+  70: [2,2,2,2,1,1,1,1,3,3,3],
+  71: [2,2,2,1,1,1,1,3,3,3,3],
+  72: [2,2,1,1,1,1,3,3,3,3,3],
+  73: [2,1,1,1,1,3,3,3,3,3,3],
+  74: [2,1,1,1,3,3,3,3,3,3,3],
+  75: [2,1,1,3,3,3,3,3,3,3,3],
+};
+const BVP_PRIORITY_MIN_AGE = 64;  // issue age below this → Loyalty Watch
+const BVP_PRIORITY_MAX_AGE = 75;  // issue age above this → Loyalty Watch
+const BVP_PRIORITY_MAX_DUR = 11;  // duration year at/after this → Loyalty Watch
+const BVP_PRIORITY_NO_DATA = 2;   // no DOB or effective date → Steady Book
+
+// Whole years between two dates (date-only strings compared in UTC; asOf in local time).
+function _bvpYearsBetween(fromStr, asOf) {
+  const f = new Date(fromStr);
+  if (isNaN(f.getTime())) return null;
+  let y = asOf.getFullYear() - f.getUTCFullYear();
+  if ((asOf.getMonth() * 100 + asOf.getDate()) < (f.getUTCMonth() * 100 + f.getUTCDate())) y--;
+  return y;
+}
+
+function bvpIssueAge(dobStr, effDateStr) {
+  if (!dobStr || !effDateStr) return null;
+  const dob = new Date(dobStr), eff = new Date(effDateStr);
+  if (isNaN(dob.getTime()) || isNaN(eff.getTime())) return null;
+  let age = eff.getUTCFullYear() - dob.getUTCFullYear();
+  if ((eff.getUTCMonth() * 100 + eff.getUTCDate()) < (dob.getUTCMonth() * 100 + dob.getUTCDate())) age--;
+  return age;
+}
+
+function bvpAttainedAge(dobStr, asOf = new Date()) {
+  return dobStr ? _bvpYearsBetween(dobStr, asOf) : null;
+}
+
+// Policy duration year (1 = first year), capped at 11 like the rate schedules.
+function bvpDurationYr(effDateStr, asOf = new Date()) {
+  if (!effDateStr) return null;
+  const yrs = _bvpYearsBetween(effDateStr, asOf);
+  if (yrs === null) return null;
+  return Math.max(1, Math.min(yrs + 1, 11));
+}
+
+function bvpCalcPriority(dobStr, effDateStr, durYr) {
+  const iAge = bvpIssueAge(dobStr, effDateStr);
+  if (iAge === null) return BVP_PRIORITY_NO_DATA;
+  if (iAge < BVP_PRIORITY_MIN_AGE || iAge > BVP_PRIORITY_MAX_AGE) return 3;
+  const dur = Math.max(1, Number(durYr) || 1);
+  if (dur >= BVP_PRIORITY_MAX_DUR) return 3;
+  const rules = BVP_PRIORITY_RULES[iAge];
+  return rules ? rules[Math.min(dur - 1, 10)] : 3;
+}
+
+// Brings a stored policy row up to date: attained age, duration year and cohort
+// as of today. Stored values are only a fallback when dates are missing.
+function bvpApplyLiveFields(p, asOf = new Date()) {
+  const age = bvpAttainedAge(p.dob, asOf);
+  if (age !== null) p.attained_age = age;
+  const dur = bvpDurationYr(p.eff_date, asOf);
+  if (dur !== null) p.duration_yr = dur;
+  if (p.dob && p.eff_date) p.calc_priority = bvpCalcPriority(p.dob, p.eff_date, p.duration_yr);
+  p.priority = p.priority_override != null ? Number(p.priority_override) : (p.calc_priority ?? p.priority);
+  return p;
+}
+
 // ── POLICIES ─────────────────────────────────────────────────
 async function bvpGetPolicies(bookId) {
   const { data, error } = await bvp
     .from('policies').select('*').eq('book_id', bookId)
     .order('priority').order('policy_idx');
   if (error) { console.error('bvpGetPolicies:', error); return []; }
-  return data;
+  const now = new Date();
+  return (data || [])
+    .map(p => bvpApplyLiveFields(p, now))
+    .sort((a, b) => (a.priority || 9) - (b.priority || 9) || (a.policy_idx || 0) - (b.policy_idx || 0));
 }
 
 // ── COMMISSION RATES ──────────────────────────────────────────
