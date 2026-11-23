@@ -914,12 +914,13 @@ function bvpAttainedAge(dobStr, asOf = new Date()) {
   return dobStr ? _bvpYearsBetween(dobStr, asOf) : null;
 }
 
-// Policy duration year (1 = first year), capped at 11 like the rate schedules.
+// Policy duration year (1 = first year). Not capped: the classification rule
+// treats year 11+ as Loyalty Watch, and NPV timing works from eff_date itself.
 function bvpDurationYr(effDateStr, asOf = new Date()) {
   if (!effDateStr) return null;
   const yrs = _bvpYearsBetween(effDateStr, asOf);
   if (yrs === null) return null;
-  return Math.max(1, Math.min(yrs + 1, 11));
+  return Math.max(1, yrs + 1);
 }
 
 function bvpCalcPriority(dobStr, effDateStr, durYr) {
@@ -1128,56 +1129,119 @@ async function bvpSaveAssumptions(bookId, discountRate, savingsPct) {
 }
 
 // ── NPV CALCULATION (client-side) ────────────────────────────
-// commRates: array of 11 rates [yr1, yr2, ... yr11]
-// Current NPV: policy is at currentDurationYr, rates step through remaining schedule
-// Renewal NPV: restarts at duration 1, uses newPrem = currPrem * (1 - savingsPct/100)
+// How commission is paid (Josh, 2026-11-18 — true for every carrier we support):
+//   the FULL year's commission is paid on each policy anniversary, at the moment
+//   the duration goes up. So the commission for the current policy year has
+//   already been paid; the next payment is on the next anniversary.
+// Payment k (k = 0 .. years-1) is paid on the (k+1)th anniversary after today,
+//   at duration (current + 1 + k), discounted from TODAY to that date:
+//   value = annual premium × rate(duration) / (1 + r)^(years from today).
+// A Save & Switch / renewal takes effect on the NEXT anniversary and restarts at
+//   duration 1 (same payment dates, duration 1, 2, 3 …).
+// Premium units: comm_prem and curr_prem are MONTHLY (as uploaded); ren_prem is
+//   stored ANNUAL (the Clients page annualizes it from its Renewal Premium Mode).
+// Horizon: the `npv_years` setting (number of payments counted).
 
-function bvpCalcCurrentNPV(commPrem, currentDurationYr, effMonth, commRates, discountPct = 10) {
-  const VALUATION_MONTH = new Date().getMonth() + 1;
-  const alreadyRenewed  = effMonth !== null && effMonth <= VALUATION_MONTH;
-  const nextDur         = currentDurationYr + 1;
-  const r               = discountPct / 100;
-  let npv = 0;
-  for (let i = 0; i < 11; i++) {
-    let rate = 0;
-    if (alreadyRenewed) {
-      rate = i === 0 ? 0 : (commRates[Math.min(nextDur - 1 + (i - 1), 10)] || 0);
-    } else {
-      rate = commRates[Math.min(nextDur - 1 + i, 10)] || 0;
-    }
-    npv += (commPrem * rate) / Math.pow(1 + r, i + 1);
-  }
-  return npv * 12;
+const BVP_MAX_DURATION = 40; // rate arrays cover durations 1..40; past the last loaded duration the last rate carries forward
+
+function _bvpAnniversary(year, month0, day) {
+  const last = new Date(year, month0 + 1, 0).getDate(); // Feb 29 → Feb 28 in non-leap years
+  return new Date(year, month0, Math.min(day, last));
 }
 
-function bvpCalcRenewalNPV(currPrem, savingsPct, effMonth, commRates, discountPct = 10) {
-  // Same already-renewed logic as current NPV:
-  // If policy already renewed this year → cf[0] = $0, cf[1..10] = Dur1..10 rates
-  // If not yet renewed → cf[0..10] = Dur1..11 rates
-  // Renewal always restarts at Duration 1 commission rates
-  const VALUATION_MONTH = new Date().getMonth() + 1;
-  const alreadyRenewed  = effMonth !== null && effMonth <= VALUATION_MONTH;
-  const r               = discountPct / 100;
-  const newPrem         = currPrem * (1 - savingsPct / 100);
-  let npv = 0;
-  for (let i = 0; i < 11; i++) {
-    let rate = 0;
-    if (alreadyRenewed) {
-      rate = i === 0 ? 0 : (commRates[Math.min(i - 1, 10)] || 0);
+// Where a policy is today and when its next `years` commission payments happen.
+// Returns { duration, firstPayDuration, nextAnniversary, payT[], payYear[], approximate }.
+//   duration          – current policy year (1 = first year)
+//   firstPayDuration  – duration paid on the next anniversary
+//   payT[k]           – years from today to payment k
+//   payYear[k]        – calendar year of payment k
+//   approximate       – true when only the effective MONTH is known (day taken as the 1st)
+function bvpPolicyTiming(p, years = 11, today = new Date()) {
+  today = _bvpDay(today);
+  const eff = _bvpParseDate(p.eff_date);
+  let duration, firstPayDuration, next, approximate = false;
+
+  if (eff && eff > today) {
+    // Not in force yet: the first-year commission is paid on the effective date.
+    duration = 1; firstPayDuration = 1; next = eff;
+  } else if (eff) {
+    let n = today.getFullYear() - eff.getFullYear();                       // anniversaries passed …
+    if (_bvpAnniversary(eff.getFullYear() + n, eff.getMonth(), eff.getDate()) > today) n--; // … on or before today
+    duration = n + 1;
+    firstPayDuration = duration + 1;
+    next = _bvpAnniversary(eff.getFullYear() + n + 1, eff.getMonth(), eff.getDate());
+  } else {
+    // Older rows with no eff_date: trust the stored duration, anniversary on the 1st of eff_month.
+    approximate = true;
+    duration = Number(p.duration_yr) || 1;
+    firstPayDuration = duration + 1;
+    const m = Number(p.eff_month);
+    if (m >= 1 && m <= 12) {
+      next = new Date(today.getFullYear(), m - 1, 1);
+      if (next <= today) next = new Date(today.getFullYear() + 1, m - 1, 1);
     } else {
-      rate = commRates[Math.min(i, 10)] || 0;
+      next = _bvpAddDays(today, 365); // nothing known: assume a year out
     }
-    npv += (newPrem * rate) / Math.pow(1 + r, i + 1);
   }
-  return npv * 12;
+
+  const t0 = _bvpDaysBetween(today, next) / 365;
+  const payT = [], payYear = [];
+  for (let k = 0; k < years; k++) { payT.push(t0 + k); payYear.push(next.getFullYear() + k); }
+  return { duration, firstPayDuration, nextAnniversary: next, payT, payYear, approximate };
+}
+
+// Rate for a duration from a duration-indexed array (index 0 = duration 1).
+function bvpRateAt(rates, duration) {
+  if (!rates || !rates.length) return 0;
+  return rates[Math.min(Math.max(duration, 1), rates.length) - 1] || 0;
+}
+
+// Present value of the payments in `timing`, starting at duration `startDuration`.
+// annualPrem: the ANNUAL premium the commission % applies to.
+function bvpCommissionNPV(annualPrem, rates, startDuration, timing, discountPct = 10) {
+  const r = discountPct / 100;
+  let npv = 0;
+  timing.payT.forEach((t, k) => {
+    npv += annualPrem * bvpRateAt(rates, startDuration + k) / Math.pow(1 + r, t);
+  });
+  return npv;
+}
+
+// Current LTV: keep the policy; payments continue at the next durations.
+function bvpCalcCurrentNPV(annualCommPrem, timing, commRates, discountPct = 10) {
+  return bvpCommissionNPV(annualCommPrem, commRates, timing.firstPayDuration, timing, discountPct);
+}
+
+// Renewal LTV: switch on the next anniversary; the new policy restarts at duration 1.
+// annualRenPrem: the new policy's ANNUAL premium (agent-entered, or current × (1 − savings %)).
+function bvpCalcRenewalNPV(annualRenPrem, timing, commRates, discountPct = 10) {
+  return bvpCommissionNPV(annualRenPrem, commRates, 1, timing, discountPct);
+}
+
+// Horizon (`npv_years`) per agent, cached for the page.
+const _bvpNpvYearsCache = new Map();
+async function bvpNpvYears(agentId) {
+  if (_bvpNpvYearsCache.has(agentId)) return _bvpNpvYearsCache.get(agentId);
+  let years = null;
+  try {
+    const s = await bvpGetSettingsFor(agentId);
+    years = Math.round(Number(s && s.npv_years));
+  } catch (e) {
+    console.warn('bvpNpvYears: settings could not be loaded, using 11 years.', e.message || e);
+  }
+  if (!(years >= 1 && years <= 40)) years = 11;
+  _bvpNpvYearsCache.set(agentId, years);
+  return years;
 }
 
 // ── LIVE NPV ENRICHMENT ───────────────────────────────────────
 // Calculates curr_npv and ren_npv live from current commission rates.
 // Call this after loading policies — replaces stored NPV values with
 // fresh calculations using the agent's current commission schedule.
-// discountPct: discount rate % (default 10)
-// savingsPct:  avg policyholder savings on switch % (default 10)
+// discountPct: discount rate % (pass the book's discount_rate)
+// savingsPct:  avg policyholder savings on switch % (pass the book's savings_pct)
+// opts.years:  horizon override (default: the agent's npv_years setting)
+// Also replaces duration_yr with the LIVE duration (stored value kept as _storedDurationYr).
 
 async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct = 10, opts = {}) {
   // Collect unique states + carriers from the book for a scoped fetch
@@ -1189,14 +1253,29 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
   // LOA agents can't read commission rates (database rule) and see no $ figures.
   const loaSelf = share.loa === true;
 
+  const years = opts.years || await bvpNpvYears(agentId);
+
   const comms = loaSelf ? [] : await bvpGetCommissionRates(agentId, states, carriers);
   const generic = bvpGenericCarrier(); // carriers table is loaded by bvpGetCommissionRates
   const _rateMemo = new Map();
   const ratePool = bvpIndexRates(comms); // carrier+plan → rows (same order as comms)
 
-  // Rate lookup: carrier + state + plan + enrollment_type → 11-element rate array
+  // Duration-indexed rate array (index 0 = duration 1) from commission_rates rows.
+  // Past the last duration loaded, that duration's rate carries forward.
+  function rateArray(rows) {
+    const rates = Array(BVP_MAX_DURATION).fill(null);
+    rows.forEach(r => {
+      const i = (r.duration_yr || 1) - 1;
+      if (i >= 0 && i < BVP_MAX_DURATION) rates[i] = parseFloat(r.rate) || 0;
+    });
+    let last = 0;
+    for (let i = 0; i < BVP_MAX_DURATION; i++) { if (rates[i] == null) rates[i] = last; else last = rates[i]; }
+    return rates;
+  }
+  const ZERO = Array(BVP_MAX_DURATION).fill(0);
+
+  // Rate lookup: carrier + state + plan + enrollment_type → duration-indexed rate array
   // Fallback chain: exact carrier+state → carrier+any state → Generic+state → Generic+any
-  // NPV calculations use only years 1-11 (indices 0-10); data goes to 20 but we cap at 11.
   function getRates(carrier, state, plan, enrollmentType) {
     const memoKey = ['R', carrier, state, plan, enrollmentType].join('|');
     if (_rateMemo.has(memoKey)) return _rateMemo.get(memoKey);
@@ -1219,20 +1298,13 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
       const pool = i < 4 ? ratePool(carrier, plan) : (generic ? ratePool(generic, plan) : []);
       const rows = pool.filter(match);
       if (rows.length > 0) {
-        // Build 11-slot array (NPV window). Data has 20 yrs; we only need 1-11.
-        const rates = Array(11).fill(0);
-        rows.forEach(r => {
-          const idx = (r.duration_yr || 1) - 1;
-          if (idx >= 0 && idx < 11) rates[idx] = parseFloat(r.rate) || 0;
-        });
+        const rates = rateArray(rows);
         if (rates.some(r => r > 0)) return rates;
       }
     }
     if (!loaSelf) console.warn('bvpEnrichPolicies: no rates found for', carrier, state, plan, enrollmentType);
-    return Array(11).fill(0);
+    return ZERO;
   }
-
-  const VALUATION_MONTH = new Date().getMonth() + 1;
 
   // State GI rules (loaded once per page; null if the table can't be read).
   const giRules = await bvpLoadStateGIRules().catch(() => null);
@@ -1240,6 +1312,8 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
   // GI commission schedule: exact enrollment-type match only, and a 0% schedule
   // stays 0% (it must not fall back to open-enrollment rates). None → 0%.
   function getGIRates(carrier, state, plan) {
+    const memoKey = ['G', carrier, state, plan].join('|');
+    if (_rateMemo.has(memoKey)) return _rateMemo.get(memoKey);
     const T = 'StateGuaranteedIssue';
     const attempts = [
       r => r.carrier === carrier && r.issued_state === state && r.plan === plan && r.enrollment_type === T,
@@ -1247,17 +1321,15 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
       r => generic && r.carrier === generic && r.issued_state === state && r.plan === plan && r.enrollment_type === T,
       r => generic && r.carrier === generic && r.plan === plan && r.enrollment_type === T,
     ];
+    let found = ZERO;
     for (let i = 0; i < attempts.length; i++) {
       const match = attempts[i];
       const pool = i < 2 ? ratePool(carrier, plan) : (generic ? ratePool(generic, plan) : []);
       const rows = pool.filter(match);
-      if (rows.length) {
-        const rates = Array(11).fill(0);
-        rows.forEach(r => { const i = (r.duration_yr || 1) - 1; if (i >= 0 && i < 11) rates[i] = parseFloat(r.rate) || 0; });
-        return rates;
-      }
+      if (rows.length) { found = rateArray(rows); break; }
     }
-    return Array(11).fill(0);
+    _rateMemo.set(memoKey, found);
+    return found;
   }
 
   // Scales a rate schedule by a share: index 0 (policy year 1) gets the
@@ -1268,93 +1340,45 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
   const enriched = policies.map(p => {
     const carrier      = p.company      || generic;
     const state        = p.issued_state || null;
-    const durYr        = p.duration_yr  || 1;
-    const effMonth     = p.eff_month    || null;
-    const commPrem     = p.comm_prem    || 0;
-    const currPrem     = p.curr_prem    || 0;
     const plan         = bvpNormalizePlan(p.plan_type);
     const enrollType   = 'OpenEnrollment'; // enrollment type stored on policy; default to OE
     // A replacement policy is assumed to be UNDERWRITTEN (Josh, 2026-11-02): carriers pay more
     // for underwritten business than GI, and the agent's goal is to get the client approved.
     const renEnrollType = 'Underwritten';
 
-    const premMulti      = p.prem_mode === 'monthly' ? 12 : p.prem_mode === 'quarterly' ? 4 : 1;
-    const annualCurrPrem = currPrem * premMulti;
-    const annualCommPrem = commPrem * premMulti;
+    // Premiums on file are monthly.
+    const annualCurrPrem = (Number(p.curr_prem) || 0) * 12;
+    const annualCommPrem = (Number(p.comm_prem) || 0) * 12;
+    // Agent-entered renewal premium is stored annual; otherwise current × (1 − savings %).
+    const agentRen       = !!(p.ren_carrier && p.ren_prem != null);
+    const renAnnualPrem  = agentRen ? Number(p.ren_prem) || 0 : annualCurrPrem * (1 - savingsPct / 100);
+    const renCarrier     = agentRen ? p.ren_carrier : carrier;
+
+    const timing = bvpPolicyTiming(p, years);
+    const live   = { ...p, duration_yr: timing.duration };
 
     // State GI rights (evaluated once; the values below are per share).
-    const gi = giRules ? bvpEvaluateGI(p, giRules) : undefined;
+    const gi = giRules ? bvpEvaluateGI(live, giRules) : undefined;
 
     // All commission math for one share of the commission.
     function run(sh) {
-      const R = (c, st, pl, et) => scaleRates(getRates(c, st, pl, et), sh);
-      const G = (c, st, pl) => scaleRates(getGIRates(c, st, pl), sh);
+      const currSched = scaleRates(getRates(carrier, state, plan, enrollType), sh);
+      const renSched  = scaleRates(getRates(renCarrier, state, plan, renEnrollType), sh);
 
-      const currRates = R(carrier, state, plan, enrollType);
-      const curr_npv = bvpCalcCurrentNPV(annualCommPrem, durYr, effMonth, currRates, discountPct);
-
-      // Renewal NPV: agent-entered renewal carrier/prem takes priority over savings % estimate.
-      // Renewal restarts at duration 1 rates, same plan and enrollment type.
-      let ren_npv;
-      if (p.ren_carrier && p.ren_prem != null) {
-        const renRates      = R(p.ren_carrier, state, plan, renEnrollType);
-        const alreadyRenewed = effMonth !== null && effMonth <= VALUATION_MONTH;
-        const r = discountPct / 100;
-        let npv = 0;
-        for (let i = 0; i < 11; i++) {
-          const rate = alreadyRenewed
-            ? (i === 0 ? 0 : (renRates[Math.min(i - 1, 10)] || 0))
-            : (renRates[Math.min(i, 10)] || 0);
-          npv += (p.ren_prem * rate) / Math.pow(1 + r, i + 1);
-        }
-        ren_npv = npv * 12;
-      } else {
-        const renRates = R(carrier, state, plan, renEnrollType);
-        ren_npv = bvpCalcRenewalNPV(annualCurrPrem, savingsPct, effMonth, renRates, discountPct);
-      }
-
-      // Build offset arrays for dashboard engine
-      const alreadyRenewed = effMonth !== null && effMonth <= VALUATION_MONTH;
-      const nextDur        = durYr + 1;
-
-      // renRatesForOffset: use agent-set renewal carrier if available, else current carrier
-      const renRatesForOffset = (p.ren_carrier && p.ren_prem != null)
-        ? R(p.ren_carrier, state, plan, renEnrollType)
-        : R(carrier, state, plan, renEnrollType);
-
-      const offsetCurrRates = Array(11).fill(0).map((_, i) => {
-        if (alreadyRenewed) {
-          if (i === 0) return 0;
-          return currRates[Math.min(nextDur - 1 + (i - 1), 10)] || 0;
-        }
-        return currRates[Math.min(nextDur - 1 + i, 10)] || 0;
-      });
-
-      const offsetRenRates = Array(11).fill(0).map((_, i) => {
-        if (alreadyRenewed) {
-          return i === 0 ? 0 : (renRatesForOffset[Math.min(i - 1, 10)] || 0);
-        }
-        return renRatesForOffset[Math.min(i, 10)] || 0;
-      });
+      const curr_npv = bvpCalcCurrentNPV(annualCommPrem, timing, currSched, discountPct);
+      const ren_npv  = bvpCalcRenewalNPV(renAnnualPrem, timing, renSched, discountPct);
 
       // What the same switch would be worth if written as GI.
       let gi_ren_npv = null;
       if (gi && gi.hasRight) {
-        if (p.ren_carrier && p.ren_prem != null) {
-          // Same math as ren_npv's agent-entered branch, on the GI schedule.
-          const giRates = G(p.ren_carrier, state, plan);
-          const r = discountPct / 100;
-          let npv = 0;
-          for (let i = 0; i < 11; i++) {
-            const rate = alreadyRenewed ? (i === 0 ? 0 : (giRates[Math.min(i - 1, 10)] || 0)) : (giRates[Math.min(i, 10)] || 0);
-            npv += (p.ren_prem * rate) / Math.pow(1 + r, i + 1);
-          }
-          gi_ren_npv = npv * 12;
-        } else {
-          gi_ren_npv = bvpCalcRenewalNPV(annualCurrPrem, savingsPct, effMonth, G(carrier, state, plan), discountPct);
-        }
+        const giSched = scaleRates(getGIRates(renCarrier, state, plan), sh);
+        gi_ren_npv = bvpCalcRenewalNPV(renAnnualPrem, timing, giSched, discountPct);
       }
-      return { curr_npv, ren_npv, gi_ren_npv, offsetCurrRates, offsetRenRates };
+
+      // Rate paid on each payment date (payment k ↔ timing.payT[k] / payYear[k]).
+      const payCurrRates = timing.payT.map((_, k) => bvpRateAt(currSched, timing.firstPayDuration + k));
+      const payRenRates  = timing.payT.map((_, k) => bvpRateAt(renSched, 1 + k));
+      return { curr_npv, ren_npv, gi_ren_npv, payCurrRates, payRenRates };
     }
 
     const v = run(share);                          // what this viewer sees
@@ -1368,15 +1392,24 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
       gi.sameCommission = bvpSplitValue(part('ren_npv'), { fy: 1, rn: 1 }) - bvpSplitValue(part('gi_ren_npv'), { fy: 1, rn: 1 }) < 1;
     }
 
-    return { ...p, curr_npv: v.curr_npv, ren_npv: v.ren_npv, gi, gi_ren_npv: v.gi_ren_npv,
+    return { ...p,
+      duration_yr: timing.duration,           // live; the uploaded value is kept below
+      _storedDurationYr: p.duration_yr,
+      _nextAnniversary: timing.nextAnniversary,
+      _timingApprox: timing.approximate,
+      curr_npv: v.curr_npv, ren_npv: v.ren_npv, gi, gi_ren_npv: v.gi_ren_npv,
       // Full (100%) commission split into first-year and renewal parts, so any
       // share can be worked out with bvpSplitValue (e.g. the agency's share).
       _parts: { curr: part('curr_npv'), ren: part('ren_npv'), gi: part('gi_ren_npv') },
       _share: share,
       _annualCurrPrem: annualCurrPrem,
       _annualCommPrem: annualCommPrem,
-      _currRates: v.offsetCurrRates,
-      _renRates: v.offsetRenRates };
+      _renAnnualPrem: agentRen ? renAnnualPrem : null, // agent-entered only; else the page applies its savings %
+      // Payment schedule (index k = k-th future payment) for cash-flow views:
+      _payT: timing.payT,
+      _payYear: timing.payYear,
+      _currRates: v.payCurrRates,
+      _renRates: v.payRenRates };
   });
   if (share.applied) bvpShowShareNote(share);
   return enriched;
