@@ -288,7 +288,7 @@
       let bookContext = 'No active book of business found.';
       if (book) {
         const policies = await bvpGetPolicies(book.id);
-        const enriched = await bvpEnrichPolicies(agentId, policies, Number(book.discount_rate) || 10, Number(book.savings_pct) || 10);
+        const enriched = await bvpEnrichPolicies(agentId, policies);
         bookContext = buildBookContext(book, enriched) + '\n\n' + buildGIContext(enriched);
       }
 
@@ -722,14 +722,18 @@ ${ctx}`;
     else if (/civil union/.test(t)) h.partner = 'civil_union';
     else if (/\b(spouse|spouses|wife|husband|married|couple)\b/.test(t)) h.partner = 'spouse';
     else if (/\b(single|lives alone|living alone|widow|widowed|widower|divorced|no spouse)\b/.test(t)) h.partner = 'none';
-    const cnt = t.match(new RegExp("\\b(\\d|one|two|three|four|five|a|an)\\s+(?:other\\s+|adult\\s+)?(?:" + _hhdRel + ")s?\\b"));
-    const rel = t.match(new RegExp("\\b(?:her|his|their|a|an|the|with)\\s+(?:adult\\s+)?(" + _hhdRel.replace('|partner', '') + ")s?\\b"));
+    // An age may sit between the count and the relation: "a 45-year-old roommate", "two 60 year old sisters".
+    const _age = "(?:\\d{2}[- ]?(?:years?[- ]old|yrs?[- ]old|yo)\\s+)?";
+    const cnt = t.match(new RegExp("\\b(\\d|one|two|three|four|five|a|an)\\s+" + _age + "(?:other\\s+|adult\\s+)?(?:" + _hhdRel + ")s?\\b"));
+    const rel = t.match(new RegExp("\\b(?:her|his|their|a|an|the|with)\\s+" + _age + "(?:adult\\s+)?(" + _hhdRel.replace('|partner', '') + ")s?\\b"));
     if (cnt && !/^(partner|boyfriend|girlfriend|companion)/.test(cnt[0].split(/\s+/).pop())) h.adults = Math.min(4, isNaN(+cnt[1]) ? (_hhdNum[cnt[1]] || 1) : +cnt[1]);
     else if (rel) h.adults = 1;
     if (/\b(boyfriend|girlfriend|companion|partner)\b/.test(t) && !h.partner) { h.adults = (h.adults || 0) + (h.adults ? 0 : 1); h.unmarried = true; }
     const age = t.match(new RegExp("\\b(?:" + _hhdRel + ")s?[^.?!]{0,25}?\\b(?:age[d]?\\s*|is\\s+|who's\\s+|,\\s*)(\\d{2})\\b"))
       || t.match(new RegExp("\\b(\\d{2})[- ]?(?:year[- ]old|yr[- ]old|yo)\\s+(?:" + _hhdRel + ")"));
     if (age) h.adultAge = +age[1];
+    // An age given for a household member means there is at least one other adult.
+    if (h.adultAge && !h.adults) h.adults = 1;
     if (/\b(just|recently)\s+moved in\b|\bless than (?:a year|12 months)\b|\b(?:[1-9]|1[01])\s+months?\b/.test(t)) h.together12 = false;
     else if (/\b(\d+|many|several|a few)\s+years\b|\bover a year\b|\bmore than (?:a year|12 months)\b|\b12\+? months\b/.test(t)) h.together12 = true;
     if (/\baffiliate/.test(t)) h.policy = 'affiliate';
