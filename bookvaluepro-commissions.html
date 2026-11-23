@@ -626,6 +626,14 @@ function groupedRows() {
 
     const carrierMap = new Map();
 
+    // Keys (plan|enrollment|year) that have a carrier-specific row in this state.
+    // Built once per state instead of rescanning every row for every Generic row.
+    const carrierSpecificKeys = new Set();
+    filteredRows.forEach(cr => {
+      if (carriersInState.has(cr.carrier) && cr.issued_state === state)
+        carrierSpecificKeys.add(cr.plan + '|' + cr.enrollment_type + '|' + cr.duration_yr);
+    });
+
     filteredRows.forEach(r => {
       const isGeneric  = !!GENERIC && r.carrier === GENERIC;
       const stateMatch = r.issued_state === state;
@@ -635,11 +643,7 @@ function groupedRows() {
 
       // Generic rows: expand into each display carrier (respecting carrier filter)
       if (isGeneric) {
-        const hasCarrierSpecific = filteredRows.some(cr =>
-          carriersInState.has(cr.carrier) && cr.issued_state === state &&
-          cr.plan === r.plan && cr.enrollment_type === r.enrollment_type &&
-          cr.duration_yr === r.duration_yr
-        );
+        const hasCarrierSpecific = carrierSpecificKeys.has(r.plan + '|' + r.enrollment_type + '|' + r.duration_yr);
         if (hasCarrierSpecific) return;
         displayCarriers.forEach(c => {
           if (!carrierMap.has(c)) carrierMap.set(c, new Map());

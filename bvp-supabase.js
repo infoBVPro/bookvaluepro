@@ -871,17 +871,18 @@ async function bvpUploadBook(agentId, fileName, policies, mode = 'version', vers
 // Business rules: Issue Age (rows) x Policy Duration Year 1..11 (columns).
 // Worked out LIVE every time policies load, so a client moves cohorts as the
 // policy ages. A manual override (priority_override) always wins.
-// Verified against CF_Template_Prototype_3_5_HTMLChecks.xlsx
+// Verified against CF_Template_Prototype_3_5_HTMLChecks.xlsx; updated 2026-11-22
+// (69/yr5, 70/yr4, 71/yr3, 72/yr2 moved from Steady Book to Save & Switch).
 const BVP_PRIORITY_RULES = {
   64: [2,2,2,2,2,1,1,1,1,1,3],
   65: [2,2,2,2,2,1,1,1,1,1,3],
   66: [2,2,2,2,2,1,1,1,1,1,3],
   67: [2,2,2,2,2,1,1,1,1,1,3],
   68: [2,2,2,2,2,1,1,1,1,1,3],
-  69: [2,2,2,2,2,1,1,1,3,3,3],
-  70: [2,2,2,2,1,1,1,1,3,3,3],
-  71: [2,2,2,1,1,1,1,3,3,3,3],
-  72: [2,2,1,1,1,1,3,3,3,3,3],
+  69: [2,2,2,2,1,1,1,1,3,3,3],
+  70: [2,2,2,1,1,1,1,1,3,3,3],
+  71: [2,2,1,1,1,1,1,3,3,3,3],
+  72: [2,1,1,1,1,1,3,3,3,3,3],
   73: [2,1,1,1,1,3,3,3,3,3,3],
   74: [2,1,1,1,3,3,3,3,3,3,3],
   75: [2,1,1,3,3,3,3,3,3,3,3],
