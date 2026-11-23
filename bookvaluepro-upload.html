@@ -1719,15 +1719,21 @@ async function _doUpload(mode, versionName) {
     // saved here is just the cohort on upload day.
     const calcPriority = bvpCalcPriority;
 
-    // ── Load commission rates from Supabase once ──────────────────
-    showParsing(true, 'Loading commission schedules…');
-    const allComms = await bvpGetCommissionRates(bvpSession.user.id);
+    // Commission rates are loaded further down, once the file's carriers are known.
+    let allComms = [], ratePool = () => [];
+    await bvpLoadCarriers();
     const GENERIC  = bvpGenericCarrier(); // fallback schedule from the carriers table
 
     // ── Build 11-slot rate array from commission_rates data ───────
     // Fallback chain: exact carrier+state+plan → carrier+plan → Generic+state+plan → Generic+plan
     // NPV uses years 1-11 only; data has 20 years but we cap at index 10.
+    const _rateMemo = new Map();
     function buildRateArray(carrier, state, plan, enrollmentType) {
+      const key = [carrier, state, plan, enrollmentType].join('|');
+      if (!_rateMemo.has(key)) _rateMemo.set(key, _buildRateArray(carrier, state, plan, enrollmentType));
+      return _rateMemo.get(key).slice();
+    }
+    function _buildRateArray(carrier, state, plan, enrollmentType) {
       // GI enrollment types only use GI schedules; a 0% GI schedule is kept
       // as 0% (not replaced by full open-enrollment rates). None found → 0%.
       if (BVP_GI_TYPES.includes(enrollmentType)) {
@@ -1737,8 +1743,10 @@ async function _doUpload(mode, versionName) {
           r => GENERIC && r.carrier === GENERIC && r.issued_state === state && r.plan === plan && r.enrollment_type === enrollmentType,
           r => GENERIC && r.carrier === GENERIC && r.plan === plan && r.enrollment_type === enrollmentType,
         ];
-        for (const match of giAttempts) {
-          const rows = allComms.filter(match);
+        for (let i = 0; i < giAttempts.length; i++) {
+          const match = giAttempts[i];
+          const pool = i < 2 ? ratePool(carrier, plan) : (GENERIC ? ratePool(GENERIC, plan) : []);
+          const rows = pool.filter(match);
           if (rows.length > 0) {
             const rates = Array(11).fill(0);
             rows.forEach(r => {
@@ -1759,8 +1767,10 @@ async function _doUpload(mode, versionName) {
         r => GENERIC && r.carrier === GENERIC && r.plan === plan          && r.enrollment_type === enrollmentType,
         r => GENERIC && r.carrier === GENERIC && r.plan === plan,
       ];
-      for (const match of attempts) {
-        const rows = allComms.filter(match);
+      for (let i = 0; i < attempts.length; i++) {
+        const match = attempts[i];
+        const pool = i < 4 ? ratePool(carrier, plan) : (GENERIC ? ratePool(GENERIC, plan) : []);
+        const rows = pool.filter(match);
         if (rows.length > 0) {
           const rates = Array(11).fill(0);
           rows.forEach(r => {
@@ -1774,7 +1784,6 @@ async function _doUpload(mode, versionName) {
     }
 
     // ── Build policy records ──────────────────────────────────────
-    showParsing(true, 'Building policy records…');
 
     // Helper: read a value from a row using the user's column mapping
     const mapped = (row, fieldKey) => {
@@ -1793,6 +1802,15 @@ async function _doUpload(mode, versionName) {
       return state.carrierMappings[fileCarrierName] || GENERIC;
     };
 
+    // ── Load commission rates once, only for the carriers in this file ──
+    // Lookups only ever use a policy's own carrier or the Generic fallback, so
+    // scoping by carrier gives exactly the same rates as loading the whole table.
+    showParsing(true, 'Loading commission schedules…');
+    const fileCarriers = [...new Set((state.rows || []).map(resolveCarrier).filter(Boolean))];
+    allComms = await bvpGetCommissionRates(bvpSession.user.id, null, fileCarriers.length ? fileCarriers : null);
+    ratePool = bvpIndexRates(allComms);
+
+    showParsing(true, 'Building policy records…');
     const policies = (state.rows || []).map((row, i) => {
       const carrier    = resolveCarrier(row);
       const stateCode  = mapped(row, 'IssuedState') || null;
@@ -1808,7 +1826,7 @@ async function _doUpload(mode, versionName) {
       const plan           = bvpNormalizePlan(planTypeVal);
       const enrollmentType = mapped(row, 'EnrollmentType') || 'OpenEnrollment';
       const curr_pcts    = buildRateArray(carrier, stateCode, plan, enrollmentType);
-      const ren_pcts     = buildRateArray(carrier, stateCode, plan, enrollmentType);
+      const ren_pcts     = curr_pcts.slice(); // same inputs → same schedule
 
       return {
         policy_idx:      i + 1,

@@ -489,28 +489,32 @@ let editingCell   = null;
 (async () => {
   bvpSession = await bvpRequireAuth();
   if (!bvpSession) return;
-  // LOA agents don't see commissions (the database blocks the rates too).
-  if (bvpIsLOA(await bvpGetSetup())) { location.replace('bookvaluepro-dashboard.html'); return; }
   bvpSetAdminNavVisible(bvpSession.user.email);
   document.getElementById('agent-name').textContent = bvpSession.user.email;
 
-  // Load enrollment type display names from DB
-  await bvpLoadEnrollmentTypes();
-
-  // Load the carrier master list (Supabase `carriers` table) and fill the Add modal
-  await bvpLoadCarriers();
+  // These don't depend on each other, so load them at the same time.
+  const [setup, , , book] = await Promise.all([
+    bvpGetSetup(),
+    bvpLoadEnrollmentTypes(),   // enrollment type display names
+    bvpLoadCarriers(),          // carrier master list (Supabase `carriers` table)
+    bvpGetActiveBook(bvpSession.user.id),
+  ]);
+  // LOA agents don't see commissions (the database blocks the rates too).
+  if (bvpIsLOA(setup)) { location.replace('bookvaluepro-dashboard.html'); return; }
   populateAddCarrierOptions();
 
-  // Get agent's book to know which carriers/states they have
-  const book = await bvpGetActiveBook(bvpSession.user.id);
+  // Get agent's book to know which carriers/states they have.
+  // Only carrier + state are needed here, so don't download whole policy rows.
   if (book) {
     // Update book chip
     const chip = document.getElementById('book-name');
     if (chip) chip.textContent = book.file_name + ' — ' + book.policy_count + ' policies';
 
-    const policies = await bvpGetPolicies(book.id);
+    const { data: policies, error: polErr } = await bvp
+      .from('policies').select('company, issued_state').eq('book_id', book.id);
+    if (polErr) console.error('Commissions: policies', polErr);
     const seen = new Set();
-    policies.forEach(p => {
+    (policies || []).forEach(p => {
       const key = `${p.company}|${p.issued_state}`;
       if (!seen.has(key) && p.company && p.issued_state) {
         seen.add(key);
@@ -522,15 +526,14 @@ let editingCell   = null;
     if (chip) chip.textContent = 'No book uploaded';
   }
 
-  // Load commission rates scoped to states in the agent's book.
-  // We scope by state only (not carrier) so Generic fallback rows are included
-  // regardless of whether carrier names match exactly between the book and workbook.
-  const bookStateNames = [...new Set(bookCarriers.map(bc => bc.state))];
-  allComms = await bvpGetCommissionRates(
-    bvpSession.user.id,
-    bookStateNames.length > 0 ? bookStateNames : null,
-    null  // no carrier filter — let groupedRows handle matching
-  );
+  // Load only the rates this page can show: the book's states, and the book's
+  // carriers plus Generic (Generic rows fill in for each carrier on screen).
+  // Other carriers and other states' Generic rows were never displayed.
+  const bookStateNames   = [...new Set(bookCarriers.map(bc => bc.state))];
+  const bookCarrierNames = [...new Set(bookCarriers.map(bc => bc.carrier))];
+  allComms = bookStateNames.length > 0
+    ? await bvpGetCommissionRates(bvpSession.user.id, bookStateNames, bookCarrierNames, { exactStates: true })
+    : await bvpGetCommissionRates(bvpSession.user.id, null, null);
   console.log('Commission rates loaded:', allComms.length, 'rows');
 
   buildFilterOptions();

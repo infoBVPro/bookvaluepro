@@ -961,19 +961,77 @@ async function bvpGetPolicies(bookId) {
 // Returns commission rates from commission_rates table.
 // Fetches system defaults (agent_id IS NULL) + agent overrides for the given agentId.
 // Optionally scoped to specific states and/or carriers for performance.
-async function bvpGetCommissionRates(agentId, states = null, carriers = null) {
-  async function fetchAll(baseQuery) {
-    const PAGE = 1000;
-    let allRows = [], from = 0;
-    while (true) {
-      const { data, error } = await baseQuery.range(from, from + PAGE - 1);
-      if (error) { console.error('bvpGetCommissionRates fetchAll:', error); break; }
-      if (!data || data.length === 0) break;
-      allRows = allRows.concat(data);
-      if (data.length < PAGE) break;
-      from += PAGE;
+// Speed (2026-11-23):
+//  • Fetches the 1,000-row pages in parallel (the first page also returns the
+//    row count) instead of one after another.
+//  • Keeps the result in this browser tab's sessionStorage for 10 minutes, so
+//    moving between pages doesn't download the same rates again. Saving or
+//    resetting a rate (bvpSetCommissionRate / bvpResetCommissionRate) clears it.
+//  • Returns fresh row objects every call: callers may change them freely.
+const BVP_RATE_CACHE_PREFIX = 'bvpRates:v1:';
+const BVP_RATE_CACHE_TTL_MS = 10 * 60 * 1000;
+
+function bvpClearRateCache() {
+  try {
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const k = sessionStorage.key(i);
+      if (k && k.startsWith(BVP_RATE_CACHE_PREFIX)) sessionStorage.removeItem(k);
     }
-    return allRows;
+  } catch (e) { /* storage unavailable — nothing cached */ }
+}
+
+function _bvpRateCacheGet(key) {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return null;
+    const c = JSON.parse(raw);
+    if (!c || Date.now() - c.t > BVP_RATE_CACHE_TTL_MS) { sessionStorage.removeItem(key); return null; }
+    // Compact form: column list + one array per row.
+    return c.rows.map(v => { const o = {}; c.cols.forEach((col, i) => { o[col] = v[i]; }); return o; });
+  } catch (e) { return null; }
+}
+
+function _bvpRateCacheSet(key, rows) {
+  try {
+    const cols = [...new Set(rows.flatMap(r => Object.keys(r)))];
+    const payload = JSON.stringify({ t: Date.now(), cols, rows: rows.map(r => cols.map(c => r[c] === undefined ? null : r[c])) });
+    sessionStorage.setItem(key, payload);
+  } catch (e) { /* too large or storage full — just don't cache */ }
+}
+
+// opts.exactStates: only rows IN `states` (Generic rows from other states are
+//   left out). For pages that just display the book's states, like Commissions.
+//   The default keeps Generic rows from every state, which the NPV fallback uses.
+async function bvpGetCommissionRates(agentId, states = null, carriers = null, opts = {}) {
+  const exactStates = !!(opts.exactStates && states && states.length);
+  const PAGE = 1000;
+  // makeQuery() must return a NEW query each call: a Supabase query object is
+  // changed by .range(), so one object can't be shared by parallel requests.
+  async function fetchAll(makeQuery) {
+    const first = await makeQuery({ count: 'exact' }).range(0, PAGE - 1);
+    if (first.error) { console.error('bvpGetCommissionRates fetchAll:', first.error); return []; }
+    let rows = first.data || [];
+    const total = first.count;
+    if (rows.length < PAGE) return rows;
+    if (total == null) {
+      // No count returned: fall back to one page at a time.
+      for (let from = PAGE; ; from += PAGE) {
+        const { data, error } = await makeQuery().range(from, from + PAGE - 1);
+        if (error) { console.error('bvpGetCommissionRates fetchAll:', error); break; }
+        if (!data || !data.length) break;
+        rows = rows.concat(data);
+        if (data.length < PAGE) break;
+      }
+      return rows;
+    }
+    const starts = [];
+    for (let from = PAGE; from < total; from += PAGE) starts.push(from);
+    const pages = await Promise.all(starts.map(from => makeQuery().range(from, from + PAGE - 1)));
+    for (const pg of pages) {
+      if (pg.error) { console.error('bvpGetCommissionRates fetchAll:', pg.error); continue; }
+      rows = rows.concat(pg.data || []);
+    }
+    return rows;
   }
 
   await bvpLoadCarriers();
@@ -981,39 +1039,53 @@ async function bvpGetCommissionRates(agentId, states = null, carriers = null) {
   const genericOr = generic ? `,carrier.eq."${generic}"` : '';
   const withGeneric = list => generic ? [...list, generic] : list;
 
-  // System defaults: agent_id IS NULL
+  const cacheKey = BVP_RATE_CACHE_PREFIX + JSON.stringify([
+    agentId, generic || '', exactStates ? 'exact' : 'or',
+    states && states.length ? [...states].sort() : null,
+    carriers && carriers.length ? [...carriers].sort() : null,
+  ]);
+  const cached = _bvpRateCacheGet(cacheKey);
+  if (cached) return cached;
+
+  // Scope filters shared by both queries.
   // When scoping by state, we use an OR filter so that Generic carrier rows
   // (which provide universal fallback rates) are always included alongside
   // state-specific rows, regardless of which states are requested.
-  let defaultQ = bvp.from('commission_rates').select('*')
-    .is('agent_id', null)
-    .order('carrier').order('issued_state').order('plan').order('enrollment_type').order('duration_yr');
-  if (states && states.length) {
-    // Fetch rows where issued_state is in the book's states OR carrier is Generic
-    defaultQ = defaultQ.or(`issued_state.in.(${states.join(',')})${genericOr}`);
-  }
-  if (carriers && carriers.length) {
-    defaultQ = defaultQ.in('carrier', withGeneric(carriers));
-  }
+  const scope = q => {
+    if (exactStates) q = q.in('issued_state', states);
+    else if (states && states.length) q = q.or(`issued_state.in.(${states.join(',')})${genericOr}`);
+    if (carriers && carriers.length) q = q.in('carrier', withGeneric(carriers));
+    return q.order('carrier').order('issued_state').order('plan').order('enrollment_type').order('duration_yr');
+  };
 
+  // System defaults: agent_id IS NULL
+  const defaultQ  = (opts) => scope(bvp.from('commission_rates').select('*', opts).is('agent_id', null));
   // Agent overrides: rows belonging to this agent
-  let overrideQ = bvp.from('commission_rates').select('*')
-    .eq('agent_id', agentId)
-    .order('carrier').order('issued_state').order('plan').order('enrollment_type').order('duration_yr');
-  if (states && states.length) {
-    overrideQ = overrideQ.or(`issued_state.in.(${states.join(',')})${genericOr}`);
-  }
-  if (carriers && carriers.length) {
-    overrideQ = overrideQ.in('carrier', withGeneric(carriers));
-  }
+  const overrideQ = (opts) => scope(bvp.from('commission_rates').select('*', opts).eq('agent_id', agentId));
 
   const [defaults, overrides] = await Promise.all([fetchAll(defaultQ), fetchAll(overrideQ)]);
+  // Order matters: overrides come after defaults so they win in rate lookups.
   const combined = [...defaults, ...overrides];
 
   if (combined.length === 0) {
     console.warn('bvpGetCommissionRates: no data returned — check RLS on commission_rates table');
+  } else {
+    _bvpRateCacheSet(cacheKey, combined);
   }
   return combined;
+}
+
+// Groups rate rows by carrier + plan once, so lookups search a handful of rows
+// instead of the whole table. Row order is kept (later rows = overrides win).
+function bvpIndexRates(rows) {
+  const byCarrierPlan = new Map();
+  for (const r of rows) {
+    const k = r.carrier + '\u0001' + r.plan;
+    let list = byCarrierPlan.get(k);
+    if (!list) byCarrierPlan.set(k, list = []);
+    list.push(r);
+  }
+  return (carrier, plan) => byCarrierPlan.get(carrier + '\u0001' + plan) || [];
 }
 
 // Save an agent override rate into commission_rates
@@ -1029,6 +1101,7 @@ async function bvpSetCommissionRate(agentId, carrier, state, plan, enrollmentTyp
     duration_yr:     durationYr,
     rate:            rate,
   }, { onConflict: 'carrier,issued_state,plan,enrollment_type,duration_yr,agent_id' });
+  bvpClearRateCache();
   if (error) { console.error('bvpSetCommissionRate:', error); return false; }
   return true;
 }
@@ -1041,6 +1114,7 @@ async function bvpResetCommissionRate(agentId, carrier, state, plan, enrollmentT
     .eq('plan', plan).eq('enrollment_type', enrollmentType);
   if (durationYr !== null) q = q.eq('duration_yr', durationYr);
   const { error } = await q;
+  bvpClearRateCache();
   if (error) { console.error('bvpResetCommissionRate:', error); return false; }
   return true;
 }
@@ -1118,6 +1192,7 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
   const comms = loaSelf ? [] : await bvpGetCommissionRates(agentId, states, carriers);
   const generic = bvpGenericCarrier(); // carriers table is loaded by bvpGetCommissionRates
   const _rateMemo = new Map();
+  const ratePool = bvpIndexRates(comms); // carrier+plan → rows (same order as comms)
 
   // Rate lookup: carrier + state + plan + enrollment_type → 11-element rate array
   // Fallback chain: exact carrier+state → carrier+any state → Generic+state → Generic+any
@@ -1139,8 +1214,10 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
       r => generic && r.carrier === generic && r.plan === plan          && r.enrollment_type === enrollmentType,
       r => generic && r.carrier === generic && r.plan === plan,
     ];
-    for (const match of attempts) {
-      const rows = comms.filter(match);
+    for (let i = 0; i < attempts.length; i++) {
+      const match = attempts[i];
+      const pool = i < 4 ? ratePool(carrier, plan) : (generic ? ratePool(generic, plan) : []);
+      const rows = pool.filter(match);
       if (rows.length > 0) {
         // Build 11-slot array (NPV window). Data has 20 yrs; we only need 1-11.
         const rates = Array(11).fill(0);
@@ -1170,8 +1247,10 @@ async function bvpEnrichPolicies(agentId, policies, discountPct = 10, savingsPct
       r => generic && r.carrier === generic && r.issued_state === state && r.plan === plan && r.enrollment_type === T,
       r => generic && r.carrier === generic && r.plan === plan && r.enrollment_type === T,
     ];
-    for (const match of attempts) {
-      const rows = comms.filter(match);
+    for (let i = 0; i < attempts.length; i++) {
+      const match = attempts[i];
+      const pool = i < 2 ? ratePool(carrier, plan) : (generic ? ratePool(generic, plan) : []);
+      const rows = pool.filter(match);
       if (rows.length) {
         const rates = Array(11).fill(0);
         rows.forEach(r => { const i = (r.duration_yr || 1) - 1; if (i >= 0 && i < 11) rates[i] = parseFloat(r.rate) || 0; });
@@ -1727,18 +1806,32 @@ async function bvpReapplyPriorityOverrides(agentId, newBookId) {
     .eq('book_id', newBookId);
   if (e2) { console.error('bvpReapplyPriorityOverrides fetch new:', e2); return 0; }
 
-  // 3. Apply overrides in chunks
+  // 3. Apply overrides in batches: one update per (override, set-by) pair,
+  //    chunked by id, instead of one request per policy.
   const toUpdate = newPolicies.filter(p => overrideMap[p.policy_idx]);
-  let count = 0;
+  const groups = new Map();
   for (const p of toUpdate) {
     const ov = overrideMap[p.policy_idx];
-    const { error } = await bvp.from('policies').update({
-      priority:             ov.priority_override,
-      priority_override:    ov.priority_override,
-      priority_override_by: ov.priority_override_by,
-    }).eq('id', p.id);
-    if (!error) count++;
+    const k = JSON.stringify([ov.priority_override, ov.priority_override_by]);
+    if (!groups.has(k)) groups.set(k, { ov, ids: [] });
+    groups.get(k).ids.push(p.id);
   }
+  const CHUNK = 200;
+  const jobs = [];
+  groups.forEach(({ ov, ids }) => {
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const chunk = ids.slice(i, i + CHUNK);
+      jobs.push(bvp.from('policies').update({
+        priority:             ov.priority_override,
+        priority_override:    ov.priority_override,
+        priority_override_by: ov.priority_override_by,
+      }).in('id', chunk).then(({ error }) => {
+        if (error) { console.error('bvpReapplyPriorityOverrides update:', error); return 0; }
+        return chunk.length;
+      }));
+    }
+  });
+  const count = (await Promise.all(jobs)).reduce((a, b) => a + b, 0);
   console.log(`bvpReapplyPriorityOverrides: reapplied ${count} overrides to new book`);
   return count;
 }
