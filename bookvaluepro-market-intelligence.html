@@ -561,7 +561,7 @@ function lookupHTML(it) {
   const n = d.columns.length;
   const states = [...new Set(d.rows.map(r => r[0]))].sort((a, b) => String(a).localeCompare(String(b)));
   const sel = miLookupSel[it.id] || (miLookupSel[it.id] = { state: '', county: '' });
-  if (sel.state && !states.includes(sel.state)) { sel.state = ''; sel.county = ''; }
+  if (sel.state && sel.state !== '__national__' && !states.includes(sel.state)) { sel.state = ''; sel.county = ''; }
   const inState = sel.state ? d.rows.filter(r => r[0] === sel.state).sort((a, b) => String(a[1]).localeCompare(String(b[1]))) : [];
   if (sel.county && !inState.some(r => r[1] === sel.county)) sel.county = '';
   // Which columns to show: code columns (FIPS, SSA and similar) are kept in the data but not shown.
@@ -580,40 +580,50 @@ function lookupHTML(it) {
     const pre = d.columns[k].replace(LOOKUP_RATE, '').trim().toLowerCase();
     return d.columns.findIndex((c, j) => j !== eCol && /enrol/i.test(c) && c.toLowerCase().startsWith(pre));
   };
+  const NAT = '__national__';
+  const national = sel.state === NAT;
   const pick = `<div class="mi-lookup-pick">
       <label class="mi-field">State
-        <select onchange="pickLookup(${it.id}, 'state', this.value)"><option value="">Choose a state</option>${states.map(s => `<option value="${esc(s)}"${s === sel.state ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
+        <select onchange="pickLookup(${it.id}, 'state', this.value)"><option value="">Choose a state</option><option value="${NAT}"${national ? ' selected' : ''}>National (all states)</option>${states.map(s => `<option value="${esc(s)}"${s === sel.state ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
       <label class="mi-field">County
-        <select onchange="pickLookup(${it.id}, 'county', this.value)" ${sel.state ? '' : 'disabled'}><option value="">${sel.state ? `All counties in ${esc(sel.state)}` : 'Choose a state first'}</option>${inState.map(r => `<option value="${esc(r[1])}"${r[1] === sel.county ? ' selected' : ''}>${esc(r[1])}</option>`).join('')}</select></label>
+        <select onchange="pickLookup(${it.id}, 'county', this.value)" ${sel.state && !national ? '' : 'disabled'}><option value="">${national ? 'All states' : sel.state ? `All counties in ${esc(sel.state)}` : 'Choose a state first'}</option>${national ? '' : inState.map(r => `<option value="${esc(r[1])}"${r[1] === sel.county ? ' selected' : ''}>${esc(r[1])}</option>`).join('')}</select></label>
     </div>`;
   if (!sel.state) return `<div class="mi-lookup">${pick}<div class="mi-hint">${states.length} states, ${d.rows.length.toLocaleString()} counties.</div></div>`;
-  const vals = sel.county ? inState.find(r => r[1] === sel.county).slice(2) : sumRows(inState, n);
-  const where = sel.county ? `${esc(sel.county)}, ${esc(sel.state)}` : `${esc(sel.state)} (all ${inState.length} counties)`;
-  const stat = (label, value, sub) => `<div class="mi-stat"><div class="mi-stat-label">${esc(label)}</div><div class="mi-stat-value">${value}</div>${sub ? `<div class="mi-stat-sub">${sub}</div>` : ''}</div>`;
-  const pct = (r, x) => (typeof r[x.e] === 'number' && r[x.e] > 0 && typeof r[x.p] === 'number') ? (r[x.p] / r[x.e] * 100).toFixed(1) + '%' : '—';
-  // For all counties in a state, a rate is Enrolled ÷ Eligibles over the counties that have
-  // both (adding up county rates would be meaningless).
-  const stateRate = k => {
-    const nCol = enrolledFor(k);
-    if (eCol < 0 || nCol < 0) return '—';
+
+  // Figures for a group of counties (a state, or the whole nation): counts are added up;
+  // a rate is Enrolled ÷ Eligibles over the counties that have both (adding up county
+  // rates would be meaningless), and the same for calculated percentages.
+  const share = (rows, e, p) => {
     let num = 0, den = 0;
-    inState.forEach(r => { const v = r.slice(2); if (typeof v[eCol] === 'number' && typeof v[nCol] === 'number') { num += v[nCol]; den += v[eCol]; } });
+    rows.forEach(r => { const v = r.slice(2); if (typeof v[e] === 'number' && typeof v[p] === 'number') { num += v[p]; den += v[e]; } });
     return den > 0 ? (num / den * 100).toLocaleString('en-US', { maximumFractionDigits: 1 }) + '%' : '—';
   };
-  let stats = show.map(k => stat(d.columns[k], rateScale[k] && !sel.county ? stateRate(k) : cell(vals[k], k), where)).join('');
-  // State totals: the % uses only counties that have both figures, so a county missing
-  // its eligibles count doesn't inflate the share.
-  const statePct = x => {
-    let num = 0, den = 0;
-    inState.forEach(r => { const v = r.slice(2); if (typeof v[x.e] === 'number' && typeof v[x.p] === 'number') { num += v[x.p]; den += v[x.e]; } });
-    return den > 0 ? (num / den * 100).toFixed(1) + '%' : '—';
+  const pct = (v, x) => (typeof v[x.e] === 'number' && v[x.e] > 0 && typeof v[x.p] === 'number') ? (v[x.p] / v[x.e] * 100).toFixed(1) + '%' : '—';
+  // Display strings for one county row ([state, county, ...values]) or a group of rows.
+  const figs = (rowOrRows, group) => {
+    if (!group) { const v = rowOrRows.slice(2); return { cols: show.map(k => cell(v[k], k)), ratios: ratios.map(x => pct(v, x)) }; }
+    const rows = rowOrRows, sums = sumRows(rows, n);
+    return {
+      cols: show.map(k => rateScale[k] ? (eCol >= 0 && enrolledFor(k) >= 0 ? share(rows, eCol, enrolledFor(k)) : '—') : fmtNum(sums[k])),
+      ratios: ratios.map(x => share(rows, x.e, x.p)),
+    };
   };
-  ratios.forEach(x => { stats += stat(x.label, sel.county ? pct(vals, x) : statePct(x), where); });
+  const groupRows = national ? d.rows : inState;
+  const top = sel.county ? figs(inState.find(r => r[1] === sel.county), false) : figs(groupRows, true);
+  const where = national ? `National (${states.length} states, ${d.rows.length.toLocaleString()} counties)`
+    : sel.county ? `${esc(sel.county)}, ${esc(sel.state)}` : `${esc(sel.state)} (${inState.length === 1 ? '1 county' : `all ${inState.length} counties`})`;
+  const stat = (label, value, sub) => `<div class="mi-stat"><div class="mi-stat-label">${esc(label)}</div><div class="mi-stat-value">${value}</div>${sub ? `<div class="mi-stat-sub">${sub}</div>` : ''}</div>`;
+  const stats = show.map((k, i) => stat(d.columns[k], top.cols[i], where)).join('') + ratios.map((x, i) => stat(x.label, top.ratios[i], where)).join('');
+
+  // Table below: every state (National) or every county (a state).
   let table = '';
   if (!sel.county) {
-    table = `<div class="mi-table-wrap"><table class="mi-table"><thead><tr><th scope="col">County</th>${show.map(k => `<th scope="col" style="text-align:right">${esc(d.columns[k])}</th>`).join('')}${ratios.map(x => `<th scope="col" style="text-align:right">${esc(x.short)}</th>`).join('')}</tr></thead><tbody>`
-      + inState.map(r => `<tr class="pick" onclick="pickLookup(${it.id}, 'county', ${esc(JSON.stringify(r[1]))})"><td>${esc(r[1])}</td>${show.map(k => `<td class="num">${cell(r[k + 2], k)}</td>`).join('')}${ratios.map(x => `<td class="num">${pct(r.slice(2), x)}</td>`).join('')}</tr>`).join('')
-      + '</tbody></table></div><div class="mi-hint">Click a county to see it on its own.</div>';
+    const head = `<tr><th scope="col">${national ? 'State' : 'County'}</th>${show.map(k => `<th scope="col" style="text-align:right">${esc(d.columns[k])}</th>`).join('')}${ratios.map(x => `<th scope="col" style="text-align:right">${esc(x.short)}</th>`).join('')}</tr>`;
+    const line = (name, f, field) => `<tr class="pick" onclick="pickLookup(${it.id}, '${field}', ${esc(JSON.stringify(name))})"><td>${esc(name)}</td>${f.cols.map(v => `<td class="num">${v}</td>`).join('')}${f.ratios.map(v => `<td class="num">${v}</td>`).join('')}</tr>`;
+    const body = national
+      ? states.map(st => line(st, figs(d.rows.filter(r => r[0] === st), true), 'state')).join('')
+      : inState.map(r => line(r[1], figs(r, false), 'county')).join('');
+    table = `<div class="mi-table-wrap"><table class="mi-table"><thead>${head}</thead><tbody>${body}</tbody></table></div><div class="mi-hint">Click a ${national ? 'state' : 'county'} to see it on its own.</div>`;
   }
   return `<div class="mi-lookup">${pick}<div class="mi-stats">${stats}</div>${table}</div>`;
 }
