@@ -139,6 +139,12 @@ body { font-family: var(--sans); color: var(--text); background: var(--light-bg)
 
 .mi-empty { text-align: center; padding: 56px 20px; color: var(--text-muted); background: #fff; border: 1px dashed var(--border); border-radius: 14px; font-size: 14px; line-height: 1.6; }
 
+/* state GI rules */
+.mi-gi td { font-size: 12.5px; line-height: 1.5; }
+.mi-gi td:first-child { white-space: nowrap; }
+.mi-gi .mi-gi-details { min-width: 280px; color: var(--text); }
+.mi-gi .mi-gi-details b { color: var(--deep); font-weight: 600; }
+
 /* state & county lookup */
 .mi-lookup { display: flex; flex-direction: column; gap: 12px; border-top: 1px dashed var(--border); padding-top: 12px; }
 .mi-lookup-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 560px; }
@@ -428,7 +434,7 @@ body { padding-left: 64px; }
 // Admins (BVP_ADMIN_EMAILS) also see hidden items and can add, edit, hide and
 // delete items and categories right on this page.
 const MI_BUCKET = 'market-intel';
-const MI_TYPE_LABEL = { pdf: 'PDF', link: 'Link', note: 'Note', table: 'Table', county: 'State & county' };
+const MI_TYPE_LABEL = { pdf: 'PDF', link: 'Link', note: 'Note', table: 'Table', county: 'State & county', gi_rules: 'State GI rules' };
 const MI_COUNTY_SOURCE = 'CMS State/County Penetration files';
 const MI_XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 let miSession = null, miAdmin = false;
@@ -770,6 +776,92 @@ async function onDataFile() {
   } catch (e) { st.textContent = e.message || String(e); }
 }
 
+// ── STATE GI RULES (live from state_gi_rules) ──
+// The "State guaranteed issue rules" card reads the same state_gi_rules table as the
+// Underwriting Assistant's State GI panel, so it always matches it. Nothing is copied.
+const MI_STATE_NAMES = {
+  AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',CO:'Colorado',CT:'Connecticut',DE:'Delaware',
+  DC:'District of Columbia',FL:'Florida',GA:'Georgia',HI:'Hawaii',ID:'Idaho',IL:'Illinois',IN:'Indiana',IA:'Iowa',
+  KS:'Kansas',KY:'Kentucky',LA:'Louisiana',ME:'Maine',MD:'Maryland',MA:'Massachusetts',MI:'Michigan',MN:'Minnesota',
+  MS:'Mississippi',MO:'Missouri',MT:'Montana',NE:'Nebraska',NV:'Nevada',NH:'New Hampshire',NJ:'New Jersey',
+  NM:'New Mexico',NY:'New York',NC:'North Carolina',ND:'North Dakota',OH:'Ohio',OK:'Oklahoma',OR:'Oregon',
+  PA:'Pennsylvania',RI:'Rhode Island',SC:'South Carolina',SD:'South Dakota',TN:'Tennessee',TX:'Texas',UT:'Utah',
+  VT:'Vermont',VA:'Virginia',WA:'Washington',WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming',
+};
+const MI_GI_PLANS = {
+  same_plan: 'Same plan letter the client has now',
+  equal_or_lesser: 'A plan with equal or lesser benefits',
+  any_plan: 'Any plan',
+  plan_a_only: 'Plan A only',
+  crosswalk: "Plan switches allowed by the state's plan chart",
+};
+const MI_GI_CARRIERS = {
+  any_carrier: 'Any carrier',
+  same_company: "Client's current company only",
+  same_carrier_group: 'Current carrier or its affiliates',
+  same_carrier_group_then_any_fallback: "Current carrier or an affiliate; any carrier if neither sells the client's plan",
+};
+const MI_GI_ORDER = { continuous: 0, birthday: 1, anniversary: 2, annual_month: 3, plan_conversion: 4 };
+let miGIRules = null, miGIErr = null, miGILoading = false;
+async function loadGIRules() {
+  if (miGIRules || miGILoading) return;
+  miGILoading = true;
+  const { data, error } = await bvp.from('state_gi_rules').select('*').eq('is_active', true);
+  miGILoading = false;
+  if (error) miGIErr = error.message || 'error'; else miGIRules = data || [];
+  render();
+}
+function giRulesHTML() {
+  if (!miGIRules) {
+    if (miGIErr) return '<span class="mi-hint">The state rules couldn\'t be loaded right now. Please try again later.</span>';
+    loadGIRules();
+    return '<span class="mi-hint">Loading state rules…</span>';
+  }
+  const today = todayISO();
+  const stName = c => MI_STATE_NAMES[String(c || '').toUpperCase()] || c;
+  const rows = miGIRules
+    .filter(r => r.state && (!r.rule_end_date || String(r.rule_end_date).slice(0, 10) >= today))
+    .sort((a, b) => String(stName(a.state)).localeCompare(String(stName(b.state))) || (MI_GI_ORDER[a.rule_code] ?? 9) - (MI_GI_ORDER[b.rule_code] ?? 9));
+  if (!rows.length) return '<span class="mi-hint">No state rules are loaded yet.</span>';
+  const details = r => {
+    const L = [];
+    const who = [];
+    if (r.min_age != null && r.max_age != null) who.push(`ages ${r.min_age}–${r.max_age}`);
+    else if (r.min_age != null) who.push(`age ${r.min_age}+`);
+    else if (r.max_age != null) who.push(`age ${r.max_age} or younger`);
+    if (r.requires_current_medsupp) who.push('must have a Medicare Supplement now');
+    if (r.min_continuous_coverage_months) who.push(`current policy in force ${r.min_continuous_coverage_months}+ months`);
+    if (r.max_coverage_gap_days) who.push(`no gap in coverage over ${r.max_coverage_gap_days} days`);
+    if (who.length) L.push(`<b>Who qualifies:</b> ${esc(who.join('; '))}`);
+    if (+r.early_application_days > 0) L.push(`<b>Apply early:</b> up to ${+r.early_application_days} days before the window opens`);
+    if (r.effective_not_before === 'first_of_next_month') L.push('<b>Effective date:</b> 1st of the month after the application');
+    else {
+      const nb = { birthday: 'before the birthday', birthday_minus_30: 'more than 30 days before the birthday' }[r.effective_not_before];
+      const after = r.max_effective_days_after_app;
+      const parts = [nb, after && `more than ${after} days after the application`].filter(Boolean);
+      if (parts.length) L.push(`<b>Effective date:</b> can't be ${esc(parts.join(' or '))}`);
+    }
+    if (r.plan_eligibility === 'crosswalk' && r.plan_crosswalk) {
+      try {
+        const cw = typeof r.plan_crosswalk === 'string' ? JSON.parse(r.plan_crosswalk) : r.plan_crosswalk;
+        const groups = {};
+        Object.entries(cw).forEach(([from, to]) => { const k = [].concat(to).join(', '); (groups[k] = groups[k] || []).push(from); });
+        L.push(`<b>Plan chart:</b> ${Object.entries(groups).map(([to, from]) => `${esc(from.join(', '))} → ${esc(to)}`).join('; ')}`);
+      } catch (e) {}
+    }
+    if (r.rule_effective_date && String(r.rule_effective_date).slice(0, 10) > today) L.push(`<b>Starts:</b> ${fmtDate(r.rule_effective_date)}`);
+    if (r.rule_end_date) L.push(`<b>Ends:</b> ${fmtDate(r.rule_end_date)}`);
+    if (r.exclusions) L.push(`<b>Exclusions:</b> ${esc(r.exclusions)}`);
+    if (r.documentation_required) L.push(`<b>Documents:</b> ${esc(r.documentation_required)}`);
+    if (r.notes) L.push(`<b>Note:</b> ${esc(r.notes)}`);
+    return L.join('<br>') || '—';
+  };
+  return `<div class="mi-table-wrap"><table class="mi-table mi-gi"><thead><tr><th scope="col">State</th><th scope="col">Rule</th><th scope="col">Plans</th><th scope="col">Carriers</th><th scope="col">Details</th></tr></thead><tbody>`
+    + rows.map(r => `<tr><td><b>${esc(stName(r.state))}</b></td><td>${esc(r.rule_name || r.rule_code)}${r.needs_review ? ' <span class="mi-hint">(unconfirmed)</span>' : ''}</td>`
+      + `<td>${esc(MI_GI_PLANS[r.plan_eligibility] || r.plan_eligibility || '—')}</td><td>${esc(MI_GI_CARRIERS[r.carrier_scope] || r.carrier_scope || '—')}</td><td class="mi-gi-details">${details(r)}</td></tr>`).join('')
+    + '</tbody></table></div>';
+}
+
 // ── RENDER ──
 function renderTabs(counts) {
   const tabs = [...visibleCats().map(c => ({ id: String(c.id), name: c.name + (c.is_active ? '' : ' (hidden)'), n: counts[c.id] || 0 }))];
@@ -794,6 +886,7 @@ function cardHTML(it, showCat) {
     if (open) extra = `<div class="mi-note">${noteHTML(it.body)}</div>`;
   } else if (it.item_type === 'table') extra = tableHTML(it.body) || '<span class="mi-hint">No table rows yet.</span>';
   else if (it.item_type === 'county') extra = lookupHTML(it);
+  else if (it.item_type === 'gi_rules') extra = giRulesHTML();
   // Source line, bottom left. State & county items default to the CMS penetration files.
   const src = (it.source_note || '').trim() || (it.item_type === 'county' ? MI_COUNTY_SOURCE : '');
   const adminBtns = miAdmin ? `<div class="mi-admin-actions">
