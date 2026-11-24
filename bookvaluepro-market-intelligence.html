@@ -366,11 +366,15 @@ body { padding-left: 64px; }
       </div>
 
       <div class="mi-type-pane" data-pane="county">
-        <label class="mi-field">Excel or CSV file
-          <input type="file" id="f-data-file" accept=".xlsx,.xls,.csv" multiple>
-        </label>
-        <div class="mi-hint">One row per county, with a State column and a County column; every other column (for example Medicare Eligibles, PDP Enrolled, MA Enrolled) becomes a figure agents can look up. The first sheet is used. To combine files, select them together: rows are matched on state and county.</div>
-        <label class="mi-check" id="f-data-add-row" hidden><input type="checkbox" id="f-data-add"> Add the new file's figures to the current data instead of replacing it</label>
+        <div class="mi-row2">
+          <label class="mi-field">PDP file
+            <input type="file" id="f-data-pdp" accept=".xlsx,.xls,.csv">
+          </label>
+          <label class="mi-field">MA file
+            <input type="file" id="f-data-ma" accept=".xlsx,.xls,.csv">
+          </label>
+        </div>
+        <div class="mi-hint">The CMS State/County Penetration files, as downloaded: State, County, Eligibles, Enrolled and Penetration columns (FIPS and SSA codes are skipped). They're combined on one card as Medicare Eligibles, PDP Enrolled, PDP Penetration, MA Enrolled and MA Penetration. The first sheet of each file is used. When editing, choose just one file to replace only those figures.</div>
         <div class="mi-hint" id="f-data-status"></div>
         <div id="f-data-preview"></div>
       </div>
@@ -566,7 +570,11 @@ function lookupHTML(it) {
   // A file with its own rate column doesn't also get a calculated %.
   const ratios = rateCols.length ? [] : lookupRatios(d.columns).filter(x => show.includes(x.e) && show.includes(x.p));
   const eCol = d.columns.findIndex(c => /eligib/i.test(c));
-  const nCol = d.columns.findIndex((c, k) => k !== eCol && /enrol/i.test(c));
+  // The enrolled column that goes with a rate column: "PDP Penetration" -> "PDP Enrolled".
+  const enrolledFor = k => {
+    const pre = d.columns[k].replace(LOOKUP_RATE, '').trim().toLowerCase();
+    return d.columns.findIndex((c, j) => j !== eCol && /enrol/i.test(c) && c.toLowerCase().startsWith(pre));
+  };
   const pick = `<div class="mi-lookup-pick">
       <label class="mi-field">State
         <select onchange="pickLookup(${it.id}, 'state', this.value)"><option value="">Choose a state</option>${states.map(s => `<option value="${esc(s)}"${s === sel.state ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
@@ -581,6 +589,7 @@ function lookupHTML(it) {
   // For all counties in a state, a rate is Enrolled ÷ Eligibles over the counties that have
   // both (adding up county rates would be meaningless).
   const stateRate = k => {
+    const nCol = enrolledFor(k);
     if (eCol < 0 || nCol < 0) return '—';
     let num = 0, den = 0;
     inState.forEach(r => { const v = r.slice(2); if (typeof v[eCol] === 'number' && typeof v[nCol] === 'number') { num += v[nCol]; den += v[eCol]; } });
@@ -638,47 +647,83 @@ async function readDataFile(file) {
   if (!rows.length) throw new Error('No county rows were found under the heading row.');
   return { columns: vi.map(k => head[k]), rows };
 }
-// Combines several files (or a file with the current data) into one: rows are matched on
-// state and county (ignoring case, spacing and a trailing "County"/"Parish"), and each
-// file's figures become extra columns. A column name already present is replaced by the
-// newer file's values.
+// The PDP file and the MA file (CMS State/County Penetration layout) are combined into one
+// card. Each file's columns are renamed for its product (Enrolled -> "PDP Enrolled",
+// Penetration -> "MA Penetration"); the eligibles column becomes "Medicare Eligibles",
+// which both files should agree on. Code columns (FIPS, SSA) aren't kept.
+// Rows are matched on state and county, ignoring case, spacing and a trailing "County"/"Parish".
 const lookupKey = (st, co) => String(st).trim().toUpperCase() + '|' + String(co).trim().toLowerCase().replace(/\s+/g, ' ').replace(/\s+(county|parish|borough|census area)$/, '');
+const ELIG = 'Medicare Eligibles';
+function labelData(d, label) {
+  const map = d.columns.map(c => /eligib/i.test(c) ? ELIG : LOOKUP_HIDE.test(c) ? null
+    : c.toLowerCase().startsWith(label.toLowerCase() + ' ') ? c : `${label} ${c}`);
+  const keep = map.map((c, k) => c ? k : -1).filter(k => k >= 0);
+  return { columns: keep.map(k => map[k]), rows: d.rows.map(r => [r[0], r[1], ...keep.map(k => r[k + 2])]) };
+}
+const productOrder = c => c === ELIG ? 0 : /^pdp\b/i.test(c) ? (/enrol/i.test(c) ? 1 : 2) : /^ma\b/i.test(c) ? (/enrol/i.test(c) ? 3 : 4) : 5;
+// list: [{ data, label }] in priority order (the first file's eligibles count is kept).
 function mergeData(list) {
-  const columns = [], map = new Map(), order = [];
+  const columns = [], map = new Map(), order = [], mismatch = [];
   let unmatched = 0;
-  list.forEach((d, fi) => {
+  list.forEach(({ data: d, label }, fi) => {
     const idx = d.columns.map(c => { let k = columns.findIndex(x => x.toLowerCase() === c.toLowerCase()); if (k < 0) { columns.push(c); k = columns.length - 1; } return k; });
     d.rows.forEach(r => {
       const key = lookupKey(r[0], r[1]);
       let row = map.get(key);
-      if (!row) { row = { st: r[0], co: r[1], v: {} }; map.set(key, row); order.push(key); if (fi > 0) unmatched++; }
-      idx.forEach((k, j) => { row.v[k] = r[j + 2]; });
+      if (!row) { row = { st: r[0], co: r[1], v: {}, from: {} }; map.set(key, row); order.push(key); if (fi > 0) unmatched++; }
+      idx.forEach((k, j) => {
+        const v = r[j + 2];
+        if (columns[k] === ELIG && k in row.v) {
+          if (typeof row.v[k] === 'number' && typeof v === 'number' && row.v[k] !== v) mismatch.push({ st: row.st, co: row.co, a: row.v[k], aFrom: row.from[k], b: v, bFrom: label });
+          if (row.v[k] !== '' && row.v[k] != null) return;      // keep the first file's count
+        }
+        row.v[k] = v; row.from[k] = label;
+      });
     });
   });
-  return { data: { columns, rows: order.map(k => { const r = map.get(k); return [r.st, r.co, ...columns.map((_, j) => r.v[j] ?? '')]; }) }, unmatched };
+  const ord = columns.map((c, k) => k).sort((a, b) => productOrder(columns[a]) - productOrder(columns[b]) || a - b);
+  const rows = order.map(k => { const r = map.get(k); return [r.st, r.co, ...ord.map(j => r.v[j] ?? '')]; });
+  return { data: { columns: ord.map(j => columns[j]), rows }, unmatched, mismatch };
 }
 
 async function onDataFile() {
-  const files = [...document.getElementById('f-data-file').files];
   const st = document.getElementById('f-data-status'), pv = document.getElementById('f-data-preview');
+  const picked = [['PDP', document.getElementById('f-data-pdp').files[0]], ['MA', document.getElementById('f-data-ma').files[0]]].filter(x => x[1]);
   miParsedData = null; pv.innerHTML = '';
-  if (!files.length) { st.textContent = ''; return; }
+  if (!picked.length) { st.textContent = ''; return; }
   st.textContent = 'Reading…';
   try {
     const list = [];
-    for (const f of files) {
-      try { list.push(await readDataFile(f)); }
-      catch (e) { throw new Error(`${f.name}: ${e.message || e}`); }
+    for (const [label, f] of picked) {
+      try { list.push({ data: labelData(await readDataFile(f), label), label }); }
+      catch (e) { throw new Error(`${label} file (${f.name}): ${e.message || e}`); }
     }
-    const keep = document.getElementById('f-data-add').checked && miEditing && miEditing.item_type === 'county' ? lookupData(miEditing) : null;
-    const { data: d, unmatched } = mergeData(keep ? [keep, ...list] : list);
+    // Editing with only one file: keep the other product's figures from the current data.
+    const cur = miEditing && miEditing.item_type === 'county' ? lookupData(miEditing) : null;
+    const notes = [];
+    if (cur && picked.length === 1) {
+      const newLabel = picked[0][0];
+      const keepCols = cur.columns.map((c, k) => k).filter(k => !cur.columns[k].toLowerCase().startsWith(newLabel.toLowerCase() + ' '));
+      if (keepCols.some(k => cur.columns[k] !== ELIG)) {
+        list.push({ data: { columns: keepCols.map(k => cur.columns[k]), rows: cur.rows.map(r => [r[0], r[1], ...keepCols.map(k => r[k + 2])]) }, label: 'current data' });
+        notes.push(`Replacing the ${newLabel} figures; the other figures stay as they are.`);
+      }
+    }
+    const { data: d, unmatched, mismatch } = mergeData(list);
     miParsedData = d;
     const states = new Set(d.rows.map(r => r[0])).size;
-    st.textContent = `${keep ? 'Combined with the current data: ' : files.length > 1 ? `Combined ${files.length} files: ` : ''}${d.rows.length.toLocaleString()} counties in ${states} states. Figures: ${d.columns.join(', ')}.`
-      + (unmatched && (keep || files.length > 1) ? ` ${unmatched.toLocaleString()} ${unmatched === 1 ? 'county appears' : 'counties appear'} in a later file but not the first; ${unmatched === 1 ? 'its' : 'their'} missing figures show as —.` : '');
+    let msg = `${notes.join(' ')} ${d.rows.length.toLocaleString()} counties in ${states} states. Figures: ${d.columns.join(', ')}.`;
+    if (list.length > 1 && unmatched) msg += ` ${unmatched.toLocaleString()} ${unmatched === 1 ? 'county is' : 'counties are'} in one file but not the other; missing figures show as —.`;
+    if (list.length > 1 && !mismatch.length && d.columns.includes(ELIG)) msg += ' Medicare Eligibles agree between the files.';
+    if (picked.length === 1 && !cur) msg += ` Add the ${picked[0][0] === 'PDP' ? 'MA' : 'PDP'} file too to show both on one card.`;
+    st.textContent = msg.trim();
+    if (mismatch.length) {
+      const ex = mismatch.slice(0, 5).map(m => `${m.co}, ${m.st}: ${m.aFrom} ${fmtNum(m.a)} vs ${m.bFrom} ${fmtNum(m.b)}`).join('; ');
+      st.innerHTML = `${esc(st.textContent)}<br><span style="color:var(--decline)">Medicare Eligibles differ in ${mismatch.length.toLocaleString()} ${mismatch.length === 1 ? 'county' : 'counties'} (${esc(ex)}${mismatch.length > 5 ? '; …' : ''}). The ${esc(mismatch[0].aFrom)} number is used.</span>`;
+    }
     pv.innerHTML = `<div class="mi-table-wrap"><table class="mi-table"><thead><tr><th>State</th><th>County</th>${d.columns.map(c => `<th style="text-align:right">${esc(c)}</th>`).join('')}</tr></thead><tbody>`
       + d.rows.slice(0, 5).map(r => `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td>${r.slice(2).map(v => `<td class="num">${fmtNum(v)}</td>`).join('')}</tr>`).join('')
-      + `</tbody></table></div><div class="mi-hint">First 5 rows shown.</div>`;
+      + `</tbody></table></div><div class="mi-hint">First 5 rows shown (penetration appears as a percent on the page).</div>`;
   } catch (e) { st.textContent = e.message || String(e); }
 }
 
@@ -788,12 +833,11 @@ function openItemForm(id) {
   document.getElementById('f-body-note').value = it.item_type === 'note' ? (it.body || '') : '';
   document.getElementById('f-body-table').value = it.item_type === 'table' ? (it.body || '') : '';
   miParsedData = null;
-  document.getElementById('f-data-file').value = '';
-  document.getElementById('f-data-add').checked = false;
-  document.getElementById('f-data-add-row').hidden = !(it.item_type === 'county');
+  document.getElementById('f-data-pdp').value = '';
+  document.getElementById('f-data-ma').value = '';
   document.getElementById('f-data-preview').innerHTML = '';
   { const d = it.item_type === 'county' ? lookupData(it) : null;
-    document.getElementById('f-data-status').textContent = d ? `Current data: ${d.rows.length.toLocaleString()} counties (${d.columns.join(', ')}). Choose a new file only to replace it.` : ''; }
+    document.getElementById('f-data-status').textContent = d ? `Current data: ${d.rows.length.toLocaleString()} counties (${d.columns.join(', ')}). Choose a new PDP or MA file only to replace those figures.` : ''; }
   document.getElementById('f-order').value = it.sort_order ?? 100;
   document.getElementById('f-active').checked = it.is_active ?? true;
   document.getElementById('f-error').textContent = '';
@@ -838,7 +882,7 @@ async function saveItem() {
   } else if (miType === 'county') {
     if (miParsedData) row.body = JSON.stringify(miParsedData);
     else if (prev.item_type === 'county' && prev.body) row.body = prev.body;
-    else { err.textContent = 'Choose an Excel or CSV file with State and County columns.'; return; }
+    else { err.textContent = 'Choose the PDP file and the MA file.'; return; }
   } else if (miType === 'pdf') {
     if (!file && !prev.file_path) { err.textContent = 'Choose a PDF file.'; return; }
     if (file && !/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') { err.textContent = 'The file must be a PDF.'; return; }
@@ -939,8 +983,8 @@ async function deleteCategory(id) {
 // ── INIT ──
 document.querySelectorAll('#f-type button').forEach(b => b.onclick = () => setType(b.dataset.type));
 document.getElementById('f-body-table').addEventListener('input', previewTable);
-document.getElementById('f-data-file').addEventListener('change', onDataFile);
-document.getElementById('f-data-add').addEventListener('change', onDataFile);
+document.getElementById('f-data-pdp').addEventListener('change', onDataFile);
+document.getElementById('f-data-ma').addEventListener('change', onDataFile);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal('item-modal'); closeModal('cat-modal'); } });
 document.getElementById('cat-new-name').addEventListener('keydown', e => { if (e.key === 'Enter') addCategory(); });
 
