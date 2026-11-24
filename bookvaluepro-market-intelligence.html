@@ -123,6 +123,7 @@ body { font-family: var(--sans); color: var(--text); background: var(--light-bg)
 }
 .mi-open:hover { color: var(--emerald); text-decoration: underline; }
 .mi-admin-actions { margin-left: auto; display: flex; gap: 6px; }
+.mi-source { font-size: 12px; color: var(--text-muted); font-style: italic; }
 .mi-note { font-size: 13.5px; line-height: 1.65; color: var(--text); border-top: 1px dashed var(--border); padding-top: 10px; overflow-wrap: anywhere; }
 .mi-note p + p { margin-top: 10px; }
 .mi-note a { color: var(--forest); }
@@ -340,6 +341,9 @@ body { padding-left: 64px; }
       <label class="mi-field">Summary <span class="mi-opt">(optional, shown on the card)</span>
         <textarea id="f-summary" rows="2" maxlength="600"></textarea>
       </label>
+      <label class="mi-field">Source <span class="mi-opt">(optional, shown at the bottom left of the card; State &amp; county items show "CMS State/County Penetration files" when left blank)</span>
+        <input type="text" id="f-source" maxlength="200">
+      </label>
 
       <div class="mi-type-pane" data-pane="pdf">
         <label class="mi-field">PDF file
@@ -427,6 +431,7 @@ body { padding-left: 64px; }
 // delete items and categories right on this page.
 const MI_BUCKET = 'market-intel';
 const MI_TYPE_LABEL = { pdf: 'PDF', link: 'Link', note: 'Note', table: 'Table', county: 'State & county' };
+const MI_COUNTY_SOURCE = 'CMS State/County Penetration files';
 const MI_XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 let miSession = null, miAdmin = false;
 let miCats = [], miItems = [];
@@ -756,6 +761,8 @@ function cardHTML(it, showCat) {
     if (open) extra = `<div class="mi-note">${noteHTML(it.body)}</div>`;
   } else if (it.item_type === 'table') extra = tableHTML(it.body) || '<span class="mi-hint">No table rows yet.</span>';
   else if (it.item_type === 'county') extra = lookupHTML(it);
+  // Source line, bottom left. State & county items default to the CMS penetration files.
+  const src = (it.source_note || '').trim() || (it.item_type === 'county' ? MI_COUNTY_SOURCE : '');
   const adminBtns = miAdmin ? `<div class="mi-admin-actions">
       <button type="button" class="mi-btn ghost small" onclick="openItemForm(${it.id})">Edit</button>
       <button type="button" class="mi-btn ghost small" onclick="toggleActive(${it.id})">${it.is_active ? 'Hide' : 'Show'}</button>
@@ -767,7 +774,7 @@ function cardHTML(it, showCat) {
     <div class="mi-title">${esc(it.title)}</div>
     ${it.summary ? `<div class="mi-summary">${esc(it.summary)}</div>` : ''}
     ${extra}
-    ${(action || adminBtns) ? `<div class="mi-actions">${action}${adminBtns}</div>` : ''}
+    ${(action || adminBtns || src) ? `<div class="mi-actions">${action}${src ? `<span class="mi-source">Source: ${esc(src)}</span>` : ''}${adminBtns}</div>` : ''}
   </article>`;
 }
 
@@ -815,6 +822,7 @@ function closeModal(id) { document.getElementById(id).hidden = true; }
 
 function setType(t) {
   miType = t;
+  { const f = document.getElementById('f-source'); if (f) f.placeholder = t === 'county' ? MI_COUNTY_SOURCE : 'e.g. CMS, carrier bulletin'; }
   document.querySelectorAll('#f-type button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.type === t)));
   document.querySelectorAll('.mi-type-pane').forEach(p => p.classList.toggle('on', p.dataset.pane === t));
 }
@@ -844,6 +852,8 @@ function openItemForm(id) {
   { const d = it.item_type === 'county' ? lookupData(it) : null;
     document.getElementById('f-data-status').textContent = d ? `Current data: ${d.rows.length.toLocaleString()} counties (${d.columns.join(', ')}). Choose a new PDP or MA file only to replace those figures.` : ''; }
   document.getElementById('f-order').value = it.sort_order ?? 100;
+  document.getElementById('f-source').value = it.source_note || '';
+  document.getElementById('f-source').placeholder = (it.item_type || 'pdf') === 'county' ? MI_COUNTY_SOURCE : 'e.g. CMS, carrier bulletin';
   document.getElementById('f-active').checked = it.is_active ?? true;
   document.getElementById('f-error').textContent = '';
   setType(it.item_type || 'pdf');
@@ -868,6 +878,7 @@ async function saveItem() {
     item_type: miType,
     published_on: document.getElementById('f-date').value || todayISO(),
     sort_order: Math.max(0, Math.min(9999, +document.getElementById('f-order').value || 0)),
+    source_note: document.getElementById('f-source').value.trim() || null,
     is_active: document.getElementById('f-active').checked,
     url: null, body: null,
     updated_at: new Date().toISOString(),
