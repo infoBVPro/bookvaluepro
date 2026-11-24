@@ -183,7 +183,7 @@ body { font-family: var(--sans); color: var(--text); background: var(--light-bg)
 .mi-type-pane.on { display: flex; }
 .mi-hint { font-size: 12px; color: var(--text-muted); }
 .mi-error { font-size: 13px; color: var(--decline); min-height: 1px; }
-.mi-cat-row { display: grid; grid-template-columns: 1fr 70px auto auto; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--border); }
+.mi-cat-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--border); }
 .mi-cat-row input[type=text], .mi-cat-row input[type=number] { padding: 7px 9px; border: 1.5px solid var(--border); border-radius: 8px; font: 13.5px var(--sans); width: 100%; min-width: 0; }
 .mi-cat-row label { font-size: 12px; color: var(--text-muted); display: flex; gap: 5px; align-items: center; white-space: nowrap; }
 .mi-cat-add { display: flex; gap: 8px; margin-top: 12px; }
@@ -198,7 +198,7 @@ body { font-family: var(--sans); color: var(--text); background: var(--light-bg)
   .page-title { font-size: 27px; }
   .mi-search { flex: 1 1 100%; }
   .mi-row2 { grid-template-columns: 1fr; }
-  .mi-cat-row { grid-template-columns: 1fr 60px; }
+  .mi-cat-row { grid-template-columns: 1fr auto; }
   .mi-lookup-pick { grid-template-columns: 1fr; }
   .mi-seg { flex-wrap: wrap; }
   .mi-seg button { flex: 1 1 30%; }
@@ -408,7 +408,7 @@ body { padding-left: 64px; }
       <button type="button" class="mi-x" onclick="closeModal('cat-modal')" aria-label="Close">✕</button>
     </div>
     <div class="mi-modal-body">
-      <div class="mi-hint" style="margin-bottom:10px;">Categories are the tabs agents see, in order (lower first). Hide a category to take it off the page without deleting its items.</div>
+      <div class="mi-hint" style="margin-bottom:10px;">Categories are the tabs agents see, listed alphabetically. Hide a category to take it off the page without deleting its items.</div>
       <div id="cat-rows"></div>
       <div class="mi-cat-add">
         <input type="text" id="cat-new-name" placeholder="New category name" maxlength="80">
@@ -457,7 +457,7 @@ function toast(msg, err) {
 // ── DATA ──
 async function loadAll() {
   const [c, i] = await Promise.all([
-    bvp.from('market_intel_categories').select('*').order('sort_order').order('name'),
+    bvp.from('market_intel_categories').select('*').order('name'),
     bvp.from('market_intel_items').select('*').order('sort_order').order('published_on', { ascending: false }).order('id', { ascending: false }),
   ]);
   if (c.error || i.error) {
@@ -467,7 +467,8 @@ async function loadAll() {
     document.getElementById('mi-tabs').innerHTML = '';
     return false;
   }
-  miCats = c.data || [];
+  // Categories are listed alphabetically (tabs, the All view and the Categories list).
+  miCats = (c.data || []).slice().sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' }));
   miItems = i.data || [];
   if (miTab !== 'all' && !miCats.some(x => String(x.id) === String(miTab) && (x.is_active || miAdmin))) miTab = 'all';
   return true;
@@ -996,7 +997,6 @@ function renderCatRows() {
   document.getElementById('cat-rows').innerHTML = miCats.map(c => `
     <div class="mi-cat-row" data-id="${c.id}">
       <input type="text" value="${esc(c.name)}" aria-label="Category name" onchange="saveCategory(${c.id}, {name: this.value.trim()})">
-      <input type="number" value="${c.sort_order}" aria-label="Order" title="Order (lower first)" onchange="saveCategory(${c.id}, {sort_order: +this.value || 0})">
       <label><input type="checkbox" ${c.is_active ? 'checked' : ''} onchange="saveCategory(${c.id}, {is_active: this.checked})"> Shown</label>
       <button type="button" class="mi-btn ghost small danger" onclick="deleteCategory(${c.id})" ${used(c.id) ? `disabled title="Has ${used(c.id)} item(s): move or delete them first"` : ''}>Delete</button>
     </div>`).join('') || '<div class="mi-hint">No categories yet.</div>';
