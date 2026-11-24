@@ -2755,11 +2755,11 @@ function bvpEvaluateUW(profile, conditions, drugs, carriers, data) {
       const _exact = matches.filter(r => (r.condition_name || '').trim().toLowerCase() === cond.trim().toLowerCase());
       if (_exact.length) matches = _exact;
 
-      // Informational rows (decision 'info'): "not a knockout by itself, but
-      // confirm ..." notes. Shown as a green info line; they don't change the
-      // status and don't count as a rule (links are still followed).
+      // Informational rows (decision 'info'): "not a knockout by itself" notes, with
+      // the row's notes explaining why. Shown as a green info line; they don't change
+      // the status and don't count as a rule (links are still followed).
       matches.filter(m => m.decision === 'info').forEach(m => infos.push({
-        text: `${cond} isn't a knockout by itself with ${carrierLabel} — confirm before submitting`,
+        text: `${cond} isn't a knockout by itself with ${carrierLabel}`,
         notes: m.notes || null,
       }));
       matches = matches.filter(m => m.decision !== 'info');
