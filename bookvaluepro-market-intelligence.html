@@ -136,6 +136,21 @@ body { font-family: var(--sans); color: var(--text); background: var(--light-bg)
 
 .mi-empty { text-align: center; padding: 56px 20px; color: var(--text-muted); background: #fff; border: 1px dashed var(--border); border-radius: 14px; font-size: 14px; line-height: 1.6; }
 
+/* state & county lookup */
+.mi-lookup { display: flex; flex-direction: column; gap: 12px; border-top: 1px dashed var(--border); padding-top: 12px; }
+.mi-lookup-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 560px; }
+.mi-lookup-pick select { width: 100%; padding: 9px 11px; border: 1.5px solid var(--border); border-radius: 9px; font: 14px var(--sans); background: var(--light-bg); color: var(--text); }
+.mi-lookup-pick select:focus { outline: none; border-color: var(--emerald); background: #fff; }
+.mi-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.mi-stat { background: var(--light-bg); border: 1px solid var(--border); border-radius: 11px; padding: 12px 14px; }
+.mi-stat-label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+.mi-stat-value { font-size: 24px; font-weight: 600; color: var(--deep); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.mi-stat-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+.mi-lookup .mi-table-wrap { max-height: 380px; overflow: auto; }
+.mi-lookup .mi-table th { position: sticky; top: 0; }
+.mi-table tr.pick td { cursor: pointer; }
+.mi-table tr.pick:hover td { background: var(--mist); }
+
 /* modals */
 .mi-modal { position: fixed; inset: 0; z-index: 700; background: rgba(7,22,13,.45); display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; }
 .mi-modal[hidden] { display: none; }
@@ -181,6 +196,9 @@ body { font-family: var(--sans); color: var(--text); background: var(--light-bg)
   .mi-search { flex: 1 1 100%; }
   .mi-row2 { grid-template-columns: 1fr; }
   .mi-cat-row { grid-template-columns: 1fr 60px; }
+  .mi-lookup-pick { grid-template-columns: 1fr; }
+  .mi-seg { flex-wrap: wrap; }
+  .mi-seg button { flex: 1 1 30%; }
   .mi-admin-actions { margin-left: 0; }
 }
 
@@ -313,6 +331,7 @@ body { padding-left: 64px; }
           <button type="button" data-type="link">Link</button>
           <button type="button" data-type="note">Note</button>
           <button type="button" data-type="table">Table</button>
+          <button type="button" data-type="county">State &amp; county</button>
         </div>
       </div>
       <label class="mi-field">Title
@@ -344,6 +363,15 @@ body { padding-left: 64px; }
         </label>
         <div class="mi-hint">Preview</div>
         <div class="mi-table-wrap" id="f-table-preview"><div class="mi-hint">Paste a table to see it here.</div></div>
+      </div>
+
+      <div class="mi-type-pane" data-pane="county">
+        <label class="mi-field">Excel or CSV file
+          <input type="file" id="f-data-file" accept=".xlsx,.xls,.csv">
+        </label>
+        <div class="mi-hint">One row per county. It needs a State column and a County column; every other column (for example Medicare Eligibles and PDP Enrolled) becomes a figure agents can look up. The first sheet is used.</div>
+        <div class="mi-hint" id="f-data-status"></div>
+        <div id="f-data-preview"></div>
       </div>
 
       <div class="mi-row2">
@@ -393,13 +421,16 @@ body { padding-left: 64px; }
 // Admins (BVP_ADMIN_EMAILS) also see hidden items and can add, edit, hide and
 // delete items and categories right on this page.
 const MI_BUCKET = 'market-intel';
-const MI_TYPE_LABEL = { pdf: 'PDF', link: 'Link', note: 'Note', table: 'Table' };
+const MI_TYPE_LABEL = { pdf: 'PDF', link: 'Link', note: 'Note', table: 'Table', county: 'State & county' };
+const MI_XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 let miSession = null, miAdmin = false;
 let miCats = [], miItems = [];
 let miTab = 'all';
 let miEditing = null;        // item being edited (null = new)
 let miType = 'pdf';
 const miOpenNotes = new Set();
+const miLookupSel = {};      // item id -> { state, county } picked on its card
+let miParsedData = null;     // State & county data read from the file chosen in the form
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 const fmtDate = d => d ? new Date(String(d).slice(0, 10) + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
@@ -480,6 +511,117 @@ function noteHTML(text) {
 }
 const safeUrl = u => /^https?:\/\//i.test(String(u || '').trim()) ? String(u).trim() : '';
 
+// ── STATE & COUNTY DATA ──
+// Stored in the item's body as JSON: { columns: [value column names], rows: [[state, county, v1, v2, ...]] }.
+const miLookupCache = new Map();
+function lookupData(it) {
+  const hit = miLookupCache.get(it.id);
+  if (hit && hit.src === it.body) return hit.data;
+  let data = null;
+  try { const j = JSON.parse(it.body || ''); if (j && Array.isArray(j.columns) && Array.isArray(j.rows)) data = j; } catch (e) {}
+  miLookupCache.set(it.id, { src: it.body, data });
+  return data;
+}
+const fmtNum = v => typeof v === 'number' ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : (v === '' || v == null ? '—' : esc(v));
+const toNum = v => {
+  if (typeof v === 'number') return v;
+  const t = String(v ?? '').replace(/[$,\s]/g, '');
+  return t !== '' && !isNaN(+t) ? +t : String(v ?? '').trim();
+};
+// "PDP Enrolled as a % of Medicare Eligibles" when both columns exist.
+function lookupRatio(columns) {
+  const e = columns.findIndex(c => /eligib/i.test(c));
+  const p = columns.findIndex(c => /\bpdp\b/i.test(c));
+  return e >= 0 && p >= 0 && e !== p ? { e, p, label: `${columns[p]} as % of ${columns[e]}` } : null;
+}
+function sumRows(rows, n) {
+  const tot = Array(n).fill(0), any = Array(n).fill(false);
+  rows.forEach(r => { for (let k = 0; k < n; k++) if (typeof r[k + 2] === 'number') { tot[k] += r[k + 2]; any[k] = true; } });
+  return tot.map((t, k) => any[k] ? t : '');
+}
+function lookupHTML(it) {
+  const d = lookupData(it);
+  if (!d || !d.rows.length) return '<span class="mi-hint">No data loaded yet.</span>';
+  const n = d.columns.length;
+  const states = [...new Set(d.rows.map(r => r[0]))].sort((a, b) => String(a).localeCompare(String(b)));
+  const sel = miLookupSel[it.id] || (miLookupSel[it.id] = { state: '', county: '' });
+  if (sel.state && !states.includes(sel.state)) { sel.state = ''; sel.county = ''; }
+  const inState = sel.state ? d.rows.filter(r => r[0] === sel.state).sort((a, b) => String(a[1]).localeCompare(String(b[1]))) : [];
+  if (sel.county && !inState.some(r => r[1] === sel.county)) sel.county = '';
+  const ratio = lookupRatio(d.columns);
+  const pick = `<div class="mi-lookup-pick">
+      <label class="mi-field">State
+        <select onchange="pickLookup(${it.id}, 'state', this.value)"><option value="">Choose a state</option>${states.map(s => `<option value="${esc(s)}"${s === sel.state ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
+      <label class="mi-field">County
+        <select onchange="pickLookup(${it.id}, 'county', this.value)" ${sel.state ? '' : 'disabled'}><option value="">${sel.state ? `All counties in ${esc(sel.state)}` : 'Choose a state first'}</option>${inState.map(r => `<option value="${esc(r[1])}"${r[1] === sel.county ? ' selected' : ''}>${esc(r[1])}</option>`).join('')}</select></label>
+    </div>`;
+  if (!sel.state) return `<div class="mi-lookup">${pick}<div class="mi-hint">${states.length} states, ${d.rows.length.toLocaleString()} counties.</div></div>`;
+  const vals = sel.county ? inState.find(r => r[1] === sel.county).slice(2) : sumRows(inState, n);
+  const where = sel.county ? `${esc(sel.county)}, ${esc(sel.state)}` : `${esc(sel.state)} (all ${inState.length} counties)`;
+  const stat = (label, value, sub) => `<div class="mi-stat"><div class="mi-stat-label">${esc(label)}</div><div class="mi-stat-value">${value}</div>${sub ? `<div class="mi-stat-sub">${sub}</div>` : ''}</div>`;
+  const pct = (r) => (ratio && typeof r[ratio.e] === 'number' && r[ratio.e] > 0 && typeof r[ratio.p] === 'number') ? (r[ratio.p] / r[ratio.e] * 100).toFixed(1) + '%' : '—';
+  let stats = d.columns.map((c, k) => stat(c, fmtNum(vals[k]), where)).join('');
+  if (ratio) stats += stat(ratio.label, pct(vals), where);
+  let table = '';
+  if (!sel.county) {
+    table = `<div class="mi-table-wrap"><table class="mi-table"><thead><tr><th scope="col">County</th>${d.columns.map(c => `<th scope="col" style="text-align:right">${esc(c)}</th>`).join('')}${ratio ? '<th scope="col" style="text-align:right">PDP %</th>' : ''}</tr></thead><tbody>`
+      + inState.map(r => `<tr class="pick" onclick="pickLookup(${it.id}, 'county', ${esc(JSON.stringify(r[1]))})"><td>${esc(r[1])}</td>${r.slice(2).map(v => `<td class="num">${fmtNum(v)}</td>`).join('')}${ratio ? `<td class="num">${pct(r.slice(2))}</td>` : ''}</tr>`).join('')
+      + '</tbody></table></div><div class="mi-hint">Click a county to see it on its own.</div>';
+  }
+  return `<div class="mi-lookup">${pick}<div class="mi-stats">${stats}</div>${table}</div>`;
+}
+function pickLookup(id, field, value) {
+  const sel = miLookupSel[id] || (miLookupSel[id] = { state: '', county: '' });
+  sel[field] = value;
+  if (field === 'state') sel.county = '';
+  render();
+}
+
+// Reads the first sheet of an Excel or CSV file into State & county data.
+function loadXlsxLib() {
+  if (window.XLSX) return Promise.resolve();
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = MI_XLSX_URL; s.onload = () => res(); s.onerror = () => rej(new Error('Could not load the Excel reader. Check your connection and try again.'));
+    document.head.appendChild(s);
+  });
+}
+async function readDataFile(file) {
+  await loadXlsxLib();
+  const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const grid = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' });
+  const hi = grid.findIndex(r => r.some(c => /^\s*state\b/i.test(String(c))) && r.some(c => /county/i.test(String(c))));
+  if (hi < 0) throw new Error('Could not find a heading row with a State column and a County column.');
+  const head = grid[hi].map(c => String(c).trim());
+  const si = head.findIndex(c => /^state\b/i.test(c)), ci = head.findIndex(c => /county/i.test(c));
+  const vi = head.map((c, k) => k).filter(k => k !== si && k !== ci && head[k] !== '');
+  const rows = [];
+  grid.slice(hi + 1).forEach(r => {
+    const st = String(r[si] ?? '').trim(), co = String(r[ci] ?? '').trim();
+    if (!st || !co || /^total/i.test(st) || /^total/i.test(co)) return;
+    rows.push([st, co, ...vi.map(k => toNum(r[k]))]);
+  });
+  if (!rows.length) throw new Error('No county rows were found under the heading row.');
+  return { columns: vi.map(k => head[k]), rows };
+}
+async function onDataFile() {
+  const f = document.getElementById('f-data-file').files[0];
+  const st = document.getElementById('f-data-status'), pv = document.getElementById('f-data-preview');
+  miParsedData = null; pv.innerHTML = '';
+  if (!f) { st.textContent = ''; return; }
+  st.textContent = 'Reading the file…';
+  try {
+    const d = await readDataFile(f);
+    miParsedData = d;
+    const states = new Set(d.rows.map(r => r[0])).size;
+    st.textContent = `Read ${d.rows.length.toLocaleString()} counties in ${states} states. Figures: ${d.columns.join(', ')}.`;
+    pv.innerHTML = `<div class="mi-table-wrap"><table class="mi-table"><thead><tr><th>State</th><th>County</th>${d.columns.map(c => `<th style="text-align:right">${esc(c)}</th>`).join('')}</tr></thead><tbody>`
+      + d.rows.slice(0, 5).map(r => `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td>${r.slice(2).map(v => `<td class="num">${fmtNum(v)}</td>`).join('')}</tr>`).join('')
+      + `</tbody></table></div><div class="mi-hint">First 5 rows shown.</div>`;
+  } catch (e) { st.textContent = e.message || String(e); }
+}
+
 // ── RENDER ──
 function renderTabs(counts) {
   const tabs = [{ id: 'all', name: 'All', n: counts.all }, ...visibleCats().map(c => ({ id: String(c.id), name: c.name + (c.is_active ? '' : ' (hidden)'), n: counts[c.id] || 0 }))];
@@ -503,6 +645,7 @@ function cardHTML(it, showCat) {
     action = `<button type="button" class="mi-open" onclick="toggleNote(${it.id})" aria-expanded="${open}">${open ? 'Hide' : 'Read'}</button>`;
     if (open) extra = `<div class="mi-note">${noteHTML(it.body)}</div>`;
   } else if (it.item_type === 'table') extra = tableHTML(it.body) || '<span class="mi-hint">No table rows yet.</span>';
+  else if (it.item_type === 'county') extra = lookupHTML(it);
   const adminBtns = miAdmin ? `<div class="mi-admin-actions">
       <button type="button" class="mi-btn ghost small" onclick="openItemForm(${it.id})">Edit</button>
       <button type="button" class="mi-btn ghost small" onclick="toggleActive(${it.id})">${it.is_active ? 'Hide' : 'Show'}</button>
@@ -526,7 +669,7 @@ function render() {
   renderTabs(counts);
 
   let list = miTab === 'all' ? shown : shown.filter(it => String(it.category_id) === String(miTab));
-  if (q) list = list.filter(it => [it.title, it.summary, it.body, it.file_name, (catById(it.category_id) || {}).name]
+  if (q) list = list.filter(it => [it.title, it.summary, it.item_type === 'county' ? '' : it.body, it.file_name, (catById(it.category_id) || {}).name]
     .some(v => String(v || '').toLowerCase().includes(q)));
 
   const el = document.getElementById('mi-list');
@@ -584,6 +727,11 @@ function openItemForm(id) {
   document.getElementById('f-file-current').textContent = it.file_path ? `Current file: ${it.file_name || it.file_path}. Choose a new file only to replace it.` : '';
   document.getElementById('f-body-note').value = it.item_type === 'note' ? (it.body || '') : '';
   document.getElementById('f-body-table').value = it.item_type === 'table' ? (it.body || '') : '';
+  miParsedData = null;
+  document.getElementById('f-data-file').value = '';
+  document.getElementById('f-data-preview').innerHTML = '';
+  { const d = it.item_type === 'county' ? lookupData(it) : null;
+    document.getElementById('f-data-status').textContent = d ? `Current data: ${d.rows.length.toLocaleString()} counties (${d.columns.join(', ')}). Choose a new file only to replace it.` : ''; }
   document.getElementById('f-order').value = it.sort_order ?? 100;
   document.getElementById('f-active').checked = it.is_active ?? true;
   document.getElementById('f-error').textContent = '';
@@ -625,6 +773,10 @@ async function saveItem() {
   } else if (miType === 'table') {
     row.body = document.getElementById('f-body-table').value.replace(/\s+$/, '');
     if (parseTable(row.body).length < 2) { err.textContent = 'Paste a table with a heading row and at least one row.'; return; }
+  } else if (miType === 'county') {
+    if (miParsedData) row.body = JSON.stringify(miParsedData);
+    else if (prev.item_type === 'county' && prev.body) row.body = prev.body;
+    else { err.textContent = 'Choose an Excel or CSV file with State and County columns.'; return; }
   } else if (miType === 'pdf') {
     if (!file && !prev.file_path) { err.textContent = 'Choose a PDF file.'; return; }
     if (file && !/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') { err.textContent = 'The file must be a PDF.'; return; }
@@ -725,6 +877,7 @@ async function deleteCategory(id) {
 // ── INIT ──
 document.querySelectorAll('#f-type button').forEach(b => b.onclick = () => setType(b.dataset.type));
 document.getElementById('f-body-table').addEventListener('input', previewTable);
+document.getElementById('f-data-file').addEventListener('change', onDataFile);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal('item-modal'); closeModal('cat-modal'); } });
 document.getElementById('cat-new-name').addEventListener('keydown', e => { if (e.key === 'Enter') addCategory(); });
 
