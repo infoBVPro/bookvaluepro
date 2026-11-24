@@ -529,6 +529,11 @@ const toNum = v => {
   const t = String(v ?? '').replace(/[$,\s]/g, '');
   return t !== '' && !isNaN(+t) ? +t : String(v ?? '').trim();
 };
+// Columns kept in the data but not shown to agents: county and state codes.
+const LOOKUP_HIDE = /^(fips|ssa)|\bcode\b|^(st|cnty)\s*(cd|code|fips)$/i;
+// Columns holding a rate, shown as a percent.
+const LOOKUP_RATE = /penetration|percent|%|\bshare\b|\brate\b/i;
+
 // Each enrollment column (PDP Enrolled, MA Enrolled, ...) as a % of the eligibles column.
 function lookupRatios(columns) {
   const e = columns.findIndex(c => /eligib/i.test(c));
@@ -550,7 +555,18 @@ function lookupHTML(it) {
   if (sel.state && !states.includes(sel.state)) { sel.state = ''; sel.county = ''; }
   const inState = sel.state ? d.rows.filter(r => r[0] === sel.state).sort((a, b) => String(a[1]).localeCompare(String(b[1]))) : [];
   if (sel.county && !inState.some(r => r[1] === sel.county)) sel.county = '';
-  const ratios = lookupRatios(d.columns);
+  // Which columns to show: code columns (FIPS, SSA and similar) are kept in the data but not shown.
+  const show = d.columns.map((c, k) => k).filter(k => !LOOKUP_HIDE.test(d.columns[k]));
+  // Rate columns (e.g. CMS "Penetration", stored as 0.56) are shown as a percent (56%).
+  const rateCols = show.filter(k => LOOKUP_RATE.test(d.columns[k]));
+  const rateScale = {};
+  rateCols.forEach(k => { const vs = d.rows.map(r => r[k + 2]).filter(v => typeof v === 'number'); rateScale[k] = vs.length && Math.max(...vs) <= 1.5 ? 100 : 1; });
+  const fmtRate = (v, k) => typeof v === 'number' ? (v * rateScale[k]).toLocaleString('en-US', { maximumFractionDigits: 1 }) + '%' : '—';
+  const cell = (v, k) => rateScale[k] ? fmtRate(v, k) : fmtNum(v);
+  // A file with its own rate column doesn't also get a calculated %.
+  const ratios = rateCols.length ? [] : lookupRatios(d.columns).filter(x => show.includes(x.e) && show.includes(x.p));
+  const eCol = d.columns.findIndex(c => /eligib/i.test(c));
+  const nCol = d.columns.findIndex((c, k) => k !== eCol && /enrol/i.test(c));
   const pick = `<div class="mi-lookup-pick">
       <label class="mi-field">State
         <select onchange="pickLookup(${it.id}, 'state', this.value)"><option value="">Choose a state</option>${states.map(s => `<option value="${esc(s)}"${s === sel.state ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
@@ -562,7 +578,15 @@ function lookupHTML(it) {
   const where = sel.county ? `${esc(sel.county)}, ${esc(sel.state)}` : `${esc(sel.state)} (all ${inState.length} counties)`;
   const stat = (label, value, sub) => `<div class="mi-stat"><div class="mi-stat-label">${esc(label)}</div><div class="mi-stat-value">${value}</div>${sub ? `<div class="mi-stat-sub">${sub}</div>` : ''}</div>`;
   const pct = (r, x) => (typeof r[x.e] === 'number' && r[x.e] > 0 && typeof r[x.p] === 'number') ? (r[x.p] / r[x.e] * 100).toFixed(1) + '%' : '—';
-  let stats = d.columns.map((c, k) => stat(c, fmtNum(vals[k]), where)).join('');
+  // For all counties in a state, a rate is Enrolled ÷ Eligibles over the counties that have
+  // both (adding up county rates would be meaningless).
+  const stateRate = k => {
+    if (eCol < 0 || nCol < 0) return '—';
+    let num = 0, den = 0;
+    inState.forEach(r => { const v = r.slice(2); if (typeof v[eCol] === 'number' && typeof v[nCol] === 'number') { num += v[nCol]; den += v[eCol]; } });
+    return den > 0 ? (num / den * 100).toLocaleString('en-US', { maximumFractionDigits: 1 }) + '%' : '—';
+  };
+  let stats = show.map(k => stat(d.columns[k], rateScale[k] && !sel.county ? stateRate(k) : cell(vals[k], k), where)).join('');
   // State totals: the % uses only counties that have both figures, so a county missing
   // its eligibles count doesn't inflate the share.
   const statePct = x => {
@@ -573,8 +597,8 @@ function lookupHTML(it) {
   ratios.forEach(x => { stats += stat(x.label, sel.county ? pct(vals, x) : statePct(x), where); });
   let table = '';
   if (!sel.county) {
-    table = `<div class="mi-table-wrap"><table class="mi-table"><thead><tr><th scope="col">County</th>${d.columns.map(c => `<th scope="col" style="text-align:right">${esc(c)}</th>`).join('')}${ratios.map(x => `<th scope="col" style="text-align:right">${esc(x.short)}</th>`).join('')}</tr></thead><tbody>`
-      + inState.map(r => `<tr class="pick" onclick="pickLookup(${it.id}, 'county', ${esc(JSON.stringify(r[1]))})"><td>${esc(r[1])}</td>${r.slice(2).map(v => `<td class="num">${fmtNum(v)}</td>`).join('')}${ratios.map(x => `<td class="num">${pct(r.slice(2), x)}</td>`).join('')}</tr>`).join('')
+    table = `<div class="mi-table-wrap"><table class="mi-table"><thead><tr><th scope="col">County</th>${show.map(k => `<th scope="col" style="text-align:right">${esc(d.columns[k])}</th>`).join('')}${ratios.map(x => `<th scope="col" style="text-align:right">${esc(x.short)}</th>`).join('')}</tr></thead><tbody>`
+      + inState.map(r => `<tr class="pick" onclick="pickLookup(${it.id}, 'county', ${esc(JSON.stringify(r[1]))})"><td>${esc(r[1])}</td>${show.map(k => `<td class="num">${cell(r[k + 2], k)}</td>`).join('')}${ratios.map(x => `<td class="num">${pct(r.slice(2), x)}</td>`).join('')}</tr>`).join('')
       + '</tbody></table></div><div class="mi-hint">Click a county to see it on its own.</div>';
   }
   return `<div class="mi-lookup">${pick}<div class="mi-stats">${stats}</div>${table}</div>`;
