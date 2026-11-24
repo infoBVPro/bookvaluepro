@@ -588,7 +588,7 @@ function lookupHTML(it) {
       <label class="mi-field">County
         <select onchange="pickLookup(${it.id}, 'county', this.value)" ${sel.state && !national ? '' : 'disabled'}><option value="">${national ? 'All states' : sel.state ? `All counties in ${esc(sel.state)}` : 'Choose a state first'}</option>${national ? '' : inState.map(r => `<option value="${esc(r[1])}"${r[1] === sel.county ? ' selected' : ''}>${esc(r[1])}</option>`).join('')}</select></label>
     </div>`;
-  if (!sel.state) return `<div class="mi-lookup">${pick}<div class="mi-hint">${states.length} states, ${d.rows.length.toLocaleString()} counties.</div></div>`;
+  if (!sel.state) return `<div class="mi-lookup">${pick}<div class="mi-hint">Choose a state, or National for totals across all states and territories.</div></div>`;
 
   // Figures for a group of counties (a state, or the whole nation): counts are added up;
   // a rate is Enrolled ÷ Eligibles over the counties that have both (adding up county
@@ -610,7 +610,7 @@ function lookupHTML(it) {
   };
   const groupRows = national ? d.rows : inState;
   const top = sel.county ? figs(inState.find(r => r[1] === sel.county), false) : figs(groupRows, true);
-  const where = national ? `National (${states.length} states, ${d.rows.length.toLocaleString()} counties)`
+  const where = national ? ''   // National: no line under each figure
     : sel.county ? `${esc(sel.county)}, ${esc(sel.state)}` : `${esc(sel.state)} (${inState.length === 1 ? '1 county' : `all ${inState.length} counties`})`;
   const stat = (label, value, sub) => `<div class="mi-stat"><div class="mi-stat-label">${esc(label)}</div><div class="mi-stat-value">${value}</div>${sub ? `<div class="mi-stat-sub">${sub}</div>` : ''}</div>`;
   const stats = show.map((k, i) => stat(d.columns[k], top.cols[i], where)).join('') + ratios.map((x, i) => stat(x.label, top.ratios[i], where)).join('');
