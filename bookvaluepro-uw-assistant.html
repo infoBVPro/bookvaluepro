@@ -924,12 +924,13 @@ function uwGIRuleLines(r) {
   if (who.length) L.push(`<b>Who qualifies:</b> ${who.join('; ')}`);
   if (r.early_application_days > 0) L.push(`<b>Apply early:</b> up to ${r.early_application_days} days before the window opens`);
   const after = r.max_effective_days_after_app;
+  // Coverage start, said as what's allowed: "on or after the birthday, up to 60 days after the application is signed".
   if (r.effective_not_before === 'first_of_next_month') {
-    L.push('<b>Effective date:</b> 1st of the month after the application is signed');
+    L.push('<b>Coverage starts:</b> 1st of the month after the application is signed');
   } else if (r.effective_not_before || after) {
-    const nb = { birthday: 'before the birthday', birthday_minus_30: 'more than 30 days before the birthday' }[r.effective_not_before];
-    const parts = [nb && `${nb}`, after && `more than ${after} days after the application`].filter(Boolean);
-    if (parts.length) L.push(`<b>Effective date:</b> can't be ${parts.join(' or ')}`);
+    const nb = { birthday: 'on or after the birthday', birthday_minus_30: 'no earlier than 30 days before the birthday' }[r.effective_not_before];
+    const parts = [nb, after && `up to ${after} days after the application is signed`].filter(Boolean);
+    if (parts.length) L.push(`<b>Coverage can start:</b> ${parts.join(', ')}`);
   }
   if (r.rule_effective_date && new Date(r.rule_effective_date) > new Date()) L.push(`<b>Starts:</b> ${_giDate(r.rule_effective_date)}`);
   if (r.exclusions) L.push(`<b>Exclusions:</b> ${_giEsc(r.exclusions)}`);

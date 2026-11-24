@@ -834,12 +834,13 @@ function giRulesHTML() {
     if (r.max_coverage_gap_days) who.push(`no gap in coverage over ${r.max_coverage_gap_days} days`);
     if (who.length) L.push(`<b>Who qualifies:</b> ${esc(who.join('; '))}`);
     if (+r.early_application_days > 0) L.push(`<b>Apply early:</b> up to ${+r.early_application_days} days before the window opens`);
-    if (r.effective_not_before === 'first_of_next_month') L.push('<b>Effective date:</b> 1st of the month after the application');
+    // Coverage start, said as what's allowed: "on or after the birthday, up to 60 days after the application is signed".
+    if (r.effective_not_before === 'first_of_next_month') L.push('<b>Coverage starts:</b> 1st of the month after the application is signed');
     else {
-      const nb = { birthday: 'before the birthday', birthday_minus_30: 'more than 30 days before the birthday' }[r.effective_not_before];
+      const nb = { birthday: 'on or after the birthday', birthday_minus_30: 'no earlier than 30 days before the birthday' }[r.effective_not_before];
       const after = r.max_effective_days_after_app;
-      const parts = [nb, after && `more than ${after} days after the application`].filter(Boolean);
-      if (parts.length) L.push(`<b>Effective date:</b> can't be ${esc(parts.join(' or '))}`);
+      const parts = [nb, after && `up to ${after} days after the application is signed`].filter(Boolean);
+      if (parts.length) L.push(`<b>Coverage can start:</b> ${esc(parts.join(', '))}`);
     }
     if (r.plan_eligibility === 'crosswalk' && r.plan_crosswalk) {
       try {
