@@ -355,6 +355,17 @@ function renderSimple(title, chipHtml, text, actionsHtml = '') {
     ${actionsHtml ? `<div class="actions">${actionsHtml}</div>` : ''}`;
 }
 
+// Beta: start a free agency (you become the owner), then go to agency setup.
+async function startBetaAgency() {
+  const name = document.getElementById('beta-agency-name').value.trim();
+  const err = document.getElementById('beta-agency-err'), btn = document.getElementById('beta-agency-btn');
+  err.textContent = '';
+  if (!name) { err.textContent = "Please enter your agency's name."; return; }
+  btn.disabled = true; btn.textContent = 'Starting…';
+  try { await bvpStartBetaAgency(name); location.href = BVP_AGENCY_SETUP_PAGE; }
+  catch (e) { err.textContent = e.message; btn.disabled = false; btn.textContent = 'Start an agency'; }
+}
+
 async function loadSubscription(access, userId) {
   let q = bvp.from('subscriptions').select('*').order('updated_at', { ascending: false }).limit(1);
   q = access.reason === 'agency_owner' ? q.eq('agency_id', access.agency_id) : q.eq('user_id', userId).is('agency_id', null);
@@ -372,12 +383,24 @@ async function render(session) {
     case 'admin':
       renderSimple('Administrator', '<span class="chip green">Full access</span>', 'Your account has full access as a site administrator.');
       return access;
-    case 'beta':
-      renderSimple('Beta tester', '<span class="chip green">Free access</span>',
-        access.beta_ends_on
-          ? `Thanks for testing BookValuePro. Your free access runs through <strong>${fmtDate(access.beta_ends_on)}</strong>.`
-          : 'Thanks for testing BookValuePro. You have free access to every tool, with no card needed.');
+    case 'beta': {
+      const until = access.beta_ends_on
+        ? `Thanks for testing BookValuePro. Your free access runs through <strong>${bvpFmtDay(access.beta_ends_on)}</strong>, with no card needed.`
+        : 'Thanks for testing BookValuePro. You have free access to every tool, with no card needed.';
+      if (access.agency_id) {
+        const { data: agency } = await bvp.from('agencies').select('name').eq('id', access.agency_id).maybeSingle();
+        const roleText = access.role === 'owner' ? 'You own' : 'You\'re on';
+        renderSimple('Beta tester', '<span class="chip green">Free access</span>',
+          `${until} ${roleText} the agency <strong>${esc(agency?.name || '')}</strong>.`,
+          access.role === 'owner' ? `<a class="btn btn-primary" href="${BVP_TEAM_PAGE}">Invite your team</a>` : '');
+      } else {
+        renderSimple('Beta tester', '<span class="chip green">Free access</span>', until + ' Run an agency? You can start one free during the beta and invite your agents.',
+          `<input id="beta-agency-name" maxlength="100" placeholder="Agency name" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;font-size:14px;min-width:220px;"/>
+           <button class="btn btn-primary" id="beta-agency-btn" onclick="startBetaAgency()">Start an agency</button>
+           <div id="beta-agency-err" style="flex-basis:100%;color:#c0392b;font-size:13px;"></div>`);
+      }
       return access;
+    }
     case 'agency_admin': {
       const { data: agency } = await bvp.from('agencies').select('name').eq('id', access.agency_id).maybeSingle();
       renderSimple(esc(agency?.name || 'Agency plan'), '<span class="chip green">Agency admin</span>',

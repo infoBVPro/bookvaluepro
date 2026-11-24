@@ -242,8 +242,17 @@ async function choose(kind) {
   }
 
   if (access.reason === 'beta') {
-    showBanner('info', "You're a beta tester, so you have free access. No plan needed. <a href='bookvaluepro-dashboard.html'>Go to your dashboard →</a>");
+    const until = access.beta_ends_on ? ` through <strong>${bvpFmtDay(access.beta_ends_on)}</strong>` : '';
+    showBanner('info', `You're in the free beta${until}, so there's no plan to pick and no card needed. <a href='bookvaluepro-dashboard.html'>Go to your dashboard →</a>`);
     return;
+  }
+
+  // The open beta has ended and this account was part of it.
+  const prog = await bvpGetBetaProgram().catch(() => null);
+  const today = new Date().toLocaleDateString('en-CA');
+  if (prog && today > prog.endsOn && String(session.user.created_at || '').slice(0, 10) <= prog.endsOn
+      && ['no_plan', 'agency_inactive'].includes(access.reason)) {
+    showBanner('info', `Thanks for being part of the BookValuePro beta! The free beta ended on <strong>${bvpFmtDay(prog.endsOn)}</strong>. Pick a plan below to keep going. Your clients, leads and settings are all still here.`);
   }
 
   if (access.reason === 'agency_inactive' && access.role !== 'owner') {
@@ -262,6 +271,10 @@ async function choose(kind) {
     showBanner('info', 'Checkout was cancelled and no charge was made. Pick a plan whenever you are ready.');
     history.replaceState(null, '', location.pathname);
   }
+
+  // Agency name typed at sign-up.
+  const meta = session.user.user_metadata || {};
+  if (meta.agency_name && !document.getElementById('agency-name').value) document.getElementById('agency-name').value = meta.agency_name;
 
   document.getElementById('plans').classList.remove('hidden');
   document.getElementById('fine').classList.remove('hidden');

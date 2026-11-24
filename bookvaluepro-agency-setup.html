@@ -59,6 +59,9 @@ h1{font-family:'DM Serif Display',serif;font-size:32px;color:var(--deep);font-we
 .inv-sum{font-size:12.5px;color:var(--text-muted);margin-top:8px;}
 .inv-body{margin-top:12px;display:none;}
 .inv.open .inv-body{display:block;}
+.admin-check{display:flex;gap:9px;align-items:flex-start;margin-top:9px;font-size:13.5px;color:var(--deep);cursor:pointer;line-height:1.45;}
+.admin-check input{margin-top:3px;accent-color:var(--forest);}
+.admin-check small{display:block;color:var(--text-muted);font-size:12px;}
 .inv-res{font-size:12.5px;margin-top:8px;line-height:1.5;word-break:break-all;}
 .inv-res.ok{color:var(--forest);}
 .inv-res.error{color:var(--danger);}
@@ -75,8 +78,8 @@ h1{font-family:'DM Serif Display',serif;font-size:32px;color:var(--deep);font-we
 <main class="page">
   <div class="eyebrow">Agency setup</div>
   <h1 id="title">Set up your agency</h1>
-  <p class="sub">A few questions about your agency and how your team works. It takes about three minutes, and you can change any of it later.</p>
-  <div class="steps" id="steps"><div></div><div></div><div></div><div></div></div>
+  <p class="sub">A few questions about your agency. It takes about two minutes, and you can change any of it later.</p>
+  <div class="steps" id="steps"><div></div><div></div><div></div></div>
   <div class="steps-label" id="steps-label"></div>
   <div id="loading" class="sub">Loading…</div>
 
@@ -123,24 +126,15 @@ h1{font-family:'DM Serif Display',serif;font-size:32px;color:var(--deep);font-we
     <div class="actions"><button class="btn btn-ghost" onclick="go(1)">← Back</button><button class="btn btn-primary" onclick="saveStep(2)">Continue →</button></div>
   </section>
 
-  <!-- STEP 3: HOW YOUR TEAM WORKS -->
+  <!-- STEP 3: INVITE -->
   <section class="card hidden" data-step="3">
-    <h2>How your team works</h2>
-    <p class="hint">This sets what your agents see and what happens to their clients if they leave. It becomes the starting choice on every invite, and you can change it for any one person.</p>
-    <div id="defaults-form"></div>
-    <div class="note" id="model-note"></div>
-    <div class="msg error" id="msg-3"></div>
-    <div class="actions"><button class="btn btn-ghost" onclick="go(2)">← Back</button><button class="btn btn-primary" onclick="saveStep(3)">Save and continue →</button></div>
-  </section>
-
-  <!-- STEP 4: INVITE -->
-  <section class="card hidden" data-step="4">
     <h2>Invite your team</h2>
     <p class="hint">Each person gets an email with a link to join. You can also do this later from the Team page.</p>
+    <div data-bvp-team-explainer style="margin:0 0 14px;"></div>
     <div id="invites"></div>
     <button class="link-btn" onclick="addInvite()">+ Add another person</button>
-    <div class="msg" id="msg-4"></div>
-    <div class="actions"><button class="btn btn-ghost" onclick="go(3)">← Back</button>
+    <div class="msg" id="msg-3"></div>
+    <div class="actions"><button class="btn btn-ghost" onclick="go(2)">← Back</button>
       <span><button class="btn btn-ghost" id="btn-skip" onclick="finish()">Skip for now</button>
       <button class="btn btn-primary" id="btn-send" onclick="sendInvites()">Send invites and finish</button></span></div>
   </section>
@@ -150,7 +144,7 @@ h1{font-family:'DM Serif Display',serif;font-size:32px;color:var(--deep);font-we
 let me = null, agency = null, roster = [], step = 1, inviteSeq = 0;
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-const STEP_NAMES = ['Your business', 'How you sell', 'How your team works', 'Invite your team'];
+const STEP_NAMES = ['Your business', 'How you sell', 'Invite your team'];
 const TIME_ZONES = [
   ['America/New_York', 'Eastern'], ['America/Chicago', 'Central'], ['America/Denver', 'Mountain'],
   ['America/Phoenix', 'Arizona'], ['America/Los_Angeles', 'Pacific'], ['America/Anchorage', 'Alaska'],
@@ -164,7 +158,7 @@ function go(n) {
   document.querySelectorAll('[data-step]').forEach(s => s.classList.toggle('hidden', +s.dataset.step !== n));
   document.querySelectorAll('#steps div').forEach((d, i) => d.classList.toggle('on', i < n));
   $('steps-label').textContent = `Step ${n} of ${STEP_NAMES.length} · ${STEP_NAMES[n - 1]}`;
-  if (n === 4 && !$('invites').children.length) addInvite();
+  if (n === 3 && !$('invites').children.length) addInvite();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -190,26 +184,6 @@ function fill() {
   $('a-upline').value = agency.upline_name || '';
   $('a-principal').innerHTML = roster.map(m => `<option value="${esc(m.user_id)}">${esc(bvpMemberLabel(m))}${m.user_id === me.id ? ' (you)' : ''}</option>`).join('');
   $('a-principal').value = agency.principal_producer_id || me.id;
-
-  bvpTermsFormStyles();
-  const defaults = { ...bvpAgencyDefaultTerms(agency), model: agency.default_model || null };
-  $('defaults-form').innerHTML = bvpTermsFormHTML('def', {
-    allowMixed: true, values: defaults,
-    modelQuestion: 'Does your agency use the LOA model?',
-    payQuestion: 'For Contracted agents, how does the agency usually get paid on their business?',
-  }).replace('>LOA<', '>Yes — LOA<').replace('>Contracted<', '>No — agents are Contracted<');
-  bvpTermsFormInit('def', defaults);
-  const note = () => {
-    const m = radioVal('def-model');
-    $('model-note').innerHTML = m === 'loa'
-      ? '<strong>LOA:</strong> 100% of the commission goes to the agency. Agents see their clients, renewal schedule, client categories, State GI dates and outreach, but not book value or commissions. If an LOA agent leaves, their clients move to someone on your team.'
-      : m === 'contracted'
-      ? '<strong>Contracted:</strong> agents see everything, including their own expected commission after the agency\'s share. If a Contracted agent leaves, they keep their book unless you choose to move it.'
-      : m === 'mixed'
-      ? '<strong>Some of each:</strong> you\'ll pick LOA or Contracted for each person when you invite them. LOA agents are always 100% to the agency. The Contracted percentages here are pre-filled on each invite, and you can change them there.'
-      : 'Choose one to continue.';
-  };
-  $('defaults-form').addEventListener('change', note); note();
 }
 
 async function updateAgency(fields) {
@@ -238,81 +212,57 @@ async function saveStep(n) {
     } else if (n === 2) {
       btn.disabled = true;
       await updateAgency({ business_mix: radioVal('mix'), sales_channel: radioVal('channel'),
-        upline_name: blankToNull($('a-upline').value), principal_producer_id: $('a-principal').value || null });
+        upline_name: blankToNull($('a-upline').value), principal_producer_id: $('a-principal').value || null,
+        default_model: 'loa', setup_completed_at: agency.setup_completed_at || new Date().toISOString() });
       go(3);
-    } else if (n === 3) {
-      const r = bvpTermsFormRead('def', { payOptional: true });
-      if (!r.ok) return showMsg(3, r.error);
-      const t = r.terms, contracted = t.model !== 'loa', loa = t.model !== 'contracted';
-      btn.disabled = true;
-      await updateAgency({
-        default_model: t.model,
-        default_pay_method: contracted ? t.pay_method : null,
-        default_agent_first_year_pct: contracted && t.pay_method === 'split' ? t.agent_first_year_pct : null,
-        default_agent_renewal_pct:    contracted && t.pay_method === 'split' ? t.agent_renewal_pct : null,
-        default_agency_first_year_pct: contracted && t.pay_method === 'override' ? t.agency_first_year_pct : null,
-        default_agency_renewal_pct:    contracted && t.pay_method === 'override' ? t.agency_renewal_pct : null,
-        default_loa_agency_first_year_pct: loa ? t.loa_agency_first_year_pct : null,
-        default_loa_agency_renewal_pct:    loa ? t.loa_agency_renewal_pct : null,
-        setup_completed_at: agency.setup_completed_at || new Date().toISOString(),
-      });
-      go(4);
     }
   } catch (e) { showMsg(n, 'Could not save: ' + e.message); }
   if (btn) btn.disabled = false;
 }
 
-// ── STEP 4: invites ──
+// ── STEP 3: invites ──
 function addInvite() {
   const i = ++inviteSeq, prefix = 'inv' + i;
-  const values = bvpAgencyDefaultTerms(agency);
-  // Open the payment details when the owner has to choose (no full default).
-  const needsChoice = !values.model || (values.model === 'contracted' && !values.pay_method);
   const div = document.createElement('div');
-  div.className = 'inv' + (needsChoice ? ' open' : '');
+  div.className = 'inv';
   div.id = prefix;
   div.innerHTML = `<div class="inv-top">
       <input type="email" id="${prefix}-email" placeholder="agent@example.com" autocomplete="off"/>
-      <button class="link-btn" onclick="document.getElementById('${prefix}').classList.toggle('open')">Change setup</button>
       ${i > 1 ? `<button class="link-btn" style="color:var(--slate)" onclick="document.getElementById('${prefix}').remove()">Remove</button>` : ''}
     </div>
-    <div class="inv-sum" id="${prefix}-sum"></div>
-    <div class="inv-body">${bvpTermsFormHTML(prefix, { values, modelQuestion: 'How is this person set up?' })}</div>
+    <label class="admin-check"><input type="checkbox" id="${prefix}-admin"/>
+      <span>Make this person an agency administrator
+      <small>Admins see everything: their own book, the agency roll-ups, every agent's clients, and commissions.</small></span></label>
     <div class="inv-res" id="${prefix}-res"></div>`;
   $('invites').appendChild(div);
-  bvpTermsFormInit(prefix, values);
-  const sum = () => { const r = bvpTermsFormRead(prefix); $(prefix + '-sum').textContent = r.ok ? bvpTermsSummary(r.terms) : 'Setup: choose below'; };
-  div.addEventListener('input', sum); div.addEventListener('change', sum); sum();
 }
 
 async function sendInvites() {
-  showMsg(4, '');
+  showMsg(3, '');
   const rows = [...document.querySelectorAll('#invites .inv')];
   const todo = [];
   for (const row of rows) {
     const p = row.id, email = $(p + '-email').value.trim().toLowerCase();
     $(p + '-res').textContent = ''; $(p + '-res').className = 'inv-res';
     if (!email) continue;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { row.classList.add('open'); return showMsg(4, `"${email}" isn't a valid email address.`); }
-    const r = bvpTermsFormRead(p);
-    if (!r.ok) { row.classList.add('open'); return showMsg(4, `${email}: ${r.error}`); }
-    todo.push({ p, email, terms: r.terms });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showMsg(3, `"${email}" isn't a valid email address.`);
+    todo.push({ p, email, admin: $(p + '-admin').checked });
   }
-  if (!todo.length) return showMsg(4, 'Enter at least one email, or choose Skip for now.');
+  if (!todo.length) return showMsg(3, 'Enter at least one email, or choose Skip for now.');
   $('btn-send').disabled = true; $('btn-skip').disabled = true; $('btn-send').textContent = 'Sending…';
   let failed = 0;
   for (const t of todo) {
     const res = $(t.p + '-res');
     try {
-      await bvpSavePendingTerms(agency.id, t.email, t.terms, me.id);
+      await bvpSaveInviteRole(agency.id, t.email, t.admin ? 'admin' : 'agent', me.id);
       const r = await bvpAgencyAction('invite', { email: t.email });
       res.className = 'inv-res ok';
       res.textContent = r.emailed ? `Invite emailed to ${t.email}.` : `Email isn't set up yet. Send ${t.email} this link yourself: ${r.link}`;
     } catch (e) { failed++; res.className = 'inv-res error'; res.textContent = e.message; }
   }
   $('btn-send').disabled = false; $('btn-skip').disabled = false; $('btn-send').textContent = 'Send invites and finish';
-  if (failed) return showMsg(4, `${failed} invite${failed === 1 ? '' : 's'} didn't go out. Fix and try again, or choose Skip for now.`);
-  showMsg(4, 'Invites sent. Finishing up…', 'ok');
+  if (failed) return showMsg(3, `${failed} invite${failed === 1 ? '' : 's'} didn't go out. Fix and try again, or choose Skip for now.`);
+  showMsg(3, 'Invites sent. Finishing up…', 'ok');
   setTimeout(finish, 2500);
 }
 
@@ -333,6 +283,7 @@ async function finish() {
   if (!agency) { $('loading').textContent = 'Your agency could not be loaded. Please refresh the page.'; return; }
   if (agency.setup_completed_at) { $('title').textContent = 'Agency setup'; }
   fill();
+  bvpFillTeamExplainer();
   $('loading').classList.add('hidden');
   go(1);
 })();
