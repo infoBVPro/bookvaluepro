@@ -367,14 +367,14 @@ body { padding-left: 64px; }
 
       <div class="mi-type-pane" data-pane="county">
         <div class="mi-row2">
-          <label class="mi-field">PDP file
-            <input type="file" id="f-data-pdp" accept=".xlsx,.xls,.csv">
-          </label>
           <label class="mi-field">MA file
             <input type="file" id="f-data-ma" accept=".xlsx,.xls,.csv">
           </label>
+          <label class="mi-field">PDP file
+            <input type="file" id="f-data-pdp" accept=".xlsx,.xls,.csv">
+          </label>
         </div>
-        <div class="mi-hint">The CMS State/County Penetration files, as downloaded: State, County, Eligibles, Enrolled and Penetration columns (FIPS and SSA codes are skipped). They're combined on one card as Medicare Eligibles, PDP Enrolled, PDP Penetration, MA Enrolled and MA Penetration. The first sheet of each file is used. When editing, choose just one file to replace only those figures.</div>
+        <div class="mi-hint">The CMS State/County Penetration files, as downloaded: State, County, Eligibles, Enrolled and Penetration columns (FIPS and SSA codes are skipped). They're combined on one card as Medicare Eligibles, MA Enrolled, MA Penetration, PDP Enrolled and PDP Penetration. The first sheet of each file is used. When editing, choose just one file to replace only those figures.</div>
         <div class="mi-hint" id="f-data-status"></div>
         <div id="f-data-preview"></div>
       </div>
@@ -660,7 +660,7 @@ function labelData(d, label) {
   const keep = map.map((c, k) => c ? k : -1).filter(k => k >= 0);
   return { columns: keep.map(k => map[k]), rows: d.rows.map(r => [r[0], r[1], ...keep.map(k => r[k + 2])]) };
 }
-const productOrder = c => c === ELIG ? 0 : /^pdp\b/i.test(c) ? (/enrol/i.test(c) ? 1 : 2) : /^ma\b/i.test(c) ? (/enrol/i.test(c) ? 3 : 4) : 5;
+const productOrder = c => c === ELIG ? 0 : /^ma\b/i.test(c) ? (/enrol/i.test(c) ? 1 : 2) : /^pdp\b/i.test(c) ? (/enrol/i.test(c) ? 3 : 4) : 5;
 // list: [{ data, label }] in priority order (the first file's eligibles count is kept).
 function mergeData(list) {
   const columns = [], map = new Map(), order = [], mismatch = [];
@@ -670,7 +670,8 @@ function mergeData(list) {
     d.rows.forEach(r => {
       const key = lookupKey(r[0], r[1]);
       let row = map.get(key);
-      if (!row) { row = { st: r[0], co: r[1], v: {}, from: {} }; map.set(key, row); order.push(key); if (fi > 0) unmatched++; }
+      if (!row) { row = { st: r[0], co: r[1], v: {}, from: {}, seen: new Set() }; map.set(key, row); order.push(key); }
+      row.seen.add(fi);
       idx.forEach((k, j) => {
         const v = r[j + 2];
         if (columns[k] === ELIG && k in row.v) {
@@ -681,6 +682,8 @@ function mergeData(list) {
       });
     });
   });
+  // Counties missing from at least one of the files.
+  map.forEach(row => { if (row.seen.size < list.length) unmatched++; });
   const ord = columns.map((c, k) => k).sort((a, b) => productOrder(columns[a]) - productOrder(columns[b]) || a - b);
   const rows = order.map(k => { const r = map.get(k); return [r.st, r.co, ...ord.map(j => r.v[j] ?? '')]; });
   return { data: { columns: ord.map(j => columns[j]), rows }, unmatched, mismatch };
@@ -688,7 +691,7 @@ function mergeData(list) {
 
 async function onDataFile() {
   const st = document.getElementById('f-data-status'), pv = document.getElementById('f-data-preview');
-  const picked = [['PDP', document.getElementById('f-data-pdp').files[0]], ['MA', document.getElementById('f-data-ma').files[0]]].filter(x => x[1]);
+  const picked = [['MA', document.getElementById('f-data-ma').files[0]], ['PDP', document.getElementById('f-data-pdp').files[0]]].filter(x => x[1]);
   miParsedData = null; pv.innerHTML = '';
   if (!picked.length) { st.textContent = ''; return; }
   st.textContent = 'Reading…';
@@ -703,8 +706,10 @@ async function onDataFile() {
     const notes = [];
     if (cur && picked.length === 1) {
       const newLabel = picked[0][0];
-      const keepCols = cur.columns.map((c, k) => k).filter(k => !cur.columns[k].toLowerCase().startsWith(newLabel.toLowerCase() + ' '));
-      if (keepCols.some(k => cur.columns[k] !== ELIG)) {
+      const other = newLabel === 'MA' ? 'pdp ' : 'ma ';
+      // Keep only the other product's figures; older unlabeled columns (Eligibles, Enrolled, Penetration) are dropped.
+      const keepCols = cur.columns.map((c, k) => k).filter(k => cur.columns[k].toLowerCase().startsWith(other));
+      if (keepCols.length) {
         list.push({ data: { columns: keepCols.map(k => cur.columns[k]), rows: cur.rows.map(r => [r[0], r[1], ...keepCols.map(k => r[k + 2])]) }, label: 'current data' });
         notes.push(`Replacing the ${newLabel} figures; the other figures stay as they are.`);
       }
