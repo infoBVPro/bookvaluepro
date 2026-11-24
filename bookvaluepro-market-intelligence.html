@@ -133,6 +133,8 @@ body { font-family: var(--sans); color: var(--text); background: var(--light-bg)
 .mi-table th { background: var(--mist); color: var(--deep); font-weight: 600; text-align: left; padding: 9px 12px; white-space: nowrap; border-bottom: 1px solid var(--accept-border); }
 .mi-table td { padding: 8px 12px; border-top: 1px solid var(--border); vertical-align: top; }
 .mi-table tr:nth-child(even) td { background: var(--light-bg); }
+.mi-table td a { color: var(--forest); font-weight: 500; white-space: nowrap; }
+.mi-table td a:hover { color: var(--emerald); }
 .mi-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 .mi-empty { text-align: center; padding: 56px 20px; color: var(--text-muted); background: #fff; border: 1px dashed var(--border); border-radius: 14px; font-size: 14px; line-height: 1.6; }
@@ -510,7 +512,26 @@ function tableHTML(text) {
     return vals.length > 0 && vals.every(isNum);
   });
   return `<div class="mi-table-wrap"><table class="mi-table"><thead><tr>${pad(head).map((h, k) => `<th scope="col"${numCol[k] ? ' style="text-align:right"' : ''}>${esc(h)}</th>`).join('')}</tr></thead>`
-    + `<tbody>${body.map(r => `<tr>${pad(r).map((c, k) => `<td${numCol[k] ? ' class="num"' : ''}>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    + `<tbody>${body.map(r => `<tr>${pad(r).map((c, k) => `<td${numCol[k] ? ' class="num"' : ''}>${numCol[k] ? esc(c) : linkCell(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+
+// Table cells: phone numbers, email addresses and web addresses become tappable links,
+// and [label](https://...) shows the label as a link (e.g. [Vantage](https://account.humana.com/)).
+const MI_CELL_LINK = /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)|([\w.+-]+@[\w-]+(?:\.[\w-]+)+)|((?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4})|((?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|org|net|gov|us|info)(?:\/[^\s,;)]*)?)/gi;
+function linkCell(text) {
+  const t = String(text ?? '');
+  let out = '', last = 0, m;
+  MI_CELL_LINK.lastIndex = 0;
+  while ((m = MI_CELL_LINK.exec(t))) {
+    out += esc(t.slice(last, m.index));
+    const a = (href, label, ext) => `<a href="${esc(href)}"${ext ? ' target="_blank" rel="noopener"' : ''}>${esc(label)}</a>`;
+    if (m[1]) out += a(m[2], m[1], true);
+    else if (m[3]) out += a('mailto:' + m[3], m[3]);
+    else if (m[4]) { const dg = m[4].replace(/\D/g, '').replace(/^1(?=\d{10}$)/, ''); out += a('tel:+1' + dg, m[4]); }
+    else out += a(/^https?:/i.test(m[5]) ? m[5] : 'https://' + m[5], m[5], true);
+    last = m.index + m[0].length;
+  }
+  return out + esc(t.slice(last));
 }
 
 // Note text: paragraphs on blank lines, line breaks kept, web addresses linked.
