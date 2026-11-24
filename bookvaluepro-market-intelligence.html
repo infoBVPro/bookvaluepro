@@ -367,9 +367,10 @@ body { padding-left: 64px; }
 
       <div class="mi-type-pane" data-pane="county">
         <label class="mi-field">Excel or CSV file
-          <input type="file" id="f-data-file" accept=".xlsx,.xls,.csv">
+          <input type="file" id="f-data-file" accept=".xlsx,.xls,.csv" multiple>
         </label>
-        <div class="mi-hint">One row per county. It needs a State column and a County column; every other column (for example Medicare Eligibles and PDP Enrolled) becomes a figure agents can look up. The first sheet is used.</div>
+        <div class="mi-hint">One row per county, with a State column and a County column; every other column (for example Medicare Eligibles, PDP Enrolled, MA Enrolled) becomes a figure agents can look up. The first sheet is used. To combine files, select them together: rows are matched on state and county.</div>
+        <label class="mi-check" id="f-data-add-row" hidden><input type="checkbox" id="f-data-add"> Add the new file's figures to the current data instead of replacing it</label>
         <div class="mi-hint" id="f-data-status"></div>
         <div id="f-data-preview"></div>
       </div>
@@ -528,11 +529,12 @@ const toNum = v => {
   const t = String(v ?? '').replace(/[$,\s]/g, '');
   return t !== '' && !isNaN(+t) ? +t : String(v ?? '').trim();
 };
-// "PDP Enrolled as a % of Medicare Eligibles" when both columns exist.
-function lookupRatio(columns) {
+// Each enrollment column (PDP Enrolled, MA Enrolled, ...) as a % of the eligibles column.
+function lookupRatios(columns) {
   const e = columns.findIndex(c => /eligib/i.test(c));
-  const p = columns.findIndex(c => /\bpdp\b/i.test(c));
-  return e >= 0 && p >= 0 && e !== p ? { e, p, label: `${columns[p]} as % of ${columns[e]}` } : null;
+  if (e < 0) return [];
+  return columns.map((c, p) => ({ e, p, c })).filter(x => x.p !== e && /enrol|\bpdp\b|\bma\b|advantage/i.test(x.c))
+    .map(x => ({ e, p: x.p, label: `${x.c} as % of ${columns[e]}`, short: x.c.replace(/\s*enroll(ed|ment)?\s*/i, ' ').trim() + ' %' }));
 }
 function sumRows(rows, n) {
   const tot = Array(n).fill(0), any = Array(n).fill(false);
@@ -548,7 +550,7 @@ function lookupHTML(it) {
   if (sel.state && !states.includes(sel.state)) { sel.state = ''; sel.county = ''; }
   const inState = sel.state ? d.rows.filter(r => r[0] === sel.state).sort((a, b) => String(a[1]).localeCompare(String(b[1]))) : [];
   if (sel.county && !inState.some(r => r[1] === sel.county)) sel.county = '';
-  const ratio = lookupRatio(d.columns);
+  const ratios = lookupRatios(d.columns);
   const pick = `<div class="mi-lookup-pick">
       <label class="mi-field">State
         <select onchange="pickLookup(${it.id}, 'state', this.value)"><option value="">Choose a state</option>${states.map(s => `<option value="${esc(s)}"${s === sel.state ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
@@ -559,13 +561,20 @@ function lookupHTML(it) {
   const vals = sel.county ? inState.find(r => r[1] === sel.county).slice(2) : sumRows(inState, n);
   const where = sel.county ? `${esc(sel.county)}, ${esc(sel.state)}` : `${esc(sel.state)} (all ${inState.length} counties)`;
   const stat = (label, value, sub) => `<div class="mi-stat"><div class="mi-stat-label">${esc(label)}</div><div class="mi-stat-value">${value}</div>${sub ? `<div class="mi-stat-sub">${sub}</div>` : ''}</div>`;
-  const pct = (r) => (ratio && typeof r[ratio.e] === 'number' && r[ratio.e] > 0 && typeof r[ratio.p] === 'number') ? (r[ratio.p] / r[ratio.e] * 100).toFixed(1) + '%' : '—';
+  const pct = (r, x) => (typeof r[x.e] === 'number' && r[x.e] > 0 && typeof r[x.p] === 'number') ? (r[x.p] / r[x.e] * 100).toFixed(1) + '%' : '—';
   let stats = d.columns.map((c, k) => stat(c, fmtNum(vals[k]), where)).join('');
-  if (ratio) stats += stat(ratio.label, pct(vals), where);
+  // State totals: the % uses only counties that have both figures, so a county missing
+  // its eligibles count doesn't inflate the share.
+  const statePct = x => {
+    let num = 0, den = 0;
+    inState.forEach(r => { const v = r.slice(2); if (typeof v[x.e] === 'number' && typeof v[x.p] === 'number') { num += v[x.p]; den += v[x.e]; } });
+    return den > 0 ? (num / den * 100).toFixed(1) + '%' : '—';
+  };
+  ratios.forEach(x => { stats += stat(x.label, sel.county ? pct(vals, x) : statePct(x), where); });
   let table = '';
   if (!sel.county) {
-    table = `<div class="mi-table-wrap"><table class="mi-table"><thead><tr><th scope="col">County</th>${d.columns.map(c => `<th scope="col" style="text-align:right">${esc(c)}</th>`).join('')}${ratio ? '<th scope="col" style="text-align:right">PDP %</th>' : ''}</tr></thead><tbody>`
-      + inState.map(r => `<tr class="pick" onclick="pickLookup(${it.id}, 'county', ${esc(JSON.stringify(r[1]))})"><td>${esc(r[1])}</td>${r.slice(2).map(v => `<td class="num">${fmtNum(v)}</td>`).join('')}${ratio ? `<td class="num">${pct(r.slice(2))}</td>` : ''}</tr>`).join('')
+    table = `<div class="mi-table-wrap"><table class="mi-table"><thead><tr><th scope="col">County</th>${d.columns.map(c => `<th scope="col" style="text-align:right">${esc(c)}</th>`).join('')}${ratios.map(x => `<th scope="col" style="text-align:right">${esc(x.short)}</th>`).join('')}</tr></thead><tbody>`
+      + inState.map(r => `<tr class="pick" onclick="pickLookup(${it.id}, 'county', ${esc(JSON.stringify(r[1]))})"><td>${esc(r[1])}</td>${r.slice(2).map(v => `<td class="num">${fmtNum(v)}</td>`).join('')}${ratios.map(x => `<td class="num">${pct(r.slice(2), x)}</td>`).join('')}</tr>`).join('')
       + '</tbody></table></div><div class="mi-hint">Click a county to see it on its own.</div>';
   }
   return `<div class="mi-lookup">${pick}<div class="mi-stats">${stats}</div>${table}</div>`;
@@ -605,17 +614,44 @@ async function readDataFile(file) {
   if (!rows.length) throw new Error('No county rows were found under the heading row.');
   return { columns: vi.map(k => head[k]), rows };
 }
+// Combines several files (or a file with the current data) into one: rows are matched on
+// state and county (ignoring case, spacing and a trailing "County"/"Parish"), and each
+// file's figures become extra columns. A column name already present is replaced by the
+// newer file's values.
+const lookupKey = (st, co) => String(st).trim().toUpperCase() + '|' + String(co).trim().toLowerCase().replace(/\s+/g, ' ').replace(/\s+(county|parish|borough|census area)$/, '');
+function mergeData(list) {
+  const columns = [], map = new Map(), order = [];
+  let unmatched = 0;
+  list.forEach((d, fi) => {
+    const idx = d.columns.map(c => { let k = columns.findIndex(x => x.toLowerCase() === c.toLowerCase()); if (k < 0) { columns.push(c); k = columns.length - 1; } return k; });
+    d.rows.forEach(r => {
+      const key = lookupKey(r[0], r[1]);
+      let row = map.get(key);
+      if (!row) { row = { st: r[0], co: r[1], v: {} }; map.set(key, row); order.push(key); if (fi > 0) unmatched++; }
+      idx.forEach((k, j) => { row.v[k] = r[j + 2]; });
+    });
+  });
+  return { data: { columns, rows: order.map(k => { const r = map.get(k); return [r.st, r.co, ...columns.map((_, j) => r.v[j] ?? '')]; }) }, unmatched };
+}
+
 async function onDataFile() {
-  const f = document.getElementById('f-data-file').files[0];
+  const files = [...document.getElementById('f-data-file').files];
   const st = document.getElementById('f-data-status'), pv = document.getElementById('f-data-preview');
   miParsedData = null; pv.innerHTML = '';
-  if (!f) { st.textContent = ''; return; }
-  st.textContent = 'Reading the file…';
+  if (!files.length) { st.textContent = ''; return; }
+  st.textContent = 'Reading…';
   try {
-    const d = await readDataFile(f);
+    const list = [];
+    for (const f of files) {
+      try { list.push(await readDataFile(f)); }
+      catch (e) { throw new Error(`${f.name}: ${e.message || e}`); }
+    }
+    const keep = document.getElementById('f-data-add').checked && miEditing && miEditing.item_type === 'county' ? lookupData(miEditing) : null;
+    const { data: d, unmatched } = mergeData(keep ? [keep, ...list] : list);
     miParsedData = d;
     const states = new Set(d.rows.map(r => r[0])).size;
-    st.textContent = `Read ${d.rows.length.toLocaleString()} counties in ${states} states. Figures: ${d.columns.join(', ')}.`;
+    st.textContent = `${keep ? 'Combined with the current data: ' : files.length > 1 ? `Combined ${files.length} files: ` : ''}${d.rows.length.toLocaleString()} counties in ${states} states. Figures: ${d.columns.join(', ')}.`
+      + (unmatched && (keep || files.length > 1) ? ` ${unmatched.toLocaleString()} ${unmatched === 1 ? 'county appears' : 'counties appear'} in a later file but not the first; ${unmatched === 1 ? 'its' : 'their'} missing figures show as —.` : '');
     pv.innerHTML = `<div class="mi-table-wrap"><table class="mi-table"><thead><tr><th>State</th><th>County</th>${d.columns.map(c => `<th style="text-align:right">${esc(c)}</th>`).join('')}</tr></thead><tbody>`
       + d.rows.slice(0, 5).map(r => `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td>${r.slice(2).map(v => `<td class="num">${fmtNum(v)}</td>`).join('')}</tr>`).join('')
       + `</tbody></table></div><div class="mi-hint">First 5 rows shown.</div>`;
@@ -729,6 +765,8 @@ function openItemForm(id) {
   document.getElementById('f-body-table').value = it.item_type === 'table' ? (it.body || '') : '';
   miParsedData = null;
   document.getElementById('f-data-file').value = '';
+  document.getElementById('f-data-add').checked = false;
+  document.getElementById('f-data-add-row').hidden = !(it.item_type === 'county');
   document.getElementById('f-data-preview').innerHTML = '';
   { const d = it.item_type === 'county' ? lookupData(it) : null;
     document.getElementById('f-data-status').textContent = d ? `Current data: ${d.rows.length.toLocaleString()} counties (${d.columns.join(', ')}). Choose a new file only to replace it.` : ''; }
@@ -878,6 +916,7 @@ async function deleteCategory(id) {
 document.querySelectorAll('#f-type button').forEach(b => b.onclick = () => setType(b.dataset.type));
 document.getElementById('f-body-table').addEventListener('input', previewTable);
 document.getElementById('f-data-file').addEventListener('change', onDataFile);
+document.getElementById('f-data-add').addEventListener('change', onDataFile);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal('item-modal'); closeModal('cat-modal'); } });
 document.getElementById('cat-new-name').addEventListener('keydown', e => { if (e.key === 'Enter') addCategory(); });
 
