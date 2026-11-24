@@ -404,6 +404,13 @@ Response guidelines:
   const _uwList = v => Array.isArray(v) ? v : (typeof v === 'string' && v.trim()
     ? (() => { try { const j = JSON.parse(v); return Array.isArray(j) ? j : [v]; } catch (e) { return v.split(/[,;|]/); } })()
     : []);
+  // Carriers whose Medicare Supplement underwriting uses NO height/weight build chart
+  // (confirmed from their applications and producer guides). The chat says so plainly
+  // instead of "not loaded yet". Add a carrier here only once that's confirmed.
+  const UW_NO_BUILD_CHART = [
+    { match: /aetna|cvs/i, note: "Aetna doesn't use a height/weight build chart for Medicare Supplement underwriting; height and weight alone don't decline an application." },
+  ];
+  const uwNoBuildChart = (c, label) => UW_NO_BUILD_CHART.find(r => r.match.test(c) || r.match.test(label || '')) || null;
   const UW_CHAT_STATES = {
     AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California', CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware',
     DC: 'District of Columbia', FL: 'Florida', GA: 'Georgia', HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa',
@@ -574,6 +581,15 @@ Response guidelines:
     });
     if (!giOnly) out.push('RULE SOURCE PER CARRIER\n' + basisLines.join('\n'));
 
+    // Height/weight questions: say per carrier whether it uses a build chart.
+    if (!giOnly && (hasBuild || /\b(height|weight|build|bmi|overweight|underweight|obes\w*)\b/i.test(question))) {
+      out.push('HEIGHT/WEIGHT BUILD CHART PER CARRIER\n' + carriers.map(c => {
+        const nb = (scoped.buildCharts || []).filter(r => r.carrier === c).length;
+        const none = uwNoBuildChart(c, disp(c));
+        return `- ${disp(c)}: ${nb ? `build chart loaded (${nb} rows)` : none ? `NO build chart — ${none.note}` : 'build chart not loaded in BookValuePro yet'}`;
+      }).join('\n'));
+    }
+
     // Underwriting check results (the same check the page runs)
     const runEval = (gender) => (typeof bvpEvaluateUWByProduct === 'function' ? bvpEvaluateUWByProduct : bvpEvaluateUW)({ gender, heightIn: hasBuild ? prof.heightIn : null, weightLb: hasBuild ? prof.weightLb : null, age: prof.age || null, state }, conds, drugs, carriers, data);
     if (conds.length || drugs.length || hasBuild) {
@@ -632,7 +648,7 @@ Response guidelines:
 - Accepted at a higher rate class: ${group('accept_with_rating').join('; ') || 'none listed'}
 - Informational: ${group('info').join('; ') || 'none'}
 - Medication list: ${nd.length ? `${nd.length} medications (${nd.filter(r => r.decision === 'decline').length} decline) — ask about a specific drug` : 'none loaded'}
-- Height/weight build chart: ${nb.length ? `loaded (${nb.length} rows) — give a height, weight and sex to check` : 'none loaded'}`);
+- Height/weight build chart: ${nb.length ? `loaded (${nb.length} rows) — give a height, weight and sex to check` : uwNoBuildChart(c, disp(c)) ? `NONE — ${uwNoBuildChart(c, disp(c)).note}` : 'none loaded'}`);
       });
     } else if (!conds.length && !drugs.length && !hasBuild) {
       out.push('NOTE: No condition, medication or height/weight was recognized and more than 4 carriers are in scope. If the question needs specifics, ask the agent which condition, medication or carrier they mean.');
@@ -680,6 +696,7 @@ How to read the data:
 - lookback = how many years back the question asks. "only when taken for" = the medication matters only for those conditions.
 - "UNDERWRITING CHECK RESULTS" is the same check the page runs; trust it over your own reading of the rows.
 - A carrier with no rules loaded, or NOT OFFERED in the state, must be reported that way — never as a likely accept.
+- "NO build chart" means the carrier doesn't use one at all — say so directly (e.g. "No. Aetna doesn't use a height/weight build chart for Medicare Supplement"); don't call it "not loaded". "not loaded in BookValuePro yet" means we don't have that carrier's chart.
 - State rules come from that state's application; otherwise the carrier's national rules apply.
 
 How to answer:
