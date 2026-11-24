@@ -303,10 +303,6 @@ body { padding-left: 64px; }
 
   <div class="mi-toolbar">
     <div class="mi-tabs" id="mi-tabs" role="tablist"></div>
-    <div class="mi-search">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-      <input type="search" id="mi-search" placeholder="Search" aria-label="Search market intelligence" oninput="render()">
-    </div>
   </div>
 
   <div id="mi-list" class="mi-list"><div class="mi-empty">Loading…</div></div>
@@ -811,7 +807,7 @@ function cardHTML(it, showCat) {
 }
 
 function render() {
-  const q = (document.getElementById('mi-search').value || '').trim().toLowerCase();
+  const q = ((document.getElementById('mi-search') || {}).value || '').trim().toLowerCase();   // no search box on the page now
   const shown = miItems.filter(itemVisible);
   const counts = { all: shown.length };
   shown.forEach(it => { counts[it.category_id] = (counts[it.category_id] || 0) + 1; });
