@@ -466,7 +466,12 @@ async function loadAll() {
   // Categories are listed alphabetically (tabs, the All view and the Categories list).
   miCats = (c.data || []).slice().sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' }));
   miItems = i.data || [];
-  if (miTab !== 'all' && !miCats.some(x => String(x.id) === String(miTab) && (x.is_active || miAdmin))) miTab = 'all';
+  // There's no "All" tab: each category stands on its own. Open the last category viewed,
+  // or the first one alphabetically.
+  if (!miCats.some(x => String(x.id) === String(miTab) && (x.is_active || miAdmin))) {
+    const first = miCats.find(x => x.is_active || miAdmin);
+    miTab = first ? String(first.id) : 'all';
+  }
   return true;
 }
 
@@ -767,7 +772,7 @@ async function onDataFile() {
 
 // ── RENDER ──
 function renderTabs(counts) {
-  const tabs = [{ id: 'all', name: 'All', n: counts.all }, ...visibleCats().map(c => ({ id: String(c.id), name: c.name + (c.is_active ? '' : ' (hidden)'), n: counts[c.id] || 0 }))];
+  const tabs = [...visibleCats().map(c => ({ id: String(c.id), name: c.name + (c.is_active ? '' : ' (hidden)'), n: counts[c.id] || 0 }))];
   document.getElementById('mi-tabs').innerHTML = tabs.map(t =>
     `<button type="button" class="mi-tab" role="tab" aria-selected="${String(miTab) === t.id}" data-tab="${t.id}">${esc(t.name)}<span class="n">${t.n}</span></button>`).join('');
   document.querySelectorAll('.mi-tab').forEach(b => b.onclick = () => {
