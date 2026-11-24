@@ -799,7 +799,7 @@ function cardHTML(it, showCat) {
       <button type="button" class="mi-btn ghost small" onclick="toggleActive(${it.id})">${it.is_active ? 'Hide' : 'Show'}</button>
       <button type="button" class="mi-btn ghost small danger" onclick="deleteItem(${it.id})">Delete</button></div>` : '';
   return `<article class="mi-card${it.is_active ? '' : ' hidden-item'}">
-    <div class="mi-meta"><span class="mi-badge">${MI_TYPE_LABEL[it.item_type] || esc(it.item_type)}</span>
+    <div class="mi-meta">
       ${showCat && cat ? `<span class="mi-cat">${esc(cat.name)}</span><span aria-hidden="true">·</span>` : ''}<span>${fmtDate(it.published_on)}</span>
       ${it.is_active ? '' : '<span class="mi-badge hid">Hidden from agents</span>'}</div>
     <div class="mi-title">${esc(it.title)}</div>
