@@ -4,9 +4,6 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>BookValuePro — Market Intelligence</title>
-<link rel="icon" href="favicon.ico" sizes="32x32">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="bvp-supabase.js"></script>
@@ -481,6 +478,9 @@ let miParsedData = null;     // State & county data read from the file chosen in
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 const fmtDate = d => d ? new Date(String(d).slice(0, 10) + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+// "Last updated" uses the time the item was last changed (updated_at, kept by the database),
+// shown in the viewer's own time zone; falls back to the item's date.
+const fmtUpdated = it => it.updated_at ? new Date(it.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : fmtDate(it.published_on);
 const todayISO = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
 
 function toast(msg, err) {
@@ -940,7 +940,7 @@ function cardHTML(it, showCat) {
       <button type="button" class="mi-btn ghost small danger" onclick="deleteItem(${it.id})">Delete</button></div>` : '';
   return `<article class="mi-card${it.is_active ? '' : ' hidden-item'}">
     <div class="mi-meta">
-      ${showCat && cat ? `<span class="mi-cat">${esc(cat.name)}</span><span aria-hidden="true">·</span>` : ''}<span>${fmtDate(it.published_on)}</span>
+      ${showCat && cat ? `<span class="mi-cat">${esc(cat.name)}</span><span aria-hidden="true">·</span>` : ''}<span>Last updated: ${fmtUpdated(it)}</span>
       ${it.is_active ? '' : '<span class="mi-badge hid">Hidden from agents</span>'}</div>
     <div class="mi-title">${esc(it.title)}</div>
     ${it.summary ? `<div class="mi-summary">${esc(it.summary)}</div>` : ''}
@@ -1193,7 +1193,7 @@ async function saveItem() {
 
 async function toggleActive(id) {
   const it = miItems.find(x => x.id === id); if (!it) return;
-  const { error } = await bvp.from('market_intel_items').update({ is_active: !it.is_active, updated_at: new Date().toISOString() }).eq('id', id);
+  const { error } = await bvp.from('market_intel_items').update({ is_active: !it.is_active })   // hiding/showing isn't an update to the content.eq('id', id);
   if (error) { toast(error.message, true); return; }
   toast(it.is_active ? 'Hidden from agents' : 'Shown to agents');
   await loadAll(); render();
