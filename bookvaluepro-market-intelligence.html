@@ -160,6 +160,18 @@ body { font-family: var(--sans); color: var(--text); background: var(--light-bg)
 .mi-table tr.pick td { cursor: pointer; }
 .mi-table tr.pick:hover td { background: var(--mist); }
 
+/* row PDFs */
+.mi-rowpdf { background: none; border: none; padding: 0; font: inherit; font-weight: 600; color: var(--forest); cursor: pointer; display: inline-flex; align-items: center; gap: 5px; text-align: left; text-decoration: underline; text-decoration-color: var(--accept-border); text-underline-offset: 3px; }
+.mi-rowpdf:hover { color: var(--emerald); }
+.mi-pdf-ico { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; flex-shrink: 0; }
+.mi-rowpdf-row { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(120px, 1.4fr) auto auto; gap: 8px; align-items: center; padding: 7px 0; border-top: 1px solid var(--border); font-size: 13.5px; }
+.mi-rowpdf-name { font-weight: 600; color: var(--deep); overflow-wrap: anywhere; }
+.mi-rowpdf-status { overflow-wrap: anywhere; }
+.mi-file-btn { position: relative; overflow: hidden; display: inline-flex; align-items: center; }
+.mi-file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.mi-pdf-box { max-width: 1000px; height: calc(100vh - 80px); }
+.mi-pdf-frame { flex: 1; width: 100%; border: none; border-top: 1px solid var(--border); border-radius: 0 0 16px 16px; }
+
 /* modals */
 .mi-modal { position: fixed; inset: 0; z-index: 700; background: rgba(7,22,13,.45); display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; }
 .mi-modal[hidden] { display: none; }
@@ -206,6 +218,8 @@ body { font-family: var(--sans); color: var(--text); background: var(--light-bg)
   .mi-row2 { grid-template-columns: 1fr; }
   .mi-cat-row { grid-template-columns: 1fr auto; }
   .mi-lookup-pick { grid-template-columns: 1fr; }
+  .mi-rowpdf-row { grid-template-columns: 1fr auto; }
+  .mi-rowpdf-status { grid-column: 1 / -1; order: 3; }
   .mi-seg { flex-wrap: wrap; }
   .mi-seg button { flex: 1 1 30%; }
   .mi-admin-actions { margin-left: 0; }
@@ -371,6 +385,8 @@ body { padding-left: 64px; }
         </label>
         <div class="mi-hint">Preview</div>
         <div class="mi-table-wrap" id="f-table-preview"><div class="mi-hint">Paste a table to see it here.</div></div>
+        <div class="mi-field" style="margin-top:6px;">PDFs for rows <span class="mi-opt">(optional: the first cell of a row with a PDF becomes a link that opens it, e.g. a carrier's bonus program)</span></div>
+        <div id="f-rowpdfs"></div>
       </div>
 
       <div class="mi-type-pane" data-pane="county">
@@ -421,6 +437,20 @@ body { padding-left: 64px; }
     <div class="mi-modal-foot">
       <button type="button" class="mi-btn" onclick="closeModal('cat-modal')">Done</button>
     </div>
+  </div>
+</div>
+
+<!-- PDF VIEWER (row PDFs) -->
+<div class="mi-modal" id="pdf-modal" hidden onclick="if (event.target === this) closeModal('pdf-modal')">
+  <div class="mi-modal-box mi-pdf-box" role="dialog" aria-modal="true" aria-labelledby="pdf-modal-title">
+    <div class="mi-modal-head">
+      <div class="mi-modal-title" id="pdf-modal-title">PDF</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <a class="mi-btn ghost small" id="pdf-newtab" href="#" target="_blank" rel="noopener">Open in new tab</a>
+        <button type="button" class="mi-x" onclick="closeModal('pdf-modal')" aria-label="Close">✕</button>
+      </div>
+    </div>
+    <iframe id="pdf-frame" class="mi-pdf-frame" title="PDF viewer" src="about:blank"></iframe>
   </div>
 </div>
 
@@ -507,7 +537,12 @@ function parseTable(text) {
   row.push(cell.trim()); rows.push(row);
   return rows;
 }
-function tableHTML(text) {
+// opts.itemId + opts.attachments ({ row key: { path, name } }): a row whose first cell has a PDF
+// attached shows that cell as a link that opens the PDF (see openRowPdf).
+const rowKey = v => String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+const MI_PDF_ICON = '<svg class="mi-pdf-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>';
+function tableHTML(text, opts) {
+  const att = (opts && opts.attachments) || {};
   const rows = parseTable(text).filter(r => r.some(c => c !== ''));
   if (!rows.length) return '';
   const n = Math.max(...rows.map(r => r.length));
@@ -520,7 +555,13 @@ function tableHTML(text) {
     return vals.length > 0 && vals.every(isNum);
   });
   return `<div class="mi-table-wrap"><table class="mi-table"><thead><tr>${pad(head).map((h, k) => `<th scope="col"${numCol[k] ? ' style="text-align:right"' : ''}>${esc(h)}</th>`).join('')}</tr></thead>`
-    + `<tbody>${body.map(r => `<tr>${pad(r).map((c, k) => `<td${numCol[k] ? ' class="num"' : ''}>${numCol[k] ? esc(c) : linkCell(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    + `<tbody>${body.map(r => `<tr>${pad(r).map((c, k) => {
+        const pdf = k === 0 && opts && opts.itemId != null && att[rowKey(c)];
+        const inner = pdf
+          ? `<button type="button" class="mi-rowpdf" onclick="openRowPdf(${opts.itemId}, ${esc(JSON.stringify(rowKey(c)))})" title="Open the ${esc(c)} PDF">${esc(c)}${MI_PDF_ICON}</button>`
+          : (numCol[k] ? esc(c) : linkCell(c));
+        return `<td${numCol[k] ? ' class="num"' : ''}>${inner}</td>`;
+      }).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
 
 // Table cells: phone numbers, email addresses and web addresses become tappable links,
@@ -885,7 +926,7 @@ function cardHTML(it, showCat) {
   else if (it.item_type === 'note') {
     action = `<button type="button" class="mi-open" onclick="toggleNote(${it.id})" aria-expanded="${open}">${open ? 'Hide' : 'Read'}</button>`;
     if (open) extra = `<div class="mi-note">${noteHTML(it.body)}</div>`;
-  } else if (it.item_type === 'table') extra = tableHTML(it.body) || '<span class="mi-hint">No table rows yet.</span>';
+  } else if (it.item_type === 'table') extra = tableHTML(it.body, { itemId: it.id, attachments: it.attachments }) || '<span class="mi-hint">No table rows yet.</span>';
   else if (it.item_type === 'county') extra = lookupHTML(it);
   else if (it.item_type === 'gi_rules') extra = giRulesHTML();
   // Source line, bottom left. State & county items default to the CMS penetration files.
@@ -945,7 +986,66 @@ async function openPdf(id) {
 }
 
 // ── ADMIN: ITEMS ──
-function closeModal(id) { document.getElementById(id).hidden = true; }
+function closeModal(id) {
+  document.getElementById(id).hidden = true;
+  if (id === 'pdf-modal') document.getElementById('pdf-frame').src = 'about:blank';
+}
+
+// Opens a row's PDF: a pop-up viewer on wider screens, a new tab on phones.
+async function openRowPdf(id, key) {
+  const it = miItems.find(x => x.id === id);
+  const a = it && it.attachments && it.attachments[key];
+  if (!a || !a.path) return;
+  const phone = window.innerWidth < 700;
+  const win = phone ? window.open('', '_blank') : null;     // open now so pop-up blockers allow it
+  const { data, error } = await bvp.storage.from(MI_BUCKET).createSignedUrl(a.path, 3600);
+  if (error || !data) { if (win) win.close(); toast('Could not open the PDF. Please try again.', true); return; }
+  if (phone) { if (win) win.location = data.signedUrl; else window.location.href = data.signedUrl; return; }
+  document.getElementById('pdf-modal-title').textContent = a.label || a.name || 'PDF';
+  document.getElementById('pdf-newtab').href = data.signedUrl;
+  document.getElementById('pdf-frame').src = data.signedUrl;
+  document.getElementById('pdf-modal').hidden = false;
+}
+
+// ── ADMIN: PDFs for table rows ──
+// miRowAtt: the item's saved attachments; miRowNew: files picked in this edit; miRowDel: rows whose PDF is being removed.
+let miRowAtt = {}, miRowNew = {}, miRowDel = new Set();
+function tableRowNames() {
+  const rows = parseTable(document.getElementById('f-body-table').value).filter(r => r.some(c => c !== ''));
+  const seen = new Set();
+  return rows.slice(1).map(r => String(r[0] ?? '').trim()).filter(n => n && !seen.has(rowKey(n)) && seen.add(rowKey(n)));
+}
+function renderRowPdfs() {
+  const box = document.getElementById('f-rowpdfs');
+  if (!box) return;
+  const names = tableRowNames();
+  if (!names.length) { box.innerHTML = '<div class="mi-hint">Paste the table first; each row\'s first cell can then have a PDF.</div>'; return; }
+  box.innerHTML = names.map(n => {
+    const k = rowKey(n), cur = miRowAtt[k], picked = miRowNew[k], removing = miRowDel.has(k);
+    const status = picked ? `New: ${esc(picked.name)}` : (cur && !removing) ? `PDF: ${esc(cur.name)}` : removing ? 'PDF will be removed' : 'No PDF';
+    return `<div class="mi-rowpdf-row">
+        <span class="mi-rowpdf-name">${esc(n)}</span>
+        <span class="mi-hint mi-rowpdf-status">${status}</span>
+        <label class="mi-btn ghost small mi-file-btn">${cur || picked ? 'Replace' : 'Choose PDF'}<input type="file" accept="application/pdf,.pdf" data-key="${esc(k)}" data-label="${esc(n)}" onchange="pickRowPdf(this)"></label>
+        ${(cur && !removing) || picked ? `<button type="button" class="mi-btn ghost small danger" onclick="removeRowPdf(${esc(JSON.stringify(k))})">Remove</button>` : ''}
+      </div>`;
+  }).join('');
+}
+function pickRowPdf(input) {
+  const f = input.files[0], k = input.dataset.key;
+  if (!f) return;
+  const err = document.getElementById('f-error');
+  if (!/\.pdf$/i.test(f.name) && f.type !== 'application/pdf') { err.textContent = `${f.name} isn't a PDF.`; return; }
+  if (f.size > 45 * 1024 * 1024) { err.textContent = `${f.name} is over 45 MB. Please use a smaller file.`; return; }
+  err.textContent = '';
+  miRowNew[k] = Object.assign(f, { _label: input.dataset.label });
+  miRowDel.delete(k);
+  renderRowPdfs();
+}
+function removeRowPdf(k) {
+  if (miRowNew[k]) delete miRowNew[k]; else miRowDel.add(k);
+  renderRowPdfs();
+}
 
 function setType(t) {
   miType = t;
@@ -972,6 +1072,7 @@ function openItemForm(id) {
   document.getElementById('f-file-current').textContent = it.file_path ? `Current file: ${it.file_name || it.file_path}. Choose a new file only to replace it.` : '';
   document.getElementById('f-body-note').value = it.item_type === 'note' ? (it.body || '') : '';
   document.getElementById('f-body-table').value = it.item_type === 'table' ? (it.body || '') : '';
+  miRowAtt = Object.assign({}, it.attachments || {}); miRowNew = {}; miRowDel = new Set();
   miParsedData = null;
   document.getElementById('f-data-pdp').value = '';
   document.getElementById('f-data-ma').value = '';
@@ -990,6 +1091,7 @@ function openItemForm(id) {
 }
 
 function previewTable() {
+  renderRowPdfs();
   const html = tableHTML(document.getElementById('f-body-table').value);
   document.getElementById('f-table-preview').outerHTML = `<div id="f-table-preview">${html || '<div class="mi-hint">Paste a table to see it here.</div>'}</div>`;
 }
@@ -1047,11 +1149,35 @@ async function saveItem() {
       row.file_path = null; row.file_name = null;
       oldPath = prev.file_path || null;     // switched away from PDF: remove the old file
     }
+    // PDFs for table rows. Rows no longer in the table, removed rows and replaced files are
+    // cleaned up after the save. The attachments column is only sent when there is something
+    // to save, so items save as before until market_intel_row_pdfs.sql has been run.
+    const prevAtt = prev.attachments || {};
+    let dropPaths = [];
+    if (miType === 'table') {
+      const keep = new Set(tableRowNames().map(rowKey));
+      const att = {};
+      Object.entries(miRowAtt).forEach(([k, a]) => {
+        if (keep.has(k) && !miRowDel.has(k) && !miRowNew[k]) att[k] = a; else if (a && a.path) dropPaths.push(a.path);
+      });
+      for (const [k, f] of Object.entries(miRowNew)) {
+        if (!keep.has(k)) continue;
+        const path = `rows/${Date.now()}-${f.name.replace(/[^A-Za-z0-9._-]+/g, '_')}`;
+        const up = await bvp.storage.from(MI_BUCKET).upload(path, f, { contentType: 'application/pdf', upsert: false });
+        if (up.error) throw new Error(`Upload failed for ${f.name}: ${up.error.message}`);
+        att[k] = { path, name: f.name, label: f._label || k };
+      }
+      if (Object.keys(att).length || Object.keys(prevAtt).length) row.attachments = att;
+    } else if (Object.keys(prevAtt).length) {
+      row.attachments = {};
+      dropPaths = Object.values(prevAtt).map(a => a.path).filter(Boolean);
+    }
     let res;
     if (miEditing) res = await bvp.from('market_intel_items').update(row).eq('id', miEditing.id);
     else res = await bvp.from('market_intel_items').insert({ ...row, created_by: miSession.user.email });
     if (res.error) throw new Error(res.error.message);
     if (oldPath && oldPath !== row.file_path) await bvp.storage.from(MI_BUCKET).remove([oldPath]);
+    if (dropPaths.length) await bvp.storage.from(MI_BUCKET).remove(dropPaths);
     closeModal('item-modal');
     toast(miEditing ? 'Saved' : 'Added');
     await loadAll(); render();
@@ -1075,7 +1201,8 @@ async function deleteItem(id) {
   if (!confirm(`Delete "${it.title}"? This can't be undone.`)) return;
   const { error } = await bvp.from('market_intel_items').delete().eq('id', id);
   if (error) { toast(error.message, true); return; }
-  if (it.file_path) await bvp.storage.from(MI_BUCKET).remove([it.file_path]);
+  const paths = [it.file_path, ...Object.values(it.attachments || {}).map(a => a && a.path)].filter(Boolean);
+  if (paths.length) await bvp.storage.from(MI_BUCKET).remove(paths);
   toast('Deleted');
   await loadAll(); render();
 }
@@ -1127,7 +1254,7 @@ document.querySelectorAll('#f-type button').forEach(b => b.onclick = () => setTy
 document.getElementById('f-body-table').addEventListener('input', previewTable);
 document.getElementById('f-data-pdp').addEventListener('change', onDataFile);
 document.getElementById('f-data-ma').addEventListener('change', onDataFile);
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal('item-modal'); closeModal('cat-modal'); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal('item-modal'); closeModal('cat-modal'); closeModal('pdf-modal'); } });
 document.getElementById('cat-new-name').addEventListener('keydown', e => { if (e.key === 'Enter') addCategory(); });
 
 (async function initMarketIntel() {
