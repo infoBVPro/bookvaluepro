@@ -12,6 +12,11 @@ const bvp = window.supabase.createClient(BVP_URL, BVP_ANON);
 (function () {
   const st = document.createElement('style');
   st.textContent = 'html.bvp-loa .bvp-money{display:none !important}.bvp-loa-only{display:none !important}html.bvp-loa .bvp-loa-only{display:revert !important}[data-bvp-beta-only][hidden],[data-bvp-no-beta][hidden]{display:none !important}';
+  // Side menu: on short windows (or when zoomed in) the lower menu items, such as
+  // Market Intelligence, fell below the bottom of the screen with no way to reach them.
+  // The menu now scrolls up and down instead; items keep their full size.
+  st.textContent += '.bvp-sidenav{overflow-y:auto !important;overflow-x:hidden !important;scrollbar-width:thin;scrollbar-color:rgba(122,191,154,.35) transparent}'
+    + '.bvp-sidenav-logo,.bvp-sidenav-steps,.bvp-sidenav-bottom{flex-shrink:0}';
   document.head.appendChild(st);
 })();
 // True for an LOA agent (set by bvpRequireAuth before the page renders).
