@@ -837,6 +837,7 @@ body { padding-left: 64px; }
     <a href="bookvaluepro-commissions.html" class="bvp-sidenav-item" id="step-commissions"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6.5v11M15 9.2c0-1.4-1.3-2.2-3-2.2s-3 .9-3 2.2c0 1.4 1.3 1.8 3 2.2 1.7.4 3 1 3 2.4 0 1.3-1.3 2.2-3 2.2s-3-.8-3-2.2"/></svg></span><span class="bvp-sidenav-label">Commissions</span></a>
     <a href="bookvaluepro-uw-assistant.html" class="bvp-sidenav-item" id="step-uw-assistant"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg></span><span class="bvp-sidenav-label">Underwriting Assistant</span></a>
     <a href="bookvaluepro-household-discount.html" class="bvp-sidenav-item" id="step-household-discount"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg></span><span class="bvp-sidenav-label">Household Discount</span></a>
+    <a href="bookvaluepro-market-intelligence.html" class="bvp-sidenav-item" id="step-market-intelligence"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg></span><span class="bvp-sidenav-label">Market Intelligence</span></a>
   </div>
   <div class="bvp-sidenav-bottom">
     <a href="bookvaluepro-admin.html" class="bvp-sidenav-item" id="bvp-sidenav-admin"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg></span><span class="bvp-sidenav-label">Admin</span></a>
@@ -1606,7 +1607,7 @@ bvpRequireAuth().then(async session => {
         chip.classList.add('visible');
       }
       // Mark downstream steps as done/navigable
-      ['step-dashboard','step-clients','step-outreach','step-lead-outreach','step-commissions','step-uw-assistant','step-household-discount'].forEach(id => {
+      ['step-dashboard','step-clients','step-outreach','step-lead-outreach','step-commissions','step-uw-assistant','step-household-discount','step-market-intelligence'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('done');
       });
@@ -1717,42 +1718,26 @@ async function _doUpload(mode, versionName) {
       return Math.max(1, Math.min(yrs + 1, 11));
     }
 
-    // ── Priority business rules — Issue Age x Policy Duration ─────
-    // Verified against CF_Template_Prototype_3_5_HTMLChecks.xlsx
-    const PRIORITY_RULES = {
-      64: [2,2,2,2,2,1,1,1,1,1,3],
-      65: [2,2,2,2,2,1,1,1,1,1,3],
-      66: [2,2,2,2,2,1,1,1,1,1,3],
-      67: [2,2,2,2,2,1,1,1,1,1,3],
-      68: [2,2,2,2,2,1,1,1,1,1,3],
-      69: [2,2,2,2,2,1,1,1,3,3,3],
-      70: [2,2,2,2,1,1,1,1,3,3,3],
-      71: [2,2,2,1,1,1,1,3,3,3,3],
-      72: [2,2,1,1,1,1,3,3,3,3,3],
-      73: [2,1,1,1,1,3,3,3,3,3,3],
-      74: [2,1,1,1,3,3,3,3,3,3,3],
-      75: [2,1,1,3,3,3,3,3,3,3,3],
-    };
+    // ── Priority business rules live in bvp-supabase.js (BVP_PRIORITY_RULES).
+    // The cohort is recalculated on every page load as policies age; the value
+    // saved here is just the cohort on upload day.
+    const calcPriority = bvpCalcPriority;
 
-    function calcPriority(dobStr, effDateStr, durYr) {
-      const iAge = issueAge(dobStr, effDateStr);
-      if (iAge === null) return 2;
-      if (iAge <= 63) return 3;
-      if (iAge >= 76) return 3;
-      if (durYr >= 11) return 3;
-      const rules = PRIORITY_RULES[iAge] || [3,3,3,3,3,3,3,3,3,3,3];
-      return rules[Math.min(durYr - 1, 10)];
-    }
-
-    // ── Load commission rates from Supabase once ──────────────────
-    showParsing(true, 'Loading commission schedules…');
-    const allComms = await bvpGetCommissionRates(bvpSession.user.id);
+    // Commission rates are loaded further down, once the file's carriers are known.
+    let allComms = [], ratePool = () => [];
+    await bvpLoadCarriers();
     const GENERIC  = bvpGenericCarrier(); // fallback schedule from the carriers table
 
     // ── Build 11-slot rate array from commission_rates data ───────
     // Fallback chain: exact carrier+state+plan → carrier+plan → Generic+state+plan → Generic+plan
     // NPV uses years 1-11 only; data has 20 years but we cap at index 10.
+    const _rateMemo = new Map();
     function buildRateArray(carrier, state, plan, enrollmentType) {
+      const key = [carrier, state, plan, enrollmentType].join('|');
+      if (!_rateMemo.has(key)) _rateMemo.set(key, _buildRateArray(carrier, state, plan, enrollmentType));
+      return _rateMemo.get(key).slice();
+    }
+    function _buildRateArray(carrier, state, plan, enrollmentType) {
       // GI enrollment types only use GI schedules; a 0% GI schedule is kept
       // as 0% (not replaced by full open-enrollment rates). None found → 0%.
       if (BVP_GI_TYPES.includes(enrollmentType)) {
@@ -1762,8 +1747,10 @@ async function _doUpload(mode, versionName) {
           r => GENERIC && r.carrier === GENERIC && r.issued_state === state && r.plan === plan && r.enrollment_type === enrollmentType,
           r => GENERIC && r.carrier === GENERIC && r.plan === plan && r.enrollment_type === enrollmentType,
         ];
-        for (const match of giAttempts) {
-          const rows = allComms.filter(match);
+        for (let i = 0; i < giAttempts.length; i++) {
+          const match = giAttempts[i];
+          const pool = i < 2 ? ratePool(carrier, plan) : (GENERIC ? ratePool(GENERIC, plan) : []);
+          const rows = pool.filter(match);
           if (rows.length > 0) {
             const rates = Array(11).fill(0);
             rows.forEach(r => {
@@ -1784,8 +1771,10 @@ async function _doUpload(mode, versionName) {
         r => GENERIC && r.carrier === GENERIC && r.plan === plan          && r.enrollment_type === enrollmentType,
         r => GENERIC && r.carrier === GENERIC && r.plan === plan,
       ];
-      for (const match of attempts) {
-        const rows = allComms.filter(match);
+      for (let i = 0; i < attempts.length; i++) {
+        const match = attempts[i];
+        const pool = i < 4 ? ratePool(carrier, plan) : (GENERIC ? ratePool(GENERIC, plan) : []);
+        const rows = pool.filter(match);
         if (rows.length > 0) {
           const rates = Array(11).fill(0);
           rows.forEach(r => {
@@ -1799,7 +1788,6 @@ async function _doUpload(mode, versionName) {
     }
 
     // ── Build policy records ──────────────────────────────────────
-    showParsing(true, 'Building policy records…');
 
     // Helper: read a value from a row using the user's column mapping
     const mapped = (row, fieldKey) => {
@@ -1818,6 +1806,15 @@ async function _doUpload(mode, versionName) {
       return state.carrierMappings[fileCarrierName] || GENERIC;
     };
 
+    // ── Load commission rates once, only for the carriers in this file ──
+    // Lookups only ever use a policy's own carrier or the Generic fallback, so
+    // scoping by carrier gives exactly the same rates as loading the whole table.
+    showParsing(true, 'Loading commission schedules…');
+    const fileCarriers = [...new Set((state.rows || []).map(resolveCarrier).filter(Boolean))];
+    allComms = await bvpGetCommissionRates(bvpSession.user.id, null, fileCarriers.length ? fileCarriers : null);
+    ratePool = bvpIndexRates(allComms);
+
+    showParsing(true, 'Building policy records…');
     const policies = (state.rows || []).map((row, i) => {
       const carrier    = resolveCarrier(row);
       const stateCode  = mapped(row, 'IssuedState') || null;
@@ -1833,7 +1830,7 @@ async function _doUpload(mode, versionName) {
       const plan           = bvpNormalizePlan(planTypeVal);
       const enrollmentType = mapped(row, 'EnrollmentType') || 'OpenEnrollment';
       const curr_pcts    = buildRateArray(carrier, stateCode, plan, enrollmentType);
-      const ren_pcts     = buildRateArray(carrier, stateCode, plan, enrollmentType);
+      const ren_pcts     = curr_pcts.slice(); // same inputs → same schedule
 
       return {
         policy_idx:      i + 1,
@@ -1846,8 +1843,9 @@ async function _doUpload(mode, versionName) {
         plan_type:       planTypeVal,
         company:         carrier,
         issued_state:    stateCode,
+        eff_date:        effDateStr,               // full date: duration and payment dates are worked out live from it
         eff_month:       effMonth(effDateStr),
-        duration_yr:     currDurYr,
+        duration_yr:     currDurYr,                // as of upload; pages use the live duration from eff_date
         enrollment_type: enrollmentType,
         priority,
         calc_priority:   priority,
