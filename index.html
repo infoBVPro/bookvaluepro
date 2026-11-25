@@ -4,6 +4,9 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>BookValuePro — See the value others miss.</title>
+<link rel="icon" href="favicon.ico" sizes="32x32">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="bvp-supabase.js"></script>
@@ -45,15 +48,6 @@ body{font-family:'DM Sans',sans-serif;color:var(--text);background:var(--white);
 .modal-switch{text-align:center;margin-top:1.25rem;font-size:13px;color:var(--text-muted);}
 .modal-switch a{color:var(--emerald);text-decoration:none;font-weight:600;cursor:pointer;}
 .modal-switch a:hover{text-decoration:underline;}
-.pw-wrap{position:relative;}
-.pw-wrap .form-input{padding-right:64px;}
-.pw-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--forest);font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;padding:6px 8px;}
-.who{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-.who label{display:flex;align-items:center;gap:8px;border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13.5px;color:var(--deep);cursor:pointer;transition:border-color .2s,background .2s;}
-.who label:has(input:checked){border-color:var(--emerald);background:#f4fbf7;}
-.who input{accent-color:var(--forest);}
-.beta-pill{display:inline-block;background:var(--mist);color:var(--forest);font-size:12px;font-weight:600;padding:5px 12px;border-radius:14px;margin-bottom:1rem;}
-.modal-fine{font-size:12px;color:var(--text-muted);text-align:center;margin-top:0.75rem;line-height:1.5;}
 .modal-msg{font-size:13px;padding:10px 14px;border-radius:8px;margin-bottom:1rem;display:none;line-height:1.5;}
 .modal-msg.success{background:#e6f5ee;color:var(--forest);border:1px solid #b8dfc8;display:block;}
 .modal-msg.error{background:#fdecea;color:#c0392b;border:1px solid #f5c6c2;display:block;}
@@ -152,23 +146,12 @@ hr.section-divider{border:none;border-top:1px solid var(--border);}
     <button class="modal-close" onclick="closeModal('signup')">✕</button>
     <div class="modal-logo"><div class="modal-mark">BV</div><div class="modal-brand">Book<span>Value</span>Pro</div></div>
     <h2>Create your account</h2>
-    <div class="beta-pill" data-bvp-beta-only>Free beta · no credit card · through <span data-bvp-beta-end>March 31, 2027</span></div>
-    <p class="modal-sub" data-bvp-no-beta hidden>Start seeing the value others miss. <span data-bvp-trial="days">14 days</span> free on every plan.</p>
+    <p class="modal-sub">Start seeing the value others miss. 3 months free on every plan.</p>
     <div class="modal-msg" id="signup-msg"></div>
-    <div id="signup-fields">
-    <div class="form-group"><label class="form-label" for="signup-email">Email address</label><input class="form-input" type="email" id="signup-email" placeholder="you@example.com" autocomplete="email"/></div>
-    <div class="form-group"><label class="form-label" for="signup-password">Password</label>
-      <div class="pw-wrap"><input class="form-input" type="password" id="signup-password" placeholder="At least 8 characters" autocomplete="new-password"/>
-      <button type="button" class="pw-toggle" onclick="togglePw('signup-password', this)">Show</button></div></div>
-    <div class="form-group"><span class="form-label">Who is this for?</span>
-      <div class="who">
-        <label><input type="radio" name="signup-who" value="individual" checked onchange="whoChanged()">Just me</label>
-        <label><input type="radio" name="signup-who" value="agency" onchange="whoChanged()">I run an agency</label>
-      </div></div>
-    <div class="form-group" id="signup-agency-row" hidden><label class="form-label" for="signup-agency">Agency name</label><input class="form-input" type="text" id="signup-agency" maxlength="100" placeholder="e.g. ABC Insurance Agency" autocomplete="organization"/></div>
-    <button class="btn-submit" id="signup-btn" onclick="handleSignup()">Create free account →</button>
-    <p class="modal-fine" data-bvp-beta-only>We'll email you a link to confirm. Click it and you're in.</p>
-    </div>
+    <div class="form-group"><label class="form-label">Email address</label><input class="form-input" type="email" id="signup-email" placeholder="you@example.com"/></div>
+    <div class="form-group"><label class="form-label">Password</label><input class="form-input" type="password" id="signup-password" placeholder="Min. 8 characters"/></div>
+    <div class="form-group"><label class="form-label">Confirm password</label><input class="form-input" type="password" id="signup-confirm" placeholder="Repeat your password"/></div>
+    <button class="btn-submit" id="signup-btn" onclick="handleSignup()">Create account →</button>
     <div class="modal-switch">Already have an account? <a onclick="switchModal('signup','login')">Sign in</a></div>
   </div>
 </div>
@@ -181,9 +164,7 @@ hr.section-divider{border:none;border-top:1px solid var(--border);}
     <p class="modal-sub">Sign in to your BookValuePro account.</p>
     <div class="modal-msg" id="login-msg"></div>
     <div class="form-group"><label class="form-label">Email address</label><input class="form-input" type="email" id="login-email" placeholder="you@example.com"/></div>
-    <div class="form-group"><label class="form-label">Password</label>
-      <div class="pw-wrap"><input class="form-input" type="password" id="login-password" placeholder="Your password" autocomplete="current-password"/>
-      <button type="button" class="pw-toggle" onclick="togglePw('login-password', this)">Show</button></div></div>
+    <div class="form-group"><label class="form-label">Password</label><input class="form-input" type="password" id="login-password" placeholder="Your password"/></div>
     <button class="btn-submit" id="login-btn" onclick="handleLogin()">Sign in →</button>
     <div class="modal-switch">Don't have an account? <a onclick="switchModal('login','signup')">Create one</a></div>
   </div>
@@ -194,11 +175,10 @@ hr.section-divider{border:none;border-top:1px solid var(--border);}
   <h1>See the value <em>others miss.</em></h1>
   <p class="hero-sub">BookValuePro helps Medicare Supplement agents and agencies know exactly which clients to call, when to call them, and how much commission is on the table. Our Underwriting Assistant checks each applicant against carrier underwriting guidelines, so you can place every client with the right carrier.</p>
   <div class="hero-cta">
-    <button class="btn-hero-primary" onclick="openModal('signup')"><span data-bvp-beta-only>Join the free beta →</span><span data-bvp-no-beta hidden>Start your free trial →</span></button>
+    <button class="btn-hero-primary" onclick="openModal('signup')">Start your free trial →</button>
     <button class="btn-hero-ghost" onclick="openModal('login')">Sign in</button>
   </div>
-  <p class="hero-note" data-bvp-beta-only>Free for agents and agencies through <span data-bvp-beta-end>March 31, 2027</span> · No credit card · Takes about a minute</p>
-  <p class="hero-note" data-bvp-no-beta hidden><span data-bvp-trial="days">14 days</span> free · Plans from $44.99/month · Cancel anytime</p>
+  <p class="hero-note">3 months free · Plans from $44.99/month · Cancel anytime</p>
 </section>
 
 <section class="uw-spot" id="uw-assistant">
@@ -277,42 +257,32 @@ hr.section-divider{border:none;border-top:1px solid var(--border);}
 
 <div class="cta-section">
   <h2>Ready to see what your book is really worth?</h2>
-  <p>Join agents already on the early access list — and be among the first to try the new UW Assistant. <span data-bvp-no-beta hidden><span data-bvp-trial="days">14 days</span> free on every plan.</span><span data-bvp-beta-only>Free through <span data-bvp-beta-end>March 31, 2027</span>, no credit card.</span></p>
-  <button class="btn-hero-primary" onclick="openModal('signup')" style="margin:0 auto;"><span data-bvp-beta-only>Join the free beta →</span><span data-bvp-no-beta hidden>Start your free trial →</span></button>
+  <p>Join agents already on the early access list — and be among the first to try the new UW Assistant. 3 months free on every plan.</p>
+  <button class="btn-hero-primary" onclick="openModal('signup')" style="margin:0 auto;">Start your free trial →</button>
 </div>
 
 <div class="footer"><p>© 2026 BookValuePro · bookvaluepro.com · Built for Medicare Supplement agents</p></div>
 
 <script>
 function openModal(t){document.getElementById('modal-'+t).classList.add('active');document.body.style.overflow='hidden';}
-function closeModal(t){document.getElementById('modal-'+t).classList.remove('active');document.body.style.overflow='';clearMsg(t);if(t==='signup'){document.getElementById('signup-fields').hidden=false;const b=document.getElementById('signup-btn');b.disabled=false;b.textContent='Create free account →';}}
+function closeModal(t){document.getElementById('modal-'+t).classList.remove('active');document.body.style.overflow='';clearMsg(t);}
 function switchModal(f,t){closeModal(f);setTimeout(()=>openModal(t),150);}
 function showMsg(t,msg,err){const el=document.getElementById(t+'-msg');el.textContent=msg;el.className='modal-msg '+(err?'error':'success');}
 function clearMsg(t){const el=document.getElementById(t+'-msg');el.textContent='';el.className='modal-msg';}
 
-function togglePw(id,btn){const i=document.getElementById(id);const show=i.type==='password';i.type=show?'text':'password';btn.textContent=show?'Hide':'Show';}
-function whoChanged(){const ag=(document.querySelector('input[name=signup-who]:checked')||{}).value==='agency';document.getElementById('signup-agency-row').hidden=!ag;if(ag)document.getElementById('signup-agency').focus();}
-
 async function handleSignup(){
   const email=document.getElementById('signup-email').value.trim();
   const pw=document.getElementById('signup-password').value;
-  const who=(document.querySelector('input[name=signup-who]:checked')||{}).value||'individual';
-  const agencyName=document.getElementById('signup-agency').value.trim();
+  const cf=document.getElementById('signup-confirm').value;
   const btn=document.getElementById('signup-btn');
   clearMsg('signup');
-  if(!email||!pw)return showMsg('signup','Please enter your email and a password.',true);
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return showMsg('signup','Please check your email address.',true);
+  if(!email||!pw)return showMsg('signup','Please fill in all fields.',true);
   if(pw.length<8)return showMsg('signup','Password must be at least 8 characters.',true);
-  if(who==='agency'&&!agencyName){document.getElementById('signup-agency').focus();return showMsg('signup',"Please enter your agency's name.",true);}
+  if(pw!==cf)return showMsg('signup','Passwords do not match.',true);
   btn.disabled=true;btn.textContent='Creating account...';
-  const data={signup_type:who};
-  if(who==='agency')data.agency_name=agencyName;
-  const{data:res,error}=await bvp.auth.signUp({email,password:pw,options:{emailRedirectTo:bvpSiteBase(),data}});
-  if(error){showMsg('signup',error.message,true);btn.disabled=false;btn.textContent='Create free account →';return;}
-  // Email confirmation switched off in Supabase: they're signed in already.
-  if(res&&res.session){bvpTrackActivity();await bvpSmartRedirect(res.session.user.id);return;}
-  document.getElementById('signup-fields').hidden=true;
-  showMsg('signup',`Almost done! We sent a link to ${email}. Click it and you're in. (Check your spam folder if it doesn't arrive in a minute or two.)`,false);
+  const{error}=await bvp.auth.signUp({email,password:pw});
+  if(error){showMsg('signup',error.message,true);btn.disabled=false;btn.textContent='Create account →';}
+  else{showMsg('signup','🎉 Account created! Check your email to confirm, then sign in to choose your plan.',false);btn.textContent='Check your email!';setTimeout(()=>{closeModal('signup');openModal('login');btn.disabled=false;btn.textContent='Create account →';},4000);}
 }
 
 async function handleLogin(){

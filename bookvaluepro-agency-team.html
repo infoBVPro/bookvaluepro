@@ -4,6 +4,9 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>BookValuePro — Team</title>
+<link rel="icon" href="favicon.ico" sizes="32x32">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="bvp-supabase.js"></script>
@@ -64,27 +67,10 @@ tr:last-child td{border-bottom:none;}
 td.email{font-weight:500;color:var(--deep);word-break:break-all;}
 td.actions{text-align:right;white-space:nowrap;}
 td.actions > *{margin-left:6px;}
-.admin-check{display:flex;gap:10px;align-items:flex-start;margin-top:12px;font-size:14px;color:var(--deep);cursor:pointer;line-height:1.45;}
-.admin-check input{margin-top:3px;accent-color:var(--forest);width:16px;height:16px;}
-.admin-check small{display:block;color:var(--text-muted);font-size:12.5px;}
 .chip{font-size:11px;font-weight:700;padding:3px 9px;border-radius:12px;white-space:nowrap;}
 .chip.green{background:#e6f5ee;color:#1a5c3a;border:1px solid #b8dfc8;}
 .chip.grey{background:#eef1ef;color:var(--slate);border:1px solid var(--border);}
 .chip.amber{background:#fff4dc;color:#8a5a00;border:1px solid #f0d9a6;}
-.role-sel{font-family:inherit;font-size:12px;border:1px solid var(--border);border-radius:7px;padding:5px 8px;background:white;color:var(--deep);}
-.overlay{position:fixed;inset:0;background:rgba(13,46,30,.45);display:none;align-items:center;justify-content:center;z-index:700;padding:16px;}
-.overlay.show{display:flex;}
-.dialog{background:white;border-radius:16px;max-width:520px;width:100%;padding:24px 26px;box-shadow:0 20px 60px rgba(0,0,0,.25);}
-.dialog h2{font-family:'DM Serif Display',serif;font-weight:400;font-size:24px;color:var(--deep);margin-bottom:8px;}
-.dialog p{font-size:14px;color:var(--text-muted);line-height:1.6;margin-bottom:14px;}
-.opt{display:flex;gap:10px;align-items:flex-start;border:1.5px solid var(--border);border-radius:11px;padding:11px 13px;margin-bottom:8px;cursor:pointer;font-size:14px;line-height:1.45;}
-.opt:has(input:checked){border-color:var(--emerald);background:#f4fbf7;}
-.opt input{margin-top:3px;}
-.opt small{display:block;color:var(--text-muted);font-size:12.5px;}
-.opt select{margin-top:6px;font-family:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:7px;}
-.dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
-.btn-danger{background:var(--danger);color:white;}
-.btn-ghost{background:white;border:1px solid var(--border);color:var(--slate);}
 .empty{color:var(--text-muted);font-size:14px;padding:12px 10px;}
 .loading{color:var(--text-muted);font-size:14px;}
 .hidden{display:none !important;}
@@ -173,7 +159,6 @@ body { padding-left: 64px; }
     <a href="bookvaluepro-commissions.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6.5v11M15 9.2c0-1.4-1.3-2.2-3-2.2s-3 .9-3 2.2c0 1.4 1.3 1.8 3 2.2 1.7.4 3 1 3 2.4 0 1.3-1.3 2.2-3 2.2s-3-.8-3-2.2"/></svg></span><span class="bvp-sidenav-label">Commissions</span></a>
     <a href="bookvaluepro-uw-assistant.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg></span><span class="bvp-sidenav-label">Underwriting Assistant</span></a>
   <a href="bookvaluepro-household-discount.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg></span><span class="bvp-sidenav-label">Household Discount</span></a>
-  <a href="bookvaluepro-market-intelligence.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg></span><span class="bvp-sidenav-label">Market Intelligence</span></a>
   </div>
   <div class="bvp-sidenav-bottom">
     <a href="bookvaluepro-admin.html" class="bvp-sidenav-item" id="bvp-sidenav-admin"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg></span><span class="bvp-sidenav-label">Admin</span></a>
@@ -188,7 +173,7 @@ body { padding-left: 64px; }
 <main class="page">
   <div class="eyebrow">Agency</div>
   <h1 id="agency-name">Team</h1>
-  <p class="sub">Invite agents and office staff to your agency. Each person gets their own login, and their license is covered by your plan. You can make someone an agency administrator when you invite them, or any time after. <a href="bookvaluepro-agency-setup.html" style="color:var(--forest);font-weight:600;">Agency details</a></p>
+  <p class="sub">Invite agents to your agency. Each agent gets their own login, and their license is covered by your plan.</p>
 
   <div id="loading" class="loading">Loading your team…</div>
 
@@ -204,14 +189,11 @@ body { padding-left: 64px; }
     </section>
 
     <section class="card">
-      <div class="card-label">Invite someone to your team</div>
+      <div class="card-label">Invite an agent</div>
       <div class="invite-row">
         <input id="invite-email" type="email" placeholder="agent@example.com" autocomplete="off"/>
         <button class="btn btn-primary" id="invite-btn" onclick="sendInvite()">Send invite</button>
       </div>
-      <label class="admin-check"><input type="checkbox" id="invite-admin"/>
-        <span>Make this person an agency administrator
-        <small>Admins see everything: their own book (if they have one), the agency roll-ups, every agent's clients, and commissions.</small></span></label>
       <div class="msg" id="invite-msg"></div>
       <div class="linkbox" id="linkbox">
         <p id="linkbox-text"></p>
@@ -230,36 +212,17 @@ body { padding-left: 64px; }
     <section class="card">
       <div class="card-label">Team members</div>
       <div id="members"></div>
-      <div data-bvp-team-explainer style="margin-top:16px;"></div>
-      <p class="meter-note"><strong>Agency administrators</strong> (for example an office manager or a senior agent) see everything: their own book with commissions, the Agency Overview and roll-ups, and every agent's clients and commissions. They can send renewal emails for any client, and each email goes out under that client's own agent. Only you can invite or remove people, change roles, or manage billing. You can switch anyone between Agent and Admin at any time with the Role menu above.</p>
+      <p class="meter-note">Removing an agent takes away their access right away. Their clients stay saved and aren't deleted. Tools to reassign a removed agent's clients are coming next.</p>
     </section>
   </div>
 </main>
 
-<div class="overlay" id="remove-overlay">
-  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="rm-title">
-    <h2 id="rm-title">Remove from team</h2>
-    <p id="rm-text"></p>
-    <label class="opt"><input type="radio" name="rm-dest" value="move" checked onchange="rmChanged()">
-      <span>Move their clients to
-        <select id="rm-to" onclick="document.querySelector('input[name=rm-dest][value=move]').checked=true;rmChanged()"></select>
-        <small>Their clients, older book versions, leads and do-not-email list move to this person. Any emails still scheduled under the removed person's name are cancelled.</small></span></label>
-    <div class="msg error" id="rm-err"></div>
-    <div class="dialog-actions">
-      <button class="btn btn-ghost" onclick="closeRemove()">Cancel</button>
-      <button class="btn btn-danger" id="rm-go" onclick="confirmRemove()">Remove</button>
-    </div>
-  </div>
-</div>
-
 <script>
 let me = null;
-let settings = null;
-let betaEnds = undefined;   // set while the agency is on the free beta (no plan)
 let agency = null;
 let roster = [];
 let invites = [];
-let inviteRoles = {};   // email → 'admin' | 'agent' (pending invites)
+let pendingRemove = null;
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
@@ -276,7 +239,7 @@ function showLink(result) {
   document.getElementById('linkbox-url').value = result.link;
   document.getElementById('linkbox-text').textContent = result.emailed
     ? `Invite emailed to ${result.email}. You can also copy the link below and send it yourself.`
-    : `Email isn't set up yet, so copy this link and send it to ${result.email} yourself. It works once and expires in ${settings ? settings.invite_expiry_days : '—'} days.`;
+    : `Email isn't set up yet, so copy this link and send it to ${result.email} yourself. It works once and expires in 7 days.`;
   box.classList.add('show');
 }
 
@@ -289,13 +252,6 @@ async function copyLink() {
 function renderLicenses() {
   const p = BVP_PRICING.agency;
   const used = roster.length;
-  if (betaEnds !== undefined) {
-    document.getElementById('lic-count').innerHTML = `${used} <small>${used === 1 ? 'person' : 'people'} on your team</small>`;
-    document.getElementById('lic-price').innerHTML = '<strong>Free during the beta</strong>';
-    document.getElementById('lic-fill').style.width = '100%';
-    document.getElementById('lic-note').textContent = `Invite as many agents and staff as you like. Everything is free${betaEnds ? ' through ' + bvpFmtDay(betaEnds) : ''}.`;
-    return;
-  }
   const extra = Math.max(0, used - p.includedLicenses);
   document.getElementById('lic-count').innerHTML = `${used} <small>of ${p.includedLicenses} included licenses in use</small>`;
   document.getElementById('lic-price').innerHTML = `Plan: <strong>${fmtMoney(bvpAgencyMonthly(used))}/month</strong>`;
@@ -303,20 +259,19 @@ function renderLicenses() {
   fill.style.width = Math.min(100, used / p.includedLicenses * 100) + '%';
   fill.classList.toggle('over', extra > 0);
   document.getElementById('lic-note').textContent = extra > 0
-    ? `You're using ${extra} license${extra === 1 ? '' : 's'} beyond the ${p.includedLicenses} included, at ${fmtMoney(p.extraLicense)}/month each.`
-    : `You can add ${p.includedLicenses - used} more agent${p.includedLicenses - used === 1 ? '' : 's'} at no extra cost. Each agent beyond ${p.includedLicenses} adds ${fmtMoney(p.extraLicense)}/month.`;
+    ? `You're using ${extra} license${extra === 1 ? '' : 's'} beyond the 10 included, at ${fmtMoney(p.extraLicense)}/month each.`
+    : `You can add ${p.includedLicenses - used} more agent${p.includedLicenses - used === 1 ? '' : 's'} at no extra cost. Each agent beyond 10 adds ${fmtMoney(p.extraLicense)}/month.`;
 }
 
 function renderInvites() {
   const el = document.getElementById('invites');
   if (!invites.length) { el.innerHTML = '<div class="empty">No pending invites.</div>'; return; }
   const now = new Date();
-  el.innerHTML = `<table><thead><tr><th>Email</th><th>Role</th><th>Sent</th><th>Status</th><th></th></tr></thead><tbody>${
+  el.innerHTML = `<table><thead><tr><th>Email</th><th>Sent</th><th>Status</th><th></th></tr></thead><tbody>${
     invites.map(i => {
       const expired = new Date(i.expires_at) < now;
       return `<tr>
         <td class="email">${esc(i.email)}</td>
-        <td>${inviteRoles[i.email] === 'admin' ? '<span class="chip green">Admin</span>' : '<span class="chip grey">Agent</span>'}</td>
         <td>${fmtDate(i.created_at)}</td>
         <td>${expired ? '<span class="chip amber">Expired</span>' : `<span class="chip grey">Expires ${fmtDate(i.expires_at)}</span>`}</td>
         <td class="actions">
@@ -328,27 +283,23 @@ function renderInvites() {
 
 function renderMembers() {
   const el = document.getElementById('members');
-  el.innerHTML = `<table><thead><tr><th>Member</th><th>Role</th><th>Sees</th><th>Joined</th><th></th></tr></thead><tbody>${
+  el.innerHTML = `<table><thead><tr><th>Agent</th><th>Role</th><th>Joined</th><th></th></tr></thead><tbody>${
     roster.map(m => {
       const isOwner = m.role === 'owner';
       const id = esc(m.user_id);
       return `<tr>
-        <td class="email">${m.display_name ? esc(m.display_name) + '<br><span style="color:var(--text-muted);font-weight:400;font-size:12px;">' + esc(m.email) + '</span>' : esc(m.email)}${m.user_id === me.id ? ' <span style="color:var(--text-muted);font-weight:400;">(you)</span>' : ''}</td>
-        <td>${isOwner ? '<span class="chip green">Owner</span>'
-          : `<select class="role-sel" data-id="${id}" onchange="changeRole(this)" aria-label="Role for ${esc(m.email)}">
-               <option value="agent" ${m.role === 'agent' ? 'selected' : ''}>Agent</option>
-               <option value="admin" ${m.role === 'admin' ? 'selected' : ''}>Admin</option></select>`}</td>
-        <td style="font-size:12.5px;color:var(--text-muted);">${m.role === 'agent' ? 'Own clients, no $ figures' : 'Whole agency, incl. $'}</td>
+        <td class="email">${esc(m.email)}${m.user_id === me.id ? ' <span style="color:var(--text-muted);font-weight:400;">(you)</span>' : ''}</td>
+        <td>${isOwner ? '<span class="chip green">Owner</span>' : '<span class="chip grey">Agent</span>'}</td>
         <td>${fmtDate(m.joined_at)}</td>
         <td class="actions">
           ${isOwner ? '' : `<a class="btn-sm" href="bookvaluepro-dashboard.html?agent=${encodeURIComponent(m.user_id)}">View book</a>
-          <button class="btn-sm danger" data-id="${id}" onclick="openRemove(this.dataset.id)">Remove</button>`}
+          <button class="btn-sm danger${pendingRemove === m.user_id ? ' confirm' : ''}" data-id="${id}" onclick="removeMember(this)">${pendingRemove === m.user_id ? 'Click again to remove' : 'Remove'}</button>`}
         </td></tr>`;
     }).join('')}</tbody></table>`;
 }
 
 async function reload() {
-  [roster, invites, inviteRoles] = await Promise.all([bvpGetAgencyRoster(), bvpGetAgencyInvites(agency.id), bvpGetInviteRoles(agency.id)]);
+  [roster, invites] = await Promise.all([bvpGetAgencyRoster(), bvpGetAgencyInvites(agency.id)]);
   renderLicenses(); renderInvites(); renderMembers();
 }
 
@@ -357,17 +308,14 @@ async function sendInvite() {
   const email = input.value.trim().toLowerCase();
   document.getElementById('linkbox').classList.remove('show');
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setMsg('Please enter a valid email address.', 'error'); return; }
-  if (betaEnds === undefined && roster.length >= BVP_PRICING.agency.includedLicenses && !invites.some(i => i.email === email)) {
+  if (roster.length >= BVP_PRICING.agency.includedLicenses && !invites.some(i => i.email === email)) {
     setMsg(`Heads up: once this agent joins, your plan goes to ${fmtMoney(bvpAgencyMonthly(roster.length + 1))}/month.`, 'ok');
   } else setMsg('', '');
   const btn = document.getElementById('invite-btn');
   btn.disabled = true; btn.textContent = 'Sending…';
   try {
-    const asAdmin = document.getElementById('invite-admin').checked;
-    await bvpSaveInviteRole(agency.id, email, asAdmin ? 'admin' : 'agent', me.id);
     const result = await bvpAgencyAction('invite', { email });
     input.value = '';
-    document.getElementById('invite-admin').checked = false;
     showLink(result);
     await reload();
   } catch (e) { setMsg(e.message, 'error'); }
@@ -386,59 +334,22 @@ async function cancelInvite(btn) {
   catch (e) { setMsg(e.message, 'error'); btn.disabled = false; }
 }
 
-async function changeRole(sel) {
-  const who = roster.find(m => m.user_id === sel.dataset.id);
-  const role = sel.value;
-  sel.disabled = true;
+async function removeMember(btn) {
+  const id = btn.dataset.id;
+  if (pendingRemove !== id) {
+    pendingRemove = id; renderMembers();
+    setTimeout(() => { if (pendingRemove === id) { pendingRemove = null; renderMembers(); } }, 4000);
+    return;
+  }
+  pendingRemove = null;
+  btn.disabled = true; btn.textContent = 'Removing…';
   try {
-    await bvpAgencyAction('set_role', { userId: sel.dataset.id, role });
-    setMsg(`${who ? bvpMemberLabel(who) : 'They'} ${role === 'admin' ? 'can now see every agent\'s clients and send outreach for the team' : 'now sees only their own book'}.`, 'ok');
+    const who = roster.find(m => m.user_id === id);
+    await bvpAgencyAction('remove', { userId: id });
+    setMsg(`${who ? who.email : 'The agent'} was removed from your team.`, 'ok');
     await reload();
-  } catch (e) { setMsg(e.message, 'error'); await reload(); }
+  } catch (e) { setMsg(e.message, 'error'); renderMembers(); }
 }
-
-let removing = null;
-function openRemove(id) {
-  removing = roster.find(m => m.user_id === id);
-  if (!removing) return;
-  document.getElementById('rm-title').textContent = 'Remove ' + bvpMemberLabel(removing) + '?';
-  document.getElementById('rm-text').textContent = `${removing.email} loses access to your agency right away and their license is freed up. Their clients stay with your agency. Who should take them over?`;
-  const others = roster.filter(m => m.user_id !== id);
-  document.getElementById('rm-to').innerHTML = others.map(m => `<option value="${esc(m.user_id)}">${esc(bvpMemberLabel(m))}${m.user_id === me.id ? ' (you)' : ''}</option>`).join('');
-  document.querySelector('input[name=rm-dest][value=move]').checked = true;
-  document.getElementById('rm-err').classList.remove('show');
-  rmChanged();
-  document.getElementById('remove-overlay').classList.add('show');
-}
-function rmChanged() {
-  const move = document.querySelector('input[name=rm-dest]:checked').value === 'move';
-  const to = roster.find(m => m.user_id === document.getElementById('rm-to').value);
-  document.getElementById('rm-go').textContent = move && to ? `Remove and move clients to ${bvpMemberLabel(to)}` : 'Remove';
-}
-function closeRemove() { document.getElementById('remove-overlay').classList.remove('show'); removing = null; }
-async function confirmRemove() {
-  if (!removing) return;
-  const move = true;   // LOA only: clients always stay with the agency
-  if (!document.getElementById('rm-to').value) { const err0 = document.getElementById('rm-err'); err0.textContent = 'Choose who receives their clients.'; err0.classList.add('show'); return; }
-  const transferTo = document.getElementById('rm-to').value;
-  const btn = document.getElementById('rm-go'), err = document.getElementById('rm-err');
-  btn.disabled = true; btn.textContent = move ? 'Moving clients…' : 'Removing…';
-  try {
-    const r = await bvpAgencyAction('remove', { userId: removing.user_id, transferTo });
-    const to = roster.find(m => m.user_id === transferTo);
-    let text = `${bvpMemberLabel(removing)} was removed from your team.`;
-    if (r.transfer) {
-      text += ` ${r.transfer.policies} client${r.transfer.policies === 1 ? '' : 's'} and ${r.transfer.leads} lead${r.transfer.leads === 1 ? '' : 's'} moved to ${bvpMemberLabel(to)}.`;
-      if (r.cancelledEmails) text += ` ${r.cancelledEmails} scheduled email${r.cancelledEmails === 1 ? ' was' : 's were'} cancelled.`;
-    }
-    closeRemove();
-    setMsg(text, 'ok');
-    document.getElementById('invite-msg').scrollIntoView({ behavior: 'smooth', block: 'center' });
-    await reload();
-  } catch (e) { err.textContent = e.message; err.classList.add('show'); }
-  btn.disabled = false; rmChanged();
-}
-document.getElementById('remove-overlay').addEventListener('click', e => { if (e.target.id === 'remove-overlay') closeRemove(); });
 
 document.getElementById('invite-email').addEventListener('keydown', e => { if (e.key === 'Enter') sendInvite(); });
 
@@ -450,12 +361,9 @@ document.getElementById('invite-email').addEventListener('keydown', e => { if (e
   bvpSetAdminNavVisible(me.email);
 
   const access = await bvpGetAccess();
-  if (!bvpIsAgencyOwner(access)) { window.location.replace(bvpIsAgencyManager(access) ? BVP_AGENCY_PAGE : BVP_ACCOUNT_PAGE); return; }
-  bvpFillTeamExplainer();
-  if (access.reason === 'beta') betaEnds = access.beta_ends_on || null;
+  if (access.reason !== 'agency_owner') { window.location.replace(BVP_ACCOUNT_PAGE); return; }
   agency = await bvpGetAgency(access.agency_id);
   document.getElementById('agency-name').textContent = (agency && agency.name ? agency.name + ' — ' : '') + 'Team';
-  try { settings = await bvpGetSettings(); } catch (e) { console.warn(e.message); }
 
   await reload();
   document.getElementById('loading').classList.add('hidden');

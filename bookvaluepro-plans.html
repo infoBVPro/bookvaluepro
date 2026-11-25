@@ -4,6 +4,9 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>BookValuePro — Choose your plan</title>
+<link rel="icon" href="favicon.ico" sizes="32x32">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="bvp-supabase.js"></script>
@@ -98,8 +101,8 @@ h1{font-family:'DM Serif Display',serif;font-size:clamp(32px,5vw,44px);color:var
 <main class="wrap">
   <div class="head">
     <div class="eyebrow">Choose your plan</div>
-    <h1>Start with <span data-bvp-trial="days">14 days</span> free</h1>
-    <p>Every plan includes a <strong><span data-bvp-trial="adj">14-day</span> free trial</strong>. You won't be charged until <strong id="trial-date">—</strong>, and you can cancel anytime before then.</p>
+    <h1>Start with 3 months free</h1>
+    <p>Every plan includes a <strong>3-month free trial</strong>. You won't be charged until <strong id="trial-date">—</strong>, and you can cancel anytime before then.</p>
   </div>
 
   <div class="banner" id="banner"></div>
@@ -127,7 +130,7 @@ h1{font-family:'DM Serif Display',serif;font-size:clamp(32px,5vw,44px);color:var
         <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Underwriting Assistant</li>
       </ul>
 
-      <button class="btn-go" id="btn-individual" onclick="choose('individual')">Start <span data-bvp-trial="adj">14-day</span> free trial</button>
+      <button class="btn-go" id="btn-individual" onclick="choose('individual')">Start 3-month free trial</button>
       <div class="plan-err" id="err-individual"></div>
     </section>
 
@@ -149,10 +152,10 @@ h1{font-family:'DM Serif Display',serif;font-size:clamp(32px,5vw,44px);color:var
 
       <div class="field">
         <label for="agency-name">Agency name</label>
-        <input id="agency-name" type="text" maxlength="100" placeholder="e.g. ABC Insurance Agency" autocomplete="organization"/>
+        <input id="agency-name" type="text" maxlength="100" placeholder="e.g. Jordan Insurance Group" autocomplete="organization"/>
       </div>
 
-      <button class="btn-go" id="btn-agency" onclick="choose('agency')">Start <span data-bvp-trial="adj">14-day</span> free trial</button>
+      <button class="btn-go" id="btn-agency" onclick="choose('agency')">Start 3-month free trial</button>
       <div class="plan-err" id="err-agency"></div>
     </section>
   </div>
@@ -208,7 +211,7 @@ async function choose(kind) {
   }
 
   document.querySelectorAll('.btn-go').forEach(b => b.disabled = true);
-  const label = btn.innerHTML;
+  const label = btn.textContent;
   btn.textContent = 'Opening secure checkout…';
   try {
     await bvpStartCheckout(plan, agencyName);
@@ -216,7 +219,7 @@ async function choose(kind) {
     err.textContent = e.message || 'Something went wrong. Please try again.';
     err.classList.add('show');
     document.querySelectorAll('.btn-go').forEach(b => b.disabled = false);
-    btn.innerHTML = label;
+    btn.textContent = label;
   }
 }
 
@@ -225,7 +228,8 @@ async function choose(kind) {
   if (!session) return;
   document.getElementById('user-email').textContent = session.user.email;
 
-  const trialEnd = bvpTrialEndDate();
+  const trialEnd = new Date();
+  trialEnd.setMonth(trialEnd.getMonth() + BVP_TRIAL_MONTHS);
   document.getElementById('trial-date').textContent = fmtDate(trialEnd);
   document.getElementById('trial-date-2').textContent = fmtDate(trialEnd);
 
@@ -242,17 +246,8 @@ async function choose(kind) {
   }
 
   if (access.reason === 'beta') {
-    const until = access.beta_ends_on ? ` through <strong>${bvpFmtDay(access.beta_ends_on)}</strong>` : '';
-    showBanner('info', `You're in the free beta${until}, so there's no plan to pick and no card needed. <a href='bookvaluepro-dashboard.html'>Go to your dashboard →</a>`);
+    showBanner('info', "You're a beta tester, so you have free access. No plan needed. <a href='bookvaluepro-dashboard.html'>Go to your dashboard →</a>");
     return;
-  }
-
-  // The open beta has ended and this account was part of it.
-  const prog = await bvpGetBetaProgram().catch(() => null);
-  const today = new Date().toLocaleDateString('en-CA');
-  if (prog && today > prog.endsOn && String(session.user.created_at || '').slice(0, 10) <= prog.endsOn
-      && ['no_plan', 'agency_inactive'].includes(access.reason)) {
-    showBanner('info', `Thanks for being part of the BookValuePro beta! The free beta ended on <strong>${bvpFmtDay(prog.endsOn)}</strong>. Pick a plan below to keep going. Your clients, leads and settings are all still here.`);
   }
 
   if (access.reason === 'agency_inactive' && access.role !== 'owner') {
@@ -271,10 +266,6 @@ async function choose(kind) {
     showBanner('info', 'Checkout was cancelled and no charge was made. Pick a plan whenever you are ready.');
     history.replaceState(null, '', location.pathname);
   }
-
-  // Agency name typed at sign-up.
-  const meta = session.user.user_metadata || {};
-  if (meta.agency_name && !document.getElementById('agency-name').value) document.getElementById('agency-name').value = meta.agency_name;
 
   document.getElementById('plans').classList.remove('hidden');
   document.getElementById('fine').classList.remove('hidden');

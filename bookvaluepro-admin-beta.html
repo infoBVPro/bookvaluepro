@@ -4,6 +4,9 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>BookValuePro — Beta testers</title>
+<link rel="icon" href="favicon.ico" sizes="32x32">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="bvp-supabase.js"></script>
@@ -27,7 +30,6 @@ h1{font-family:'DM Serif Display',serif;font-size:34px;color:var(--deep);margin-
 .card{background:white;border:1px solid var(--border);border-radius:16px;padding:1.5rem;margin-bottom:18px;}
 .card-label{font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--slate);margin-bottom:1rem;}
 .add-grid{display:grid;grid-template-columns:2fr 2fr 1.2fr auto;gap:12px;align-items:end;}
-.bp-grid{grid-template-columns:auto minmax(0,220px) auto;justify-content:start;}
 .field label{font-size:11px;font-weight:600;color:var(--slate);letter-spacing:0.07em;text-transform:uppercase;display:block;margin-bottom:6px;}
 .field input{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;color:var(--text);outline:none;background:white;}
 .field input:focus{border-color:var(--emerald);box-shadow:0 0 0 3px rgba(61,162,114,0.12);}
@@ -141,7 +143,6 @@ body { padding-left: 64px; }
     <a href="bookvaluepro-commissions.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6.5v11M15 9.2c0-1.4-1.3-2.2-3-2.2s-3 .9-3 2.2c0 1.4 1.3 1.8 3 2.2 1.7.4 3 1 3 2.4 0 1.3-1.3 2.2-3 2.2s-3-.8-3-2.2"/></svg></span><span class="bvp-sidenav-label">Commissions</span></a>
     <a href="bookvaluepro-uw-assistant.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg></span><span class="bvp-sidenav-label">Underwriting Assistant</span></a>
   <a href="bookvaluepro-household-discount.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg></span><span class="bvp-sidenav-label">Household Discount</span></a>
-  <a href="bookvaluepro-market-intelligence.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg></span><span class="bvp-sidenav-label">Market Intelligence</span></a>
   </div>
   <div class="bvp-sidenav-bottom">
     <a href="bookvaluepro-admin.html" class="bvp-sidenav-item active" id="bvp-sidenav-admin" style="cursor:pointer"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg></span><span class="bvp-sidenav-label">Admin</span></a>
@@ -157,19 +158,7 @@ body { padding-left: 64px; }
 <main class="page">
   <div class="eyebrow">Admin</div>
   <h1>Beta testers</h1>
-  <p class="intro">People on the list below use BookValuePro for free: no plan, no card, even when the open beta is off. Add someone before they sign up and they'll skip the plan picker when they create their account. Removing someone asks them to choose a plan the next time they sign in.</p>
-
-  <section class="card">
-    <div class="card-label">Open beta</div>
-    <p style="font-size:14px;line-height:1.55;margin:-4px 0 14px;">While the open beta is on, <strong>anyone who signs up</strong> gets free access (Individual or Agency) with no card, until the end date. The day after, people without a plan are sent to the Plans page. People you add below keep their own dates.</p>
-    <div class="add-grid bp-grid">
-      <div class="field"><label for="bp-open">Open beta</label>
-        <select id="bp-open" style="padding:9px 10px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;font-size:14px;"><option value="true">On</option><option value="false">Off</option></select></div>
-      <div class="field"><label for="bp-ends">Free through (last day)</label><input id="bp-ends" type="date"/></div>
-      <button class="btn btn-primary" id="bp-save" onclick="saveProgram()">Save</button>
-    </div>
-    <div class="msg" id="bp-msg"></div>
-  </section>
+  <p class="intro">People on this list use BookValuePro for free: no plan, no card. Add someone before they sign up and they'll skip the plan picker when they create their account. Removing someone asks them to choose a plan the next time they sign in.</p>
 
   <section class="card">
     <div class="card-label">Add a beta tester</div>
@@ -208,27 +197,6 @@ function setMsg(text, kind) {
   const m = document.getElementById('add-msg');
   m.textContent = text || '';
   m.className = 'msg ' + (kind || '');
-}
-
-async function loadProgram() {
-  const { data, error } = await bvp.from('beta_program').select('*').eq('id', 1).maybeSingle();
-  const m = document.getElementById('bp-msg');
-  if (error || !data) { m.textContent = 'Could not load the beta settings. Has database migration 9 been run?'; m.className = 'msg error'; return; }
-  document.getElementById('bp-open').value = String(!!data.open_signup);
-  document.getElementById('bp-ends').value = data.ends_on;
-  m.textContent = data.updated_by ? `Last changed by ${data.updated_by}.` : ''; m.className = 'msg';
-}
-
-async function saveProgram() {
-  const ends = document.getElementById('bp-ends').value, open = document.getElementById('bp-open').value === 'true';
-  const m = document.getElementById('bp-msg');
-  if (!ends) { m.textContent = 'Please choose the last day of the beta.'; m.className = 'msg error'; return; }
-  const btn = document.getElementById('bp-save'); btn.disabled = true;
-  const { error } = await bvp.from('beta_program').update({ open_signup: open, ends_on: ends, updated_by: me, updated_at: new Date().toISOString() }).eq('id', 1);
-  btn.disabled = false;
-  if (error) { m.textContent = 'Could not save: ' + error.message; m.className = 'msg error'; return; }
-  m.textContent = open ? `Saved. Anyone who signs up has free access through ${bvpFmtDay(ends)}.` : 'Saved. The open beta is off; only the people listed below have free access.';
-  m.className = 'msg ok';
 }
 
 async function load() {
@@ -316,7 +284,6 @@ document.getElementById('new-email').addEventListener('keydown', e => { if (e.ke
   if (!bvpIsAdmin(session.user.email)) { window.location.href = 'bookvaluepro-dashboard.html'; return; }
   me = session.user.email;
   bvpSetAdminNavVisible(me);
-  loadProgram();
   await load();
 })();
 

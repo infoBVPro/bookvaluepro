@@ -4,6 +4,9 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>BookValuePro — Account</title>
+<link rel="icon" href="favicon.ico" sizes="32x32">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="bvp-supabase.js"></script>
@@ -151,7 +154,6 @@ body { padding-left: 64px; }
     <a href="bookvaluepro-commissions.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6.5v11M15 9.2c0-1.4-1.3-2.2-3-2.2s-3 .9-3 2.2c0 1.4 1.3 1.8 3 2.2 1.7.4 3 1 3 2.4 0 1.3-1.3 2.2-3 2.2s-3-.8-3-2.2"/></svg></span><span class="bvp-sidenav-label">Commissions</span></a>
     <a href="bookvaluepro-uw-assistant.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg></span><span class="bvp-sidenav-label">Underwriting Assistant</span></a>
   <a href="bookvaluepro-household-discount.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg></span><span class="bvp-sidenav-label">Household Discount</span></a>
-  <a href="bookvaluepro-market-intelligence.html" class="bvp-sidenav-item"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg></span><span class="bvp-sidenav-label">Market Intelligence</span></a>
   </div>
   <div class="bvp-sidenav-bottom">
     <div class="bvp-sidenav-item active" id="bvp-sidenav-account"><span class="bvp-sidenav-node"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.2 3.6-7 8-7s8 2.8 8 7"/></svg></span><span class="bvp-sidenav-label">Account</span></div>
@@ -183,7 +185,6 @@ body { padding-left: 64px; }
 
   <section class="card hidden" id="sender-profile">
     <div class="card-label">Email sender profile</div>
-    <p style="font-size:13px;color:var(--text-muted);margin:-6px 0 12px;">Your NPN, license states and renewal dates are on <a href="bookvaluepro-profile-setup.html?next=bookvaluepro-account.html" style="color:var(--forest);font-weight:600;">Licensing details</a>.</p>
     <p class="plan-sub" style="margin-bottom:1rem;">Used on outreach emails you send to clients. Clients see your name as the sender, and their replies go to your reply-to email. Federal anti-spam law (CAN-SPAM) requires a mailing address on every marketing email.</p>
     <div class="sp-grid">
       <div class="sp-field"><label for="sp-name">Your name, as clients see it</label><input id="sp-name" maxlength="80" placeholder="Sarah Miller"/></div>
@@ -288,10 +289,8 @@ function renderPaidPlan(sub, agency) {
     <dl class="rows">${rows}</dl>
     <div class="actions">
       <button class="btn btn-primary" onclick="manageBilling(this)">Manage billing</button>
-      ${!isAgency && !sub.cancel_at_period_end ? `<button class="btn btn-outline" onclick="document.getElementById('upgrade-box').classList.toggle('hidden')">Upgrade to Agency</button>` : ''}
     </div>
-    <p class="muted-note">Update your card, view invoices${isAgency ? '' : ', switch between monthly and annual'}, or cancel. Opens Stripe's secure billing page.</p>
-    ${!isAgency && !sub.cancel_at_period_end ? upgradeBox(sub) : ''}`;
+    <p class="muted-note">Update your card, view invoices${isAgency ? '' : ', switch between monthly and annual'}, or cancel. Opens Stripe's secure billing page.</p>`;
 
   if (isAgency) {
     const included = BVP_PRICING.agency.includedLicenses;
@@ -310,60 +309,11 @@ function renderPaidPlan(sub, agency) {
   }
 }
 
-// "Upgrade to Agency": switches this same subscription to the Agency plan.
-// One-way. Trial days carry over; on a paid plan Stripe credits unused time.
-function upgradeBox(sub) {
-  const a = BVP_PRICING.agency;
-  const when = sub.status === 'trialing'
-    ? `Your free trial carries over: nothing is charged until <strong>${fmtDate(sub.trial_ends_at)}</strong>, then ${fmtMoney(a.amount)}/month.`
-    : `You'll move to ${fmtMoney(a.amount)}/month right away. Stripe credits the unused part of your current plan against the first Agency invoice.`;
-  return `<div id="upgrade-box" class="hidden" style="margin-top:18px;padding:16px 18px;border:1.5px solid var(--border);border-radius:12px;background:#fbfdfc;">
-    <div style="font-weight:600;color:var(--deep);margin-bottom:6px;">Upgrade to Agency</div>
-    <p class="muted-note" style="margin:0 0 12px;">${fmtMoney(a.amount)}/month includes ${a.includedLicenses} licenses (you plus ${a.includedLicenses - 1} agents or staff), then ${fmtMoney(a.extraLicense)}/month each. ${when} Your book, clients and settings stay as they are. You can't switch back to Individual afterwards.</p>
-    <label for="up-name" style="font-size:13px;font-weight:600;color:var(--slate);">Agency name</label>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
-      <input id="up-name" maxlength="100" placeholder="e.g. ABC Insurance Agency" style="flex:1;min-width:220px;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;font-size:14px;">
-      <button class="btn btn-primary" id="up-go" onclick="upgradeToAgency()">Upgrade</button>
-    </div>
-    <div class="err" id="up-err"></div>
-  </div>`;
-}
-
-async function upgradeToAgency() {
-  const name = document.getElementById('up-name').value.trim();
-  const err = document.getElementById('up-err'), btn = document.getElementById('up-go');
-  err.classList.remove('show');
-  if (!name) { err.textContent = "Please enter your agency's name."; err.classList.add('show'); return; }
-  btn.disabled = true; btn.textContent = 'Upgrading…';
-  try {
-    await bvpCallFunction('create-checkout-session', { action: 'upgrade_to_agency', agencyName: name });
-    const { data: { session } } = await bvp.auth.getSession();
-    _bvpAccessCache = null;
-    await render(session);
-    // Next: tell us about the agency and how the team works.
-    location.href = BVP_AGENCY_SETUP_PAGE;
-  } catch (e) {
-    err.textContent = e.message; err.classList.add('show');
-    btn.disabled = false; btn.textContent = 'Upgrade';
-  }
-}
-
 function renderSimple(title, chipHtml, text, actionsHtml = '') {
   document.getElementById('plan-body').innerHTML = `
     <div class="plan-title"><h2>${title}</h2>${chipHtml}</div>
     <p class="plan-sub">${text}</p>
     ${actionsHtml ? `<div class="actions">${actionsHtml}</div>` : ''}`;
-}
-
-// Beta: start a free agency (you become the owner), then go to agency setup.
-async function startBetaAgency() {
-  const name = document.getElementById('beta-agency-name').value.trim();
-  const err = document.getElementById('beta-agency-err'), btn = document.getElementById('beta-agency-btn');
-  err.textContent = '';
-  if (!name) { err.textContent = "Please enter your agency's name."; return; }
-  btn.disabled = true; btn.textContent = 'Starting…';
-  try { await bvpStartBetaAgency(name); location.href = BVP_AGENCY_SETUP_PAGE; }
-  catch (e) { err.textContent = e.message; btn.disabled = false; btn.textContent = 'Start an agency'; }
 }
 
 async function loadSubscription(access, userId) {
@@ -383,31 +333,12 @@ async function render(session) {
     case 'admin':
       renderSimple('Administrator', '<span class="chip green">Full access</span>', 'Your account has full access as a site administrator.');
       return access;
-    case 'beta': {
-      const until = access.beta_ends_on
-        ? `Thanks for testing BookValuePro. Your free access runs through <strong>${bvpFmtDay(access.beta_ends_on)}</strong>, with no card needed.`
-        : 'Thanks for testing BookValuePro. You have free access to every tool, with no card needed.';
-      if (access.agency_id) {
-        const { data: agency } = await bvp.from('agencies').select('name').eq('id', access.agency_id).maybeSingle();
-        const roleText = access.role === 'owner' ? 'You own' : 'You\'re on';
-        renderSimple('Beta tester', '<span class="chip green">Free access</span>',
-          `${until} ${roleText} the agency <strong>${esc(agency?.name || '')}</strong>.`,
-          access.role === 'owner' ? `<a class="btn btn-primary" href="${BVP_TEAM_PAGE}">Invite your team</a>` : '');
-      } else {
-        renderSimple('Beta tester', '<span class="chip green">Free access</span>', until + ' Run an agency? You can start one free during the beta and invite your agents.',
-          `<input id="beta-agency-name" maxlength="100" placeholder="Agency name" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;font-size:14px;min-width:220px;"/>
-           <button class="btn btn-primary" id="beta-agency-btn" onclick="startBetaAgency()">Start an agency</button>
-           <div id="beta-agency-err" style="flex-basis:100%;color:#c0392b;font-size:13px;"></div>`);
-      }
+    case 'beta':
+      renderSimple('Beta tester', '<span class="chip green">Free access</span>',
+        access.beta_ends_on
+          ? `Thanks for testing BookValuePro. Your free access runs through <strong>${fmtDate(access.beta_ends_on)}</strong>.`
+          : 'Thanks for testing BookValuePro. You have free access to every tool, with no card needed.');
       return access;
-    }
-    case 'agency_admin': {
-      const { data: agency } = await bvp.from('agencies').select('name').eq('id', access.agency_id).maybeSingle();
-      renderSimple(esc(agency?.name || 'Agency plan'), '<span class="chip green">Agency admin</span>',
-        'You\'re an admin on your agency\'s plan: you can see every agent\'s clients and send renewal outreach for the team. Billing and team changes are handled by your agency owner.',
-        `<a class="btn btn-primary" href="${BVP_AGENCY_PAGE}">Agency Overview</a>`);
-      return access;
-    }
     case 'agency_member': {
       const { data: agency } = await bvp.from('agencies').select('name').eq('id', access.agency_id).maybeSingle();
       renderSimple(esc(agency?.name || 'Agency plan'), '<span class="chip green">Agency license</span>',
@@ -438,7 +369,7 @@ async function render(session) {
       return access;
     default:
       renderSimple('No active plan', '<span class="chip grey">None</span>',
-        `Choose a plan to start your ${bvpTrialText('adj')} free trial.`,
+        `Choose a plan to start your ${BVP_TRIAL_MONTHS}-month free trial.`,
         `<a class="btn btn-primary" href="${BVP_PLANS_PAGE}">Choose a plan</a>`);
       return access;
   }
@@ -500,9 +431,7 @@ async function saveSenderProfile() {
       }
     }
     if (done(access)) {
-      // New agency: go straight to agency setup.
-      if (access.reason === 'agency_owner') { location.href = BVP_AGENCY_SETUP_PAGE; return; }
-      showBanner('info', `You're all set. Your ${bvpTrialText('adj')} free trial has started. <a href="bookvaluepro-upload.html" style="color:inherit;font-weight:600;">Upload your book →</a>`);
+      showBanner('info', `You're all set. Your ${BVP_TRIAL_MONTHS}-month free trial has started. <a href="bookvaluepro-upload.html" style="color:inherit;font-weight:600;">Upload your book →</a>`);
     } else {
       showBanner('warn', 'Your payment details were received, but your plan is still being set up. Please refresh this page in a minute.');
     }
